@@ -10,18 +10,23 @@
 
   <!-- Top Navigation Bar -->
   <header class="bg-gray-600 text-white px-6 py-4 flex items-center">
-    <button onclick="toggleSidebar()" class="mr-4">
+    <button onclick="toggleSidebar()" class="mr-4 sm:hidden">
       <!-- Hamburger Icon -->
       <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M4 6h16M4 12h16M4 18h16" />
       </svg>
     </button>
     <h1 class="text-xl font-semibold">SENTRA - Lecture Mode</h1>
   </header>
 
+  <!-- Sidebar Overlay for Mobile -->
+  <div id="sidebarOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-10 hidden" onclick="toggleSidebar()"></div>
+
   <div class="flex h-screen relative overflow-hidden">
     <!-- Sidebar -->
-    <aside id="sidebar" class="absolute sm:relative bg-green-700 text-white w-64 p-4 transform -translate-x-full sm:translate-x-0 transition-transform duration-300 z-20 h-full">
+    <aside id="sidebar"
+           class="absolute sm:relative bg-green-700 text-white w-64 p-4 transform -translate-x-full sm:translate-x-0 transition-transform duration-300 z-20 h-full">
       <h2 class="text-lg font-medium mb-4 border-b pb-2">Notification</h2>
       <ul class="space-y-2 text-sm">
         <li><button onclick="openModal('Cheating captured at 10:02 AM')" class="hover:underline">Cheating captured 1</button></li>
@@ -32,8 +37,9 @@
 
     <!-- Main Camera Section -->
     <main class="flex-1 p-6">
-      <div class="bg-gray-500 w-full h-full flex items-center justify-center text-white text-lg rounded">
-        Camera
+      <div class="bg-black w-full h-full flex items-center justify-center text-white text-lg rounded overflow-hidden">
+        <!-- Embed live video stream from Flask -->
+        <img src="/video" alt="Live Camera Feed" class="w-full h-full object-cover">
       </div>
     </main>
   </div>
@@ -51,7 +57,16 @@
   <script>
     function toggleSidebar() {
       const sidebar = document.getElementById('sidebar');
-      sidebar.classList.toggle('-translate-x-full');
+      const overlay = document.getElementById('sidebarOverlay');
+      const isHidden = sidebar.classList.contains('-translate-x-full');
+
+      if (isHidden) {
+        sidebar.classList.remove('-translate-x-full');
+        overlay.classList.remove('hidden');
+      } else {
+        sidebar.classList.add('-translate-x-full');
+        overlay.classList.add('hidden');
+      }
     }
 
     function openModal(message) {
