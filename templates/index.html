@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Cheating Detection</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <!-- Header -->
+  <header>
+    <h1>Cheating Detection System</h1>
+  </header>
+
+  <div class="container">
+    <!-- Sidebar -->
+    <nav class="sidebar">
+      <h2>Notifications</h2>
+      <ul id="notifications">
+        <li>No alerts yet</li>
+      </ul>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <div class="camera-container">
+        <img id="video-frame" alt="AI Detection Feed">
+        <div class="controls">
+          <button id="start-btn">Start Camera</button>
+          <button id="stop-btn">Stop Camera</button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script>
+    let socket = io();
+    let streaming = false;
+    let videoStream = null;
+    let video = document.createElement('video');
+    video.setAttribute('playsinline', '');
+    video.setAttribute('autoplay', '');
+
+    function setBlackScreen() {
+      let canvas = document.createElement('canvas');
+      canvas.width = 720;
+      canvas.height = 540;
+      let ctx = canvas.getContext('2d');
+      ctx.fillStyle = "#000";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      document.getElementById("video-frame").src = canvas.toDataURL('image/png');
+    }
+
+    window.onload = setBlackScreen;
+
+    document.getElementById('start-btn').onclick = async function() {
+      if (streaming) return;
+      try {
+        videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
+        video.srcObject = videoStream;
+        streaming = true;
+        addNotification("Camera started");
+        video.onloadedmetadata = () => {
+          sendFrame();
+        };
+      } catch (err) {
+        alert("Error accessing camera: " + err);
+      }
+    };
+
+    document.getElementById('stop-btn').onclick = function() {
+      streaming = false;
+      if (videoStream) {
+        videoStream.getTracks().forEach(track => track.stop());
+        videoStream = null;
+      }
+      setBlackScreen();
+      addNotification("Camera stopped");
+    };
+
+    function sendFrame() {
+      if (!streaming) return;
+      if (video.videoWidth === 0 || video.videoHeight === 0) {
+        setTimeout(sendFrame, 100);
+        return;
+      }
+      let canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      let ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      let dataURL = canvas.toDataURL('image/jpeg');
+      socket.emit('frame', { image: dataURL });
+      setTimeout(sendFrame, 200); // ~5 fps
+    }
+
+    socket.on('response_frame', function(data) {
+      document.getElementById('video-frame').src = data.image;
+      if (data.cheating) {
+        addCheatingNotification();
+      }
+    });
+
+    socket.on('connected', function() {
+      addNotification('Connected to server.');
+    });
+
+    // Add a cheating notification with a link, only if not already present
+    function addCheatingNotification() {
+      const ul = document.getElementById("notifications");
+      // Remove "No alerts yet" if present
+      if (ul.firstChild && ul.firstChild.textContent === "No alerts yet") {
+        ul.removeChild(ul.firstChild);
+      }
+      // Check if cheating link already exists
+      for (let i = 0; i < ul.children.length; i++) {
+        const li = ul.children[i];
+        if (li.querySelector('a') && li.querySelector('a').href.includes("/cheating")) {
+          return; // Already exists, do not add again
+        }
+      }
+      const li = document.createElement("li");
+      const a = document.createElement("a");
+      a.href = "/cheating";
+      a.textContent = "Cheating detected! Click here for details.";
+      a.style.color = "#ff4444";
+      a.style.fontWeight = "bold";
+      li.appendChild(a);
+      ul.prepend(li);
+    }
+
+    function addNotification(message) {
+      const ul = document.getElementById("notifications");
+      // Remove "No alerts yet" if present
+      if (ul.firstChild && ul.firstChild.textContent === "No alerts yet") {
+        ul.removeChild(ul.firstChild);
+      }
+      const li = document.createElement("li");
+      li.textContent = message;
+      ul.prepend(li);
+    }
+  </script>
+</body>
+</html>
