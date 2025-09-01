@@ -4,7 +4,7 @@ import time
 import cv2
 import numpy as np
 from PIL import Image
-from flask import Flask, render_template, redirect, url_for
+from flask import Flask, render_template, redirect, url_for, send_file, make_response
 from flask_socketio import SocketIO, emit
 import mediapipe as mp
 from ultralytics import YOLO
@@ -58,6 +58,8 @@ def estimate_head_rotation(image_rgb, face_landmarks):
 # Frame-level sliding counters (very simple global)
 frame_counters = {}  # keyed by session id if multi-user
 
+latest_cheating_snapshot = None  # Store base64 image string
+
 @socketio.on('connect')
 def on_connect():
     print("Client connected")
@@ -65,6 +67,7 @@ def on_connect():
 
 @socketio.on('frame')
 def handle_frame(message):
+    global latest_cheating_snapshot
     """
     message: { "image": "data:image/jpeg;base64,..." }
     """
@@ -98,13 +101,22 @@ def handle_frame(message):
     # Draw detections and simple alert flags
     alert_msgs = []
     cheating_detected = False
+    cheating_this_frame = False  # Track if we already emitted for this frame
     for label, conf, (x1, y1, x2, y2) in detections:
         cv2.rectangle(original, (x1, y1), (x2, y2), (0, 255, 0), 2)
         cv2.putText(original, f"{label} {conf:.2f}", (x1, y1 - 8),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-        if label.lower() in ['phone', 'calculator', 'handheld_device', 'notes', 'paper']:
-            alert_msgs.append(f"{label} detected")
+        if label.lower() == 'cheating':
+            alert_msgs.append("Cheating detected")
             cheating_detected = True
+            # Store the snapshot only when cheating is detected
+            out_b64 = cv2_to_b64(original, jpeg_quality=80)
+            latest_cheating_snapshot = out_b64
+            if not cheating_this_frame:
+                emit('cheating_notification', {'message': 'Cheating detected! Click here for details.', 'url': '/cheating'})
+                cheating_this_frame = True
+        elif label.lower() == 'no cheating':
+            pass
 
     # MediaPipe face mesh detection for head rotation
     image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -142,6 +154,24 @@ def home():
 @app.route("/cheating")
 def cheating():
     return render_template("cheating.html")
+
+@app.route("/cheating_snapshot")
+def cheating_snapshot():
+    global latest_cheating_snapshot
+    if latest_cheating_snapshot:
+        # Return the base64 image as a real image response
+        header, b64 = latest_cheating_snapshot.split(',', 1)
+        img_bytes = base64.b64decode(b64)
+        response = make_response(img_bytes)
+        response.headers.set('Content-Type', 'image/jpeg')
+        return response
+    else:
+        # Return a black image if no cheating snapshot yet
+        black = np.zeros((540, 720, 3), dtype=np.uint8)
+        _, buffer = cv2.imencode('.jpg', black)
+        response = make_response(buffer.tobytes())
+        response.headers.set('Content-Type', 'image/jpeg')
+        return response
 
 if __name__ == "__main__":
     host = "0.0.0.0"

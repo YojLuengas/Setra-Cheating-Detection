@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Cheating Detection</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
@@ -24,6 +25,9 @@
     <main class="main-content">
       <div class="camera-container">
         <img id="video-frame" alt="AI Detection Feed">
+        <div id="cheating-status" style="margin-top: 1rem; font-size: 1.3rem; color: #222;">
+          No cheating detected
+        </div>
         <div class="controls">
           <button id="start-btn">Start Camera</button>
           <button id="stop-btn">Stop Camera</button>
@@ -68,6 +72,8 @@
       }
     };
 
+    const statusDiv = document.getElementById('cheating-status');
+
     document.getElementById('stop-btn').onclick = function() {
       streaming = false;
       if (videoStream) {
@@ -75,6 +81,9 @@
         videoStream = null;
       }
       setBlackScreen();
+      statusDiv.textContent = "No cheating detected";
+      statusDiv.style.color = "#222";
+      statusDiv.style.fontWeight = "normal";
       addNotification("Camera stopped");
     };
 
@@ -97,12 +106,41 @@
     socket.on('response_frame', function(data) {
       document.getElementById('video-frame').src = data.image;
       if (data.cheating) {
-        addCheatingNotification();
+        statusDiv.textContent = "Cheating detected!";
+        statusDiv.style.color = "#ff4444";
+        statusDiv.style.fontWeight = "bold";
+      } else {
+        statusDiv.textContent = "No cheating detected";
+        statusDiv.style.color = "#228B22";
+        statusDiv.style.fontWeight = "bold";
       }
     });
 
     socket.on('connected', function() {
       addNotification('Connected to server.');
+    });
+
+    socket.on('cheating_notification', function(data) {
+      const ul = document.getElementById("notifications");
+      // Remove "No alerts yet" if present
+      if (ul.firstChild && ul.firstChild.textContent === "No alerts yet") {
+        ul.removeChild(ul.firstChild);
+      }
+      // Prevent duplicate links
+      for (let i = 0; i < ul.children.length; i++) {
+        const li = ul.children[i];
+        if (li.querySelector('a') && li.querySelector('a').href.includes("/cheating")) {
+          return;
+        }
+      }
+      const li = document.createElement("li");
+      const a = document.createElement("a");
+      a.href = data.url;
+      a.textContent = data.message;
+      a.style.color = "#ff4444";
+      a.style.fontWeight = "bold";
+      li.appendChild(a);
+      ul.prepend(li);
     });
 
     // Add a cheating notification with a link, only if not already present
@@ -139,6 +177,8 @@
       li.textContent = message;
       ul.prepend(li);
     }
+
+    
   </script>
 </body>
 </html>
