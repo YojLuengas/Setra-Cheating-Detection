@@ -38,6 +38,7 @@ header {
   background: #2c2c54;
   color: white;
   padding: 20px;
+  overflow-y: auto;
 }
 
 .sidebar h2 {
@@ -70,23 +71,15 @@ header {
   text-align: center;
 }
 
-video {
-  width: 640px;
-  height: 480px;
-  border: 2px solid #333;
-  border-radius: 10px;
-  background: black;
-}
-
 .camera-container img#video-frame {
-    width: 720px;
-    height: 540px;
-    border-radius: 8px;
-    border: 2px solid #2d3e50;
-    background: #000;
-    object-fit: cover;
-    display: block;
-    margin: 0 auto;
+  width: 720px;
+  height: 540px;
+  border-radius: 8px;
+  border: 2px solid #2d3e50;
+  background: #000;
+  object-fit: cover;
+  display: block;
+  margin: 0 auto;
 }
 
 /* Buttons */
@@ -107,4 +100,40 @@ button {
 
 button:hover {
   background: #005fcc;
+}
+
+/* -------------------
+   Timeline Styles
+------------------- */
+.timeline-container {
+  margin: 40px auto;
+  width: 85%;
+  position: relative;
+  height: 80px;
+}
+
+.timeline {
+  position: relative;
+  height: 6px;
+  background: #444; /* darker so it stands out */
+  top: 37px;
+  border-radius: 3px;
+  display: flex;
+  justify-content: space-between; /* evenly distribute points */
+  align-items: center;
+}
+
+.timeline-point {
+  width: 18px;
+  height: 18px;
+  background: #ff4444;
+  border: 2px solid white; /* make them pop */
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.timeline-point:hover {
+  transform: scale(1.3);
+  background: #ff0000;
 }

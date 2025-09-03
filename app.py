@@ -1,31 +1,38 @@
 import io
 import base64
 import time
+import uuid
 import cv2
 import numpy as np
 from PIL import Image
-from flask import Flask, render_template, redirect, url_for, send_file, make_response
+from flask import Flask, render_template, make_response
 from flask_socketio import SocketIO, emit
 import mediapipe as mp
 from ultralytics import YOLO
 
-# Flask + SocketIO (use eventlet or gevent)
+# Flask + SocketIO
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 
-# Load YOLO model (put your downloaded best.pt in model folder)
-MODEL_PATH = "models/best.pt"  # adjust path
+# Load YOLO model
+MODEL_PATH = "models/best.pt"
 yolo_model = YOLO(MODEL_PATH)
 
-# MediaPipe setup
+# MediaPipe
 mp_face_mesh = mp.solutions.face_mesh
-face_mesh = mp_face_mesh.FaceMesh(static_image_mode=False,
-                                  max_num_faces=1,
-                                  refine_landmarks=True,
-                                  min_detection_confidence=0.5,
-                                  min_tracking_confidence=0.5)
+face_mesh = mp_face_mesh.FaceMesh(
+    static_image_mode=False,
+    max_num_faces=1,
+    refine_landmarks=True,
+    min_detection_confidence=0.5,
+    min_tracking_confidence=0.5
+)
 
-# Helper: decode base64 jpeg to cv2 image
+# Store cheating snapshots
+cheating_snapshots = []  # [{id, image, timestamp}]
+last_cheating_notification_time = 0  # ⏱ Track last notification time
+
+# --- Helpers ---
 def b64_to_cv2(data_b64):
     header, b64 = data_b64.split(',', 1)
     img_bytes = base64.b64decode(b64)
@@ -33,149 +40,147 @@ def b64_to_cv2(data_b64):
     cv_img = np.array(img)[:, :, ::-1].copy()  # RGB->BGR
     return cv_img
 
-# Helper: encode cv2 image to base64 jpeg
 def cv2_to_b64(img, jpeg_quality=70):
     _, buffer = cv2.imencode('.jpg', img, [int(cv2.IMWRITE_JPEG_QUALITY), jpeg_quality])
     b64 = base64.b64encode(buffer).decode('utf-8')
     return 'data:image/jpeg;base64,' + b64
 
-# Simple head yaw/pitch estimation using face mesh
 def estimate_head_rotation(image_rgb, face_landmarks):
-    # We'll compute a rough yaw using left-right eye landmark x positions
-    # Landmarks: 33 (left eye outer), 263 (right eye outer) approx in FaceMesh
     h, w, _ = image_rgb.shape
     try:
         lmk = face_landmarks.landmark
         left_x = lmk[33].x * w
         right_x = lmk[263].x * w
-        nose_x = lmk[1].x * w  # tip of nose
-        # yaw proxy: if nose closer to left or right eye extremes
-        yaw = (nose_x - (left_x + right_x) / 2) / w  # normalized
+        nose_x = lmk[1].x * w
+        yaw = (nose_x - (left_x + right_x) / 2) / w
         return float(yaw)
     except Exception:
         return 0.0
 
-# Frame-level sliding counters (very simple global)
-frame_counters = {}  # keyed by session id if multi-user
-
-latest_cheating_snapshot = None  # Store base64 image string
-
+# --- Socket Events ---
 @socketio.on('connect')
 def on_connect():
-    print("Client connected")
+    print("✅ Client connected")
     emit('connected', {'data': 'ready'})
 
 @socketio.on('frame')
 def handle_frame(message):
-    global latest_cheating_snapshot
-    """
-    message: { "image": "data:image/jpeg;base64,..." }
-    """
+    global cheating_snapshots, last_cheating_notification_time
     img_b64 = message.get('image')
     if not img_b64:
         return
+
     frame = b64_to_cv2(img_b64)
     original = frame.copy()
 
-    # Resize down for faster inference
+    # Resize for YOLO inference
     h, w = frame.shape[:2]
     scale = 640 / max(h, w)
     small = cv2.resize(frame, (int(w * scale), int(h * scale)))
 
-    # Run YOLO detection
+    # Run YOLO
     results = yolo_model.predict(small, imgsz=640, conf=0.35, verbose=False)
-    # results is a list; get first
+
     detections = []
     if len(results) > 0:
         r = results[0]
-        boxes = r.boxes  # ultralytics Boxes object
-        for box in boxes:
+        for box in r.boxes:
             xyxy = box.xyxy[0].cpu().numpy()
             conf = float(box.conf[0].cpu().numpy())
             cls = int(box.cls[0].cpu().numpy())
             label = yolo_model.model.names.get(cls, str(cls))
-            # scale coords back to original frame size
             x1, y1, x2, y2 = [int(v / scale) for v in xyxy]
             detections.append((label, conf, (x1, y1, x2, y2)))
 
-    # Draw detections and simple alert flags
     alert_msgs = []
-    cheating_detected = False
-    cheating_this_frame = False  # Track if we already emitted for this frame
+    cheating_in_frame = False
+
     for label, conf, (x1, y1, x2, y2) in detections:
         cv2.rectangle(original, (x1, y1), (x2, y2), (0, 255, 0), 2)
         cv2.putText(original, f"{label} {conf:.2f}", (x1, y1 - 8),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-        if label.lower() == 'cheating':
-            alert_msgs.append("Cheating detected")
-            cheating_detected = True
-            # Store the snapshot only when cheating is detected
-            out_b64 = cv2_to_b64(original, jpeg_quality=80)
-            latest_cheating_snapshot = out_b64
-            if not cheating_this_frame:
-                emit('cheating_notification', {'message': 'Cheating detected! Click here for details.', 'url': '/cheating'})
-                cheating_this_frame = True
-        elif label.lower() == 'no cheating':
-            pass
 
-    # MediaPipe face mesh detection for head rotation
+        if label.lower() == 'cheating':
+            cheating_in_frame = True
+
+    # If cheating detected → snapshot + notification (cooldown 2s)
+    if cheating_in_frame:
+        now = time.time()
+        if now - last_cheating_notification_time >= 2:  # ⏱ 2 second cooldown
+            alert_msgs.append("Cheating detected")
+
+            out_b64 = cv2_to_b64(original, jpeg_quality=80)
+            snap_id = str(uuid.uuid4())
+            timestamp = time.strftime("%Y-%m-%d %I:%M:%S %p") # + f".{int(time.time()*1000)%1000:03d}"
+
+            cheating_snapshots.append({
+                "id": snap_id,
+                "image": out_b64,
+                "timestamp": timestamp
+            })
+
+            socketio.emit('cheating_notification', {
+                'message': f'Cheating detected at {timestamp}! Click for details.',
+                'url': f'/cheating/{snap_id}'
+            })
+
+            last_cheating_notification_time = now  # 🔄 update last notification time
+
+    # Head rotation detection
     image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     results_face = face_mesh.process(image_rgb)
     if results_face.multi_face_landmarks:
-        # take first face
         face_landmarks = results_face.multi_face_landmarks[0]
-        yaw = estimate_head_rotation(image_rgb, face_landmarks)  # normalized (-0.5 .. 0.5 approx)
-        # scale to degrees-ish proxy
+        yaw = estimate_head_rotation(image_rgb, face_landmarks)
         yaw_deg = yaw * 90
         if abs(yaw_deg) > 25:
             alert_msgs.append("Looking away (head turned)")
-            cheating_detected = True
-        # draw a small overlay
         cv2.putText(original, f"Yaw:{yaw_deg:.1f}", (10, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 0), 2)
 
-    # Compose status
-    status_text = "OK" if len(alert_msgs) == 0 else "; ".join(alert_msgs)
-    if len(alert_msgs) > 0:
-        cv2.putText(original, f"ALERT: {status_text}", (10, original.shape[0]-20),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-    else:
-        cv2.putText(original, status_text, (10, original.shape[0]-20),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+    # Status text
+    status_text = "OK" if not alert_msgs else "; ".join(alert_msgs)
+    color = (0, 255, 0) if not alert_msgs else (0, 0, 255)
+    cv2.putText(original, status_text, (10, original.shape[0]-20),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
 
-    # send annotated frame back
+    # Return annotated frame
     out_b64 = cv2_to_b64(original, jpeg_quality=60)
-    emit('response_frame', {'image': out_b64, 'cheating': cheating_detected})
+    emit('response_frame', {'image': out_b64, 'cheating': cheating_in_frame})
 
+# --- Routes ---
 @app.route("/")
 def home():
     return render_template("index.html")
 
-@app.route("/cheating")
-def cheating():
-    return render_template("cheating.html")
+@app.route("/cheating/<snap_id>")
+def cheating(snap_id):
+    snap = next((s for s in cheating_snapshots if s["id"] == snap_id), None)
+    if snap:
+        return render_template(
+            "cheating.html",
+            snapshot_id=snap_id,
+            timestamp=snap["timestamp"],
+            cheating_snapshots=cheating_snapshots  # 👈 pass all for timeline
+        )
+    else:
+        return "Snapshot not found", 404
 
-@app.route("/cheating_snapshot")
-def cheating_snapshot():
-    global latest_cheating_snapshot
-    if latest_cheating_snapshot:
-        # Return the base64 image as a real image response
-        header, b64 = latest_cheating_snapshot.split(',', 1)
+@app.route("/cheating_snapshot/<snap_id>")
+def cheating_snapshot(snap_id):
+    snap = next((s for s in cheating_snapshots if s["id"] == snap_id), None)
+    if snap:
+        header, b64 = snap["image"].split(',', 1)
         img_bytes = base64.b64decode(b64)
         response = make_response(img_bytes)
         response.headers.set('Content-Type', 'image/jpeg')
         return response
-    else:
-        # Return a black image if no cheating snapshot yet
-        black = np.zeros((540, 720, 3), dtype=np.uint8)
-        _, buffer = cv2.imencode('.jpg', black)
-        response = make_response(buffer.tobytes())
-        response.headers.set('Content-Type', 'image/jpeg')
-        return response
+    return "Snapshot not found", 404
 
+# --- Run ---
 if __name__ == "__main__":
     host = "0.0.0.0"
     port = 5000
     print(f"🚀 Server running at: http://127.0.0.1:{port}")
     print(f"🌐 Accessible on your network at: http://{host}:{port}")
-    socketio.run(app, host=host, port=port, debug=True)  # Start the SocketIO server
+    socketio.run(app, host=host, port=port, debug=True)
