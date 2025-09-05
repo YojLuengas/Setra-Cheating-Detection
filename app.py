@@ -28,9 +28,10 @@ face_mesh = mp_face_mesh.FaceMesh(
     min_tracking_confidence=0.5
 )
 
-# Store cheating snapshots
-cheating_snapshots = []  # [{id, image, timestamp}]
-last_cheating_notification_time = 0  # ⏱ Track last notification time
+# Store snapshots
+all_snapshots = []        # all detections
+notified_snapshots = []   # ✅ only snapshots shown in notifications
+last_cheating_notification_time = 0
 
 # --- Helpers ---
 def b64_to_cv2(data_b64):
@@ -65,7 +66,7 @@ def on_connect():
 
 @socketio.on('frame')
 def handle_frame(message):
-    global cheating_snapshots, last_cheating_notification_time
+    global all_snapshots, notified_snapshots, last_cheating_notification_time
     img_b64 = message.get('image')
     if not img_b64:
         return
@@ -106,25 +107,29 @@ def handle_frame(message):
     # If cheating detected → snapshot + notification (cooldown 2s)
     if cheating_in_frame:
         now = time.time()
-        if now - last_cheating_notification_time >= 2:  # ⏱ 2 second cooldown
+        if now - last_cheating_notification_time >= 2:
             alert_msgs.append("Cheating detected")
 
             out_b64 = cv2_to_b64(original, jpeg_quality=80)
             snap_id = str(uuid.uuid4())
-            timestamp = time.strftime("%Y-%m-%d %I:%M:%S %p") # + f".{int(time.time()*1000)%1000:03d}"
+            timestamp = time.strftime("%Y-%m-%d %I:%M:%S %p")
 
-            cheating_snapshots.append({
+            snapshot = {
                 "id": snap_id,
                 "image": out_b64,
-                "timestamp": timestamp
-            })
+                "timestamp": timestamp,
+                "epoch": now
+            }
+
+            all_snapshots.append(snapshot)        # log everything
+            notified_snapshots.append(snapshot)   # ✅ only store notified
 
             socketio.emit('cheating_notification', {
                 'message': f'Cheating detected at {timestamp}! Click for details.',
                 'url': f'/cheating/{snap_id}'
             })
 
-            last_cheating_notification_time = now  # 🔄 update last notification time
+            last_cheating_notification_time = now
 
     # Head rotation detection
     image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -155,20 +160,20 @@ def home():
 
 @app.route("/cheating/<snap_id>")
 def cheating(snap_id):
-    snap = next((s for s in cheating_snapshots if s["id"] == snap_id), None)
+    snap = next((s for s in notified_snapshots if s["id"] == snap_id), None)  # ✅ only notified
     if snap:
         return render_template(
             "cheating.html",
             snapshot_id=snap_id,
             timestamp=snap["timestamp"],
-            cheating_snapshots=cheating_snapshots  # 👈 pass all for timeline
+            cheating_snapshots=notified_snapshots  # ✅ only notified
         )
     else:
         return "Snapshot not found", 404
 
 @app.route("/cheating_snapshot/<snap_id>")
 def cheating_snapshot(snap_id):
-    snap = next((s for s in cheating_snapshots if s["id"] == snap_id), None)
+    snap = next((s for s in all_snapshots if s["id"] == snap_id), None)  # serve from all
     if snap:
         header, b64 = snap["image"].split(',', 1)
         img_bytes = base64.b64decode(b64)
