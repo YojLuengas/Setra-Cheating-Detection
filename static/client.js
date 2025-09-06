@@ -9,7 +9,7 @@ let stream;
 let sending = false;
 let socket;
 
-// --- Load persisted snapshots & notifications ---
+// --- Load persisted seen snapshots ---
 const seenSnapshots = new Set(JSON.parse(sessionStorage.getItem("seenSnapshots") || "[]"));
 
 // --- Black screen fallback ---
@@ -25,15 +25,11 @@ function setBlackScreen() {
 }
 
 // --- Restore notifications & timeline on refresh ---
-// --- Restore notifications & timeline on refresh ---
 window.addEventListener("DOMContentLoaded", () => {
   const savedNotifs = JSON.parse(sessionStorage.getItem("notifications") || "[]");
   if (notifications && savedNotifs.length > 0) {
     notifications.innerHTML = "";
-    // restore in reverse so newest stays on top
-    for (let i = 0; i < savedNotifs.length; i++) {
-  appendNotification(savedNotifs[i]);
-}
+    savedNotifs.forEach(n => appendNotification(n));
   }
 
   const savedPoints = JSON.parse(sessionStorage.getItem("timelinePoints") || "[]");
@@ -58,7 +54,6 @@ function appendNotification(data) {
   const li = document.createElement("li");
 
   if (data.url) {
-    // cheating alert (clickable)
     const a = document.createElement("a");
     a.href = "#";
     a.textContent = data.message;
@@ -74,18 +69,16 @@ function appendNotification(data) {
 
     li.appendChild(a);
   } else {
-    // system message (plain text)
     li.textContent = data.message;
   }
 
-  notifications.prepend(li);
+  if (notifications) notifications.prepend(li);
 }
 
 // --- Save to sessionStorage ---
 function persistState(newNotif, newPoint) {
   if (newNotif) {
     let saved = JSON.parse(sessionStorage.getItem("notifications") || "[]");
-    // keep chronological order → push
     saved.push(newNotif);
     sessionStorage.setItem("notifications", JSON.stringify(saved));
   }
@@ -99,14 +92,14 @@ function persistState(newNotif, newPoint) {
   sessionStorage.setItem("seenSnapshots", JSON.stringify(Array.from(seenSnapshots)));
 }
 
-// --- Notification helper for system events ---
+// --- System notification helper ---
 function addNotification(message) {
   if (!notifications) return;
   if (notifications.firstChild && notifications.firstChild.textContent === "No alerts yet") {
     notifications.removeChild(notifications.firstChild);
   }
 
-  const notifData = { message }; // no url → system notification
+  const notifData = { message };
   appendNotification(notifData);
   persistState(notifData, null);
 }
@@ -145,12 +138,12 @@ function initSocket() {
 
         appendNotification(data);
 
-        const timeline = document.getElementById("timeline");
         const snapId = data.url.split("/").pop();
         const timestampMatch = data.message.match(/at (.+)!/);
         const timestamp = timestampMatch ? timestampMatch[1] : new Date().toLocaleString();
         const epoch = Date.now() / 1000;
 
+        const timeline = document.getElementById("timeline");
         if (timeline) {
           const point = document.createElement("div");
           point.className = "timeline-point";
@@ -197,7 +190,7 @@ if (startBtn && stopBtn) {
       stream.getTracks().forEach(t => t.stop());
       stream = null;
     }
-    setBlackScreen();
+    setBlackScreen(); // 🔥 Force black screen immediately
     statusDiv.textContent = "No cheating detected";
     statusDiv.style.color = "#222";
     statusDiv.style.fontWeight = "normal";
@@ -224,6 +217,7 @@ if (startBtn && stopBtn) {
 }
 
 // --- Timeline refresh helper ---
+// --- Timeline refresh helper ---
 function refreshTimeline() {
   const timeline = document.getElementById("timeline");
   if (!timeline) return;
@@ -235,11 +229,49 @@ function refreshTimeline() {
   const maxTime = Math.max(...epochs);
   const span = maxTime > minTime ? maxTime - minTime : 1;
 
+  // --- Tooltip div (create once) ---
+  let tooltip = document.getElementById("timeline-tooltip");
+  if (!tooltip) {
+    tooltip = document.createElement("div");
+    tooltip.id = "timeline-tooltip";
+    tooltip.style.position = "absolute";
+    tooltip.style.background = "#333";
+    tooltip.style.color = "#fff";
+    tooltip.style.padding = "4px 8px";
+    tooltip.style.borderRadius = "6px";
+    tooltip.style.fontSize = "12px";
+    tooltip.style.whiteSpace = "nowrap";
+    tooltip.style.pointerEvents = "none";
+    tooltip.style.opacity = "0";
+    tooltip.style.transition = "opacity 0.2s ease";
+    document.body.appendChild(tooltip);
+  }
+
   points.forEach(p => {
     const epoch = parseFloat(p.dataset.epoch);
     const pos = ((epoch - minTime) / span) * 100;
     p.style.left = pos + "%";
 
+    // --- Hover effect for tooltip ---
+    p.onmouseenter = (e) => {
+      tooltip.textContent = p.dataset.timestamp;
+      tooltip.style.opacity = "1";
+      const rect = p.getBoundingClientRect();
+      tooltip.style.left = rect.left + rect.width / 2 + "px";
+      tooltip.style.top = rect.top - 28 + "px"; // above the point
+    };
+
+    p.onmousemove = (e) => {
+      const rect = p.getBoundingClientRect();
+      tooltip.style.left = rect.left + rect.width / 2 + "px";
+      tooltip.style.top = rect.top - 28 + "px";
+    };
+
+    p.onmouseleave = () => {
+      tooltip.style.opacity = "0";
+    };
+
+    // --- Click event ---
     p.onclick = () => {
       const snapId = p.dataset.id;
       const timestamp = p.dataset.timestamp;
@@ -252,12 +284,11 @@ function refreshTimeline() {
     };
   });
 
-  // 🔥 auto-activate the latest point (sync with latest notification)
+  // auto-activate latest
   const latestPoint = Array.from(points).sort((a, b) => b.dataset.epoch - a.dataset.epoch)[0];
-  if (latestPoint) {
-    autoSwitchTo(latestPoint);
-  }
+  if (latestPoint) autoSwitchTo(latestPoint);
 
+  // update labels
   const sorted = Array.from(points).sort((a, b) => a.dataset.epoch - b.dataset.epoch);
   const startLabel = document.getElementById("timeline-start");
   const endLabel = document.getElementById("timeline-end");
@@ -284,5 +315,33 @@ function autoSwitchTo(point) {
 // --- Cheating page init ---
 if (document.querySelector(".timeline")) {
   initSocket();
-  window.addEventListener("DOMContentLoaded", refreshTimeline);
+  window.addEventListener("DOMContentLoaded", () => {
+    refreshTimeline();
+
+    socket.on("cheating_notification", (data) => {
+      if (!seenSnapshots.has(data.url)) {
+        seenSnapshots.add(data.url);
+
+        const snapId = data.url.split("/").pop();
+        const timestampMatch = data.message.match(/at (.+)!/);
+        const timestamp = timestampMatch ? timestampMatch[1] : new Date().toLocaleString();
+        const epoch = Date.now() / 1000;
+
+        const timeline = document.getElementById("timeline");
+        if (timeline) {
+          const point = document.createElement("div");
+          point.className = "timeline-point";
+          point.dataset.id = snapId;
+          point.dataset.timestamp = timestamp;
+          point.dataset.epoch = epoch;
+          point.title = "Taken at " + timestamp;
+          timeline.appendChild(point);
+          refreshTimeline();
+          autoSwitchTo(point);
+        }
+
+        persistState(data, { id: snapId, timestamp, epoch });
+      }
+    });
+  });
 }
