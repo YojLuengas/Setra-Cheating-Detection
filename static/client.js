@@ -8,6 +8,11 @@ const statusDiv = document.getElementById('cheating-status');
 let stream;
 let sending = false;
 let socket;
+let currentDeviceId = null; // track selected camera
+
+// Camera dropdown
+const cameraList = document.getElementById("camera-list");
+const refreshBtn = document.getElementById("refresh-cameras");
 
 // --- Load persisted seen snapshots ---
 const seenSnapshots = new Set(JSON.parse(sessionStorage.getItem("seenSnapshots") || "[]"));
@@ -26,9 +31,43 @@ function setBlackScreen() {
   video.src = black.toDataURL('image/png');
 }
 
+// --- List available cameras ---
+async function getCameras() {
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  if (!cameraList) return;
+
+  cameraList.innerHTML = "";
+  devices.forEach(device => {
+    if (device.kind === "videoinput") {
+      const option = document.createElement("option");
+      option.value = device.deviceId;
+      option.text = device.label || `Camera ${cameraList.length + 1}`;
+      cameraList.appendChild(option);
+    }
+  });
+
+  if (devices.length > 0 && !currentDeviceId) {
+    currentDeviceId = devices.find(d => d.kind === "videoinput").deviceId;
+    cameraList.value = currentDeviceId;
+  }
+}
 
 // --- Restore notifications & timeline on refresh ---
 window.addEventListener("DOMContentLoaded", () => {
+  getCameras();
+
+  if (refreshBtn) refreshBtn.onclick = getCameras;
+  if (cameraList) {
+    cameraList.onchange = () => {
+      currentDeviceId = cameraList.value;
+      if (sending) {
+        // restart with new camera
+        stopCamera();
+        startCamera();
+      }
+    };
+  }
+
   const savedNotifs = JSON.parse(sessionStorage.getItem("notifications") || "[]");
   if (notifications && savedNotifs.length > 0) {
     notifications.innerHTML = "";
@@ -166,81 +205,70 @@ function initSocket() {
   }
 }
 
-// --- Camera page logic ---
-// --- Camera page logic ---
+// --- Camera handling ---
+let vid; // hidden video element for capture
+
+async function startCamera() {
+  initSocket();
+
+  stream = await navigator.mediaDevices.getUserMedia({
+    video: currentDeviceId ? { deviceId: { exact: currentDeviceId } } : { width: 960, height: 720 },
+    audio: false
+  });
+
+  vid = document.createElement("video");
+  vid.style.display = "none";
+  document.body.appendChild(vid);
+  vid.srcObject = stream;
+  await vid.play();
+
+  sending = true;
+  sendLoop(vid);
+  addNotification("Camera started");
+}
+
+function stopCamera() {
+  sending = false;
+  if (stream) {
+    stream.getTracks().forEach(t => t.stop());
+    stream = null;
+  }
+  if (vid) {
+    vid.srcObject = null;
+    vid.remove();
+    vid = null;
+  }
+  setBlackScreen();
+  statusDiv.textContent = "No cheating detected";
+  statusDiv.style.color = "#222";
+  statusDiv.style.fontWeight = "normal";
+  addNotification("Camera stopped");
+}
+
 if (startBtn && stopBtn) {
   window.onload = setBlackScreen;
+  startBtn.onclick = startCamera;
+  stopBtn.onclick = stopCamera;
+}
 
-  let vid; // reference to the hidden video element
 
-  startBtn.onclick = async () => {
-    initSocket();
-
-    // Get webcam stream
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: { width: 960, height: 720 },
-      audio: false
-    });
-
-    // Create a hidden video element for capturing frames
-    vid = document.createElement("video");
-    vid.style.display = "none";
-    document.body.appendChild(vid);
-    vid.srcObject = stream;
-    await vid.play();
-
-    sending = true;
-
-    sendLoop(vid);
-    addNotification("Camera started");
-  };
-
-  stopBtn.onclick = () => {
-    sending = false;
-
-    // Stop all webcam tracks
-    if (stream) {
-      stream.getTracks().forEach(t => t.stop());
-      stream = null;
+async function sendLoop(videoElement) {
+  while (sending) {
+    if (videoElement.readyState >= 2 && socket && socket.connected) {
+      const frameB64 = captureFrame(videoElement);
+      socket.emit('frame', { image: frameB64 });
     }
-
-    // Remove hidden video element
-    if (vid) {
-      vid.srcObject = null;
-      vid.remove();
-      vid = null;
-    }
-
-    // Immediately set video feed to black
-    setBlackScreen();
-
-    // Reset cheating status
-    statusDiv.textContent = "No cheating detected";
-    statusDiv.style.color = "#222";
-    statusDiv.style.fontWeight = "normal";
-
-    addNotification("Camera stopped");
-  };
-
-  async function sendLoop(videoElement) {
-    while (sending) {
-      if (videoElement.readyState >= 2 && socket && socket.connected) {
-        const frameB64 = captureFrame(videoElement);
-        socket.emit('frame', { image: frameB64 });
-      }
-      await new Promise(r => setTimeout(r, 250));
-    }
-  }
-
-  function captureFrame(videoElement) {
-    canvas.width = videoElement.videoWidth;
-    canvas.height = videoElement.videoHeight;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL('image/jpeg', 0.6);
+    await new Promise(r => setTimeout(r, 250));
   }
 }
 
+function captureFrame(videoElement) {
+  canvas.width = videoElement.videoWidth;
+  canvas.height = videoElement.videoHeight;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL('image/jpeg', 0.6);
+}
 
 // --- Timeline refresh helper ---
 function refreshTimeline() {
@@ -254,7 +282,6 @@ function refreshTimeline() {
   const maxTime = Math.max(...epochs);
   const span = maxTime > minTime ? maxTime - minTime : 1;
 
-  // --- Tooltip div (create once) ---
   let tooltip = document.getElementById("timeline-tooltip");
   if (!tooltip) {
     tooltip = document.createElement("div");
@@ -277,16 +304,15 @@ function refreshTimeline() {
     const pos = ((epoch - minTime) / span) * 100;
     p.style.left = pos + "%";
 
-    // --- Hover effect for tooltip ---
-    p.onmouseenter = (e) => {
+    p.onmouseenter = () => {
       tooltip.textContent = p.dataset.timestamp;
       tooltip.style.opacity = "1";
       const rect = p.getBoundingClientRect();
       tooltip.style.left = rect.left + rect.width / 2 + "px";
-      tooltip.style.top = rect.top - 28 + "px"; // above the point
+      tooltip.style.top = rect.top - 28 + "px";
     };
 
-    p.onmousemove = (e) => {
+    p.onmousemove = () => {
       const rect = p.getBoundingClientRect();
       tooltip.style.left = rect.left + rect.width / 2 + "px";
       tooltip.style.top = rect.top - 28 + "px";
@@ -296,24 +322,19 @@ function refreshTimeline() {
       tooltip.style.opacity = "0";
     };
 
-    // --- Click event ---
     p.onclick = () => {
       const snapId = p.dataset.id;
       const timestamp = p.dataset.timestamp;
-
       document.querySelector(".snapshot-img").src = "/cheating_snapshot/" + snapId;
       document.getElementById("snapshot-timestamp").textContent = "Snapshot at: " + timestamp;
-
       points.forEach(tp => tp.classList.remove("active"));
       p.classList.add("active");
     };
   });
 
-  // auto-activate latest
   const latestPoint = Array.from(points).sort((a, b) => b.dataset.epoch - a.dataset.epoch)[0];
   if (latestPoint) autoSwitchTo(latestPoint);
 
-  // update labels
   const sorted = Array.from(points).sort((a, b) => a.dataset.epoch - b.dataset.epoch);
   const startLabel = document.getElementById("timeline-start");
   const endLabel = document.getElementById("timeline-end");
@@ -323,44 +344,75 @@ function refreshTimeline() {
   }
 }
 
-// --- Auto switch to newest OR specific snapshot ---
 function autoSwitchTo(point) {
   if (!point) return;
   const snapId = point.dataset.id;
   const timestamp = point.dataset.timestamp;
-
   document.querySelector(".snapshot-img").src = "/cheating_snapshot/" + snapId;
   document.getElementById("snapshot-timestamp").textContent = "Snapshot at: " + timestamp;
-
   document.querySelectorAll(".timeline-point").forEach(tp => tp.classList.remove("active"));
   point.classList.add("active");
 }
 
-// --- Cheating page init ---
 if (document.querySelector(".timeline")) {
   initSocket();
-
   window.addEventListener("DOMContentLoaded", () => {
     refreshTimeline();
-
-    // 🔥 check if current page URL has snapshot_id
     const pathParts = window.location.pathname.split("/");
-    const currentSnapId = pathParts[pathParts.length - 1]; // snapshot id from URL
-
+    const currentSnapId = pathParts[pathParts.length - 1];
     const timeline = document.getElementById("timeline");
     if (timeline) {
       const allPoints = timeline.querySelectorAll(".timeline-point");
-
-      // find the one that matches the snapshot id
       const targetPoint = Array.from(allPoints).find(p => p.dataset.id === currentSnapId);
-
       if (targetPoint) {
-        autoSwitchTo(targetPoint); // activate the right snapshot
+        autoSwitchTo(targetPoint);
       } else {
-        // fallback to latest snapshot
         const latestPoint = Array.from(allPoints).sort((a, b) => b.dataset.epoch - a.dataset.epoch)[0];
         if (latestPoint) autoSwitchTo(latestPoint);
       }
     }
   });
 }
+
+const cameraSelect = document.getElementById("camera-select");
+
+// List available cameras
+async function listCameras() {
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  cameraSelect.innerHTML = ""; // clear old list
+  devices.forEach(device => {
+    if (device.kind === "videoinput") {
+      const option = document.createElement("option");
+      option.value = device.deviceId;
+      option.text = device.label || `Camera ${cameraSelect.length + 1}`;
+      cameraSelect.appendChild(option);
+    }
+  });
+}
+
+// Start camera with selected device
+async function startSelectedCamera() {
+  if (videoStream) {
+    videoStream.getTracks().forEach(track => track.stop());
+  }
+  try {
+    videoStream = await navigator.mediaDevices.getUserMedia({
+      video: { deviceId: { exact: cameraSelect.value } }
+    });
+    video.srcObject = videoStream;
+    streaming = true;
+    addNotification("Using: " + cameraSelect.selectedOptions[0].text);
+    video.onloadedmetadata = () => {
+      sendFrame();
+    };
+  } catch (err) {
+    alert("Error starting camera: " + err);
+  }
+}
+
+// Run when page loads
+window.onload = async () => {
+  setBlackScreen();
+  await listCameras();
+};
+

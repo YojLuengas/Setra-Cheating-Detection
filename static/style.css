@@ -194,3 +194,24 @@ button:hover {
     width: 95%;
   }
 }
+
+/* Camera Dropdown */
+.camera-select {
+  padding: 10px 20px;
+  margin: 5px;
+  border: none;
+  border-radius: 6px;
+  background: #0077ff;
+  color: white;
+  cursor: pointer;
+  font-size: 16px;
+  width: auto; /* auto but matches button width */
+  min-width: 160px; /* keep same width as buttons */
+  text-align: center;
+}
+
+.camera-select:hover {
+  background: #005fcc;
+}
+
+
