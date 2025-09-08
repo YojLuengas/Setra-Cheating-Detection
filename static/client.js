@@ -15,14 +15,17 @@ const seenSnapshots = new Set(JSON.parse(sessionStorage.getItem("seenSnapshots")
 // --- Black screen fallback ---
 function setBlackScreen() {
   if (!video) return;
+
   const black = document.createElement('canvas');
   black.width = 960;
   black.height = 720;
   const ctx = black.getContext('2d');
   ctx.fillStyle = "#000";
   ctx.fillRect(0, 0, black.width, black.height);
+
   video.src = black.toDataURL('image/png');
 }
+
 
 // --- Restore notifications & timeline on refresh ---
 window.addEventListener("DOMContentLoaded", () => {
@@ -164,20 +167,28 @@ function initSocket() {
 }
 
 // --- Camera page logic ---
+// --- Camera page logic ---
 if (startBtn && stopBtn) {
   window.onload = setBlackScreen;
+
+  let vid; // reference to the hidden video element
 
   startBtn.onclick = async () => {
     initSocket();
 
+    // Get webcam stream
     stream = await navigator.mediaDevices.getUserMedia({
       video: { width: 960, height: 720 },
       audio: false
     });
 
-    const vid = document.createElement("video");
+    // Create a hidden video element for capturing frames
+    vid = document.createElement("video");
+    vid.style.display = "none";
+    document.body.appendChild(vid);
     vid.srcObject = stream;
-    vid.play();
+    await vid.play();
+
     sending = true;
 
     sendLoop(vid);
@@ -186,37 +197,51 @@ if (startBtn && stopBtn) {
 
   stopBtn.onclick = () => {
     sending = false;
+
+    // Stop all webcam tracks
     if (stream) {
       stream.getTracks().forEach(t => t.stop());
       stream = null;
     }
-    setBlackScreen(); // 🔥 Force black screen immediately
+
+    // Remove hidden video element
+    if (vid) {
+      vid.srcObject = null;
+      vid.remove();
+      vid = null;
+    }
+
+    // Immediately set video feed to black
+    setBlackScreen();
+
+    // Reset cheating status
     statusDiv.textContent = "No cheating detected";
     statusDiv.style.color = "#222";
     statusDiv.style.fontWeight = "normal";
+
     addNotification("Camera stopped");
   };
 
-  async function sendLoop(vid) {
+  async function sendLoop(videoElement) {
     while (sending) {
-      if (vid.readyState >= 2 && socket && socket.connected) {
-        const frameB64 = captureFrame(vid);
+      if (videoElement.readyState >= 2 && socket && socket.connected) {
+        const frameB64 = captureFrame(videoElement);
         socket.emit('frame', { image: frameB64 });
       }
       await new Promise(r => setTimeout(r, 250));
     }
   }
 
-  function captureFrame(vid) {
-    canvas.width = vid.videoWidth;
-    canvas.height = vid.videoHeight;
+  function captureFrame(videoElement) {
+    canvas.width = videoElement.videoWidth;
+    canvas.height = videoElement.videoHeight;
     const ctx = canvas.getContext('2d');
-    ctx.drawImage(vid, 0, 0, canvas.width, canvas.height);
+    ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
     return canvas.toDataURL('image/jpeg', 0.6);
   }
 }
 
-// --- Timeline refresh helper ---
+
 // --- Timeline refresh helper ---
 function refreshTimeline() {
   const timeline = document.getElementById("timeline");
@@ -298,8 +323,7 @@ function refreshTimeline() {
   }
 }
 
-
-// --- Auto switch to newest snapshot ---
+// --- Auto switch to newest OR specific snapshot ---
 function autoSwitchTo(point) {
   if (!point) return;
   const snapId = point.dataset.id;
@@ -315,33 +339,28 @@ function autoSwitchTo(point) {
 // --- Cheating page init ---
 if (document.querySelector(".timeline")) {
   initSocket();
+
   window.addEventListener("DOMContentLoaded", () => {
     refreshTimeline();
 
-    socket.on("cheating_notification", (data) => {
-      if (!seenSnapshots.has(data.url)) {
-        seenSnapshots.add(data.url);
+    // 🔥 check if current page URL has snapshot_id
+    const pathParts = window.location.pathname.split("/");
+    const currentSnapId = pathParts[pathParts.length - 1]; // snapshot id from URL
 
-        const snapId = data.url.split("/").pop();
-        const timestampMatch = data.message.match(/at (.+)!/);
-        const timestamp = timestampMatch ? timestampMatch[1] : new Date().toLocaleString();
-        const epoch = Date.now() / 1000;
+    const timeline = document.getElementById("timeline");
+    if (timeline) {
+      const allPoints = timeline.querySelectorAll(".timeline-point");
 
-        const timeline = document.getElementById("timeline");
-        if (timeline) {
-          const point = document.createElement("div");
-          point.className = "timeline-point";
-          point.dataset.id = snapId;
-          point.dataset.timestamp = timestamp;
-          point.dataset.epoch = epoch;
-          point.title = "Taken at " + timestamp;
-          timeline.appendChild(point);
-          refreshTimeline();
-          autoSwitchTo(point);
-        }
+      // find the one that matches the snapshot id
+      const targetPoint = Array.from(allPoints).find(p => p.dataset.id === currentSnapId);
 
-        persistState(data, { id: snapId, timestamp, epoch });
+      if (targetPoint) {
+        autoSwitchTo(targetPoint); // activate the right snapshot
+      } else {
+        // fallback to latest snapshot
+        const latestPoint = Array.from(allPoints).sort((a, b) => b.dataset.epoch - a.dataset.epoch)[0];
+        if (latestPoint) autoSwitchTo(latestPoint);
       }
-    });
+    }
   });
 }

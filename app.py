@@ -189,3 +189,4 @@ if __name__ == "__main__":
     print(f"🚀 Server running at: http://127.0.0.1:{port}")
     print(f"🌐 Accessible on your network at: http://{host}:{port}")
     socketio.run(app, host=host, port=port, debug=True)
+    
