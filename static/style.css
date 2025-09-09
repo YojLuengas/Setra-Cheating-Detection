@@ -1,0 +1,217 @@
+/* General Reset */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* Body */
+body {
+  font-family: Arial, sans-serif;
+  background: #f4f4f9;
+  color: #333;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+/* Header */
+header {
+  background: #0077ff;
+  color: white;
+  padding: 15px 20px;
+  text-align: center;
+  font-size: 22px;
+  font-weight: bold;
+}
+
+/* Container (sidebar + main) */
+.container {
+  display: flex;
+  flex: 1;
+  height: calc(100vh - 60px);
+  overflow: hidden;
+}
+
+/* Sidebar */
+.sidebar {
+  width: 250px;
+  background: #2c2c54;
+  color: white;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.sidebar h2 {
+  font-size: 18px;
+  margin-bottom: 15px;
+}
+
+.sidebar ul {
+  list-style: none;
+}
+
+.sidebar ul li {
+  background: #444;
+  margin: 8px 0;
+  padding: 8px;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+/* Main Content */
+.main-content {
+  flex: 1;
+  padding: 20px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.camera-container {
+  text-align: center;
+}
+
+.camera-container img#video-frame {
+  width: 720px;
+  height: 540px;
+  border-radius: 8px;
+  border: 2px solid #2d3e50;
+  background: #000;
+  object-fit: cover;
+  display: block;
+  margin: 0 auto;
+}
+
+.status-text {
+  margin-top: 1rem;
+  font-size: 1.3rem;
+  color: #222;
+}
+
+/* Buttons */
+.controls {
+  margin-top: 15px;
+}
+
+button {
+  padding: 10px 20px;
+  margin: 5px;
+  border: none;
+  border-radius: 6px;
+  background: #0077ff;
+  color: white;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+button:hover {
+  background: #005fcc;
+}
+
+/* -------------------
+   Cheating Snapshot
+------------------- */
+.snapshot-img {
+  max-width: 90%;
+  max-height: 60vh;
+  margin: 0 auto 20px auto;
+  display: block;
+  border: 3px solid #ff4444;
+  border-radius: 10px;
+}
+
+/* -------------------
+   Timeline Styles (YouTube style)
+------------------- */
+.timeline-container {
+  margin: 20px auto;
+  width: 90%;
+  position: relative;
+}
+
+.timeline {
+  position: relative;
+  height: 8px;
+  background: #444;
+  border-radius: 4px;
+  margin: 0 auto;
+}
+
+.timeline-point {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 14px;
+  height: 14px;
+  background: #ff0000;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.2s ease, background 0.2s ease;
+  z-index: 10;
+}
+
+.timeline-point:hover {
+  transform: scale(1.4) translate(-50%, -50%);
+  background: #cc0000;
+}
+
+.timeline-point.active {
+  background: #0077ff;
+  border-color: yellow;
+}
+
+.timeline-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #333;
+  margin-top: 6px;
+}
+
+/* -------------------
+   Responsive tweaks
+------------------- */
+@media (max-width: 768px) {
+  .camera-container img#video-frame,
+  .snapshot-img {
+    width: 100%;
+    height: auto;
+    max-height: 50vh;
+  }
+
+  .sidebar {
+    display: none;
+  }
+
+  .container {
+    flex-direction: column;
+  }
+
+  .timeline-container {
+    width: 95%;
+  }
+}
+
+/* Camera Dropdown */
+.camera-select {
+  padding: 10px 20px;
+  margin: 5px;
+  border: none;
+  border-radius: 6px;
+  background: #0077ff;
+  color: white;
+  cursor: pointer;
+  font-size: 16px;
+  width: auto; /* auto but matches button width */
+  min-width: 160px; /* keep same width as buttons */
+  text-align: center;
+}
+
+.camera-select:hover {
+  background: #005fcc;
+}
+
+
