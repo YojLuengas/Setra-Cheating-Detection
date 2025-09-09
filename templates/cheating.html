@@ -24,11 +24,11 @@
       <div class="timeline" id="timeline">
         {% for snap in cheating_snapshots %}
           <div class="timeline-point 
-                      {% if snap.id == snapshot_id %}active{% endif %}" 
-               title="Taken at {{ snap.timestamp }}"
-               data-id="{{ snap.id }}"
-               data-timestamp="{{ snap.timestamp }}"
-               data-epoch="{{ snap.epoch }}">
+                      {% if snap['id'] == snapshot_id %}active{% endif %}" 
+               title="Taken at {{ snap['timestamp'] }}"
+               data-id="{{ snap['id'] }}"
+               data-timestamp="{{ snap['timestamp'] }}"
+               data-epoch="{{ snap['epoch'] }}">
           </div>
         {% endfor %}
       </div>
@@ -36,8 +36,8 @@
       <!-- Labels -->
       <div class="timeline-labels" id="timeline-labels">
         {% if cheating_snapshots %}
-          <span id="timeline-start">{{ cheating_snapshots[0].timestamp }}</span>
-          <span id="timeline-end">{{ cheating_snapshots[-1].timestamp }}</span>
+          <span id="timeline-start">{{ cheating_snapshots[0]['timestamp'] }}</span>
+          <span id="timeline-end">{{ cheating_snapshots[-1]['timestamp'] }}</span>
         {% endif %}
       </div>
     </div>

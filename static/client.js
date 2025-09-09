@@ -151,11 +151,6 @@ function initSocket() {
   if (!socket) {
     socket = io({ transports: ['websocket'] });
 
-    socket.on('connect', () => {
-      console.log("✅ Connected to server");
-      addNotification("Connected to server.");
-    });
-
     socket.on('response_frame', (msg) => {
       if (!video) return;
       video.src = msg.image;
