@@ -53,69 +53,74 @@ async function getCameras() {
 }
 
 // --- Restore notifications & timeline on refresh ---
-window.addEventListener("DOMContentLoaded", () => {
+window.addEventListener("DOMContentLoaded", async () => {
   getCameras();
 
-  if (refreshBtn) refreshBtn.onclick = getCameras;
-  if (cameraList) {
-    cameraList.onchange = () => {
-      currentDeviceId = cameraList.value;
-      if (sending) {
-        // restart with new camera
-        stopCamera();
-        startCamera();
-      }
-    };
-  }
-
-  const savedNotifs = JSON.parse(sessionStorage.getItem("notifications") || "[]");
-  if (notifications && savedNotifs.length > 0) {
-    notifications.innerHTML = "";
-    savedNotifs.forEach(n => appendNotification(n));
-  }
-
-  const savedPoints = JSON.parse(sessionStorage.getItem("timelinePoints") || "[]");
-  const timeline = document.getElementById("timeline");
-  if (timeline && savedPoints.length > 0) {
-    timeline.innerHTML = "";
-    savedPoints.forEach(p => {
-      const point = document.createElement("div");
-      point.className = "timeline-point";
-      point.dataset.id = p.id;
-      point.dataset.timestamp = p.timestamp;
-      point.dataset.epoch = p.epoch;
-      point.title = "Taken at " + p.timestamp;
-      timeline.appendChild(point);
-    });
-    refreshTimeline();
+  // Load notifications from DB
+  const res = await fetch("/api/notifications");
+  const data = await res.json();
+  notifications.innerHTML = "";
+  if (data.notifications.length === 0) {
+    notifications.innerHTML = "<li>No alerts yet</li>";
+  } else {
+    data.notifications.forEach(n => appendNotification(n));
   }
 });
 
 // --- Append a notification item ---
 function appendNotification(data) {
   const li = document.createElement("li");
+  li.classList.add("notification-item");
+
+  let contentEl;
 
   if (data.url) {
-    const a = document.createElement("a");
-    a.href = "#";
-    a.textContent = data.message;
-    a.style.color = "#ff4444";
-    a.style.fontWeight = "bold";
-    a.style.textDecoration = "underline";
-    a.style.cursor = "pointer";
-
-    a.onclick = (e) => {
+    //  Cheating notification (clickable link)
+    contentEl = document.createElement("a");
+    contentEl.href = "#";
+    contentEl.textContent = data.message;
+    contentEl.style.color = "#ff4444";
+    contentEl.style.fontWeight = "bold";
+    contentEl.style.textDecoration = "underline";
+    contentEl.style.cursor = "pointer";
+    contentEl.onclick = (e) => {
       e.preventDefault();
       window.open(data.url, "_blank");
     };
-
-    li.appendChild(a);
   } else {
-    li.textContent = data.message;
+    // System notification (plain text)
+    contentEl = document.createElement("span");
+    contentEl.textContent = data.message;
+    contentEl.style.color = "#ffffffff";
+    contentEl.style.fontWeight = "normal";
+  }
+
+  //  delete button (only for cheating notifs)
+  if (data.url) {
+    const delBtn = document.createElement("button");
+    delBtn.textContent = "×";
+    delBtn.style.marginLeft = "10px";
+    delBtn.style.background = "transparent";
+    delBtn.style.color = "#fff";
+    delBtn.style.border = "none";
+    delBtn.style.cursor = "pointer";
+    delBtn.onclick = async () => {
+      const snapId = data.url.split("/").pop();
+      const res = await fetch(`/api/delete/${snapId}`, { method: "DELETE" });
+      if (res.ok) {
+        li.remove();
+      }
+    };
+    li.appendChild(contentEl);
+    li.appendChild(delBtn);
+  } else {
+    li.appendChild(contentEl);
   }
 
   if (notifications) notifications.prepend(li);
 }
+
+
 
 // --- Save to sessionStorage ---
 function persistState(newNotif, newPoint) {
@@ -415,4 +420,3 @@ window.onload = async () => {
   setBlackScreen();
   await listCameras();
 };
-
