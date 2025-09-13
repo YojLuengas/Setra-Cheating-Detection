@@ -5,10 +5,20 @@ import uuid
 import cv2
 import numpy as np
 from PIL import Image
-from flask import Flask, render_template, make_response
+from flask import Flask, render_template, make_response, redirect, url_for, request
 from flask_socketio import SocketIO, emit
 import mediapipe as mp
 from ultralytics import YOLO
+import mysql.connector   # ✅ DB support added
+
+# --- Database Connection ---
+db = mysql.connector.connect(
+    host="localhost",
+    user="root",
+    password="",          # put your MySQL password here if any
+    database="sentra_db"  # make sure this DB exists in phpMyAdmin
+)
+cursor = db.cursor()
 
 # Flask + SocketIO
 app = Flask(__name__)
@@ -124,6 +134,16 @@ def handle_frame(message):
             all_snapshots.append(snapshot)        # log everything
             notified_snapshots.append(snapshot)   # ✅ only store notified
 
+            # ✅ Save to DB
+            try:
+                sql = "INSERT INTO detections (id, timestamp, epoch, image_path) VALUES (%s, %s, %s, %s)"
+                vals = (snap_id, timestamp, now, "base64_inline")  # image is inline base64 here
+                cursor.execute(sql, vals)
+                db.commit()
+                print(f"✅ Inserted detection {snap_id} into DB")
+            except Exception as e:
+                print(f"⚠️ DB insert error: {e}")
+
             socketio.emit('cheating_notification', {
                 'message': f'Cheating detected at {timestamp}! Click for details.',
                 'url': f'/cheating/{snap_id}'
@@ -182,6 +202,38 @@ def cheating_snapshot(snap_id):
         return response
     return "Snapshot not found", 404
 
+@app.route("/api/notifications")
+def get_notifications():
+    cursor.execute("SELECT id, timestamp FROM detections ORDER BY epoch DESC")
+    rows = cursor.fetchall()
+    notifications = [
+        {
+            "id": row[0],
+            "message": f"Cheating detected at {row[1]}! Click for details.",
+            "url": f"/cheating/{row[0]}"
+        }
+        for row in rows
+    ]
+    return {"notifications": notifications}
+
+
+@app.route("/api/delete/<snap_id>", methods=["DELETE"])
+def delete_notification(snap_id):
+    try:
+        # delete from DB
+        cursor.execute("DELETE FROM detections WHERE id = %s", (snap_id,))
+        db.commit()
+
+        # also clean from in-memory snapshots
+        global all_snapshots, notified_snapshots
+        all_snapshots = [s for s in all_snapshots if s["id"] != snap_id]
+        notified_snapshots = [s for s in notified_snapshots if s["id"] != snap_id]
+
+        return {"success": True}
+    except Exception as e:
+        return {"success": False, "error": str(e)}, 500
+
+
 # --- Run ---
 if __name__ == "__main__":
     host = "0.0.0.0"
@@ -189,4 +241,3 @@ if __name__ == "__main__":
     print(f"🚀 Server running at: http://127.0.0.1:{port}")
     print(f"🌐 Accessible on your network at: http://{host}:{port}")
     socketio.run(app, host=host, port=port, debug=True)
-    
