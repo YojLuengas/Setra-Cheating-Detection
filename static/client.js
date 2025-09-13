@@ -169,7 +169,51 @@ function initSocket() {
         statusDiv.style.fontWeight = "bold";
       }
     });
+    // --- Handle delete events from server ---
+    socket.on('delete_notification', (data) => {
+      const snapId = data.id;
 
+      // 🔹 Remove from notifications panel
+      if (notifications) {
+        const notifItems = notifications.querySelectorAll("li");
+        notifItems.forEach(li => {
+          const link = li.querySelector("a");
+          if (link && link.href.includes(snapId)) {
+            li.remove();
+          }
+        });
+      }
+
+      // 🔹 Remove from sessionStorage (notifications list)
+      let saved = JSON.parse(sessionStorage.getItem("notifications") || "[]");
+      saved = saved.filter(n => !n.url || !n.url.includes(snapId));
+      sessionStorage.setItem("notifications", JSON.stringify(saved));
+
+      // 🔹 Remove from sessionStorage (timeline points)
+      let savedPoints = JSON.parse(sessionStorage.getItem("timelinePoints") || "[]");
+      savedPoints = savedPoints.filter(p => p.id !== snapId);
+      sessionStorage.setItem("timelinePoints", JSON.stringify(savedPoints));
+
+      // 🔹 Remove from seenSnapshots
+      seenSnapshots.delete("/cheating/" + snapId);
+      sessionStorage.setItem("seenSnapshots", JSON.stringify(Array.from(seenSnapshots)));
+
+      // 🔹 Remove from timeline UI
+      const timeline = document.getElementById("timeline");
+      if (timeline) {
+        const points = timeline.querySelectorAll(".timeline-point");
+        points.forEach(p => {
+          if (p.dataset.id === snapId) {
+            p.remove();
+          }
+        });
+        refreshTimeline();
+      }
+
+      console.log(`🗑️ Snapshot ${snapId} deleted (frontend cleaned)`);
+    });
+
+    
     socket.on('cheating_notification', (data) => {
       if (!seenSnapshots.has(data.url)) {
         seenSnapshots.add(data.url);

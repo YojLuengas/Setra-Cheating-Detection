@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Cheating Detection</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
@@ -14,10 +14,21 @@
 
   <div class="container">
     <!-- Sidebar -->
-    <nav class="sidebar">
+    <nav class="sidebar" aria-label="Notifications">
       <h2>Notifications</h2>
       <ul id="notifications">
-        <li>No alerts yet</li>
+        {% for snap in cheating_snapshots %}
+          <li>
+            <a href="{{ url_for('cheating', snap_id=snap['id']) }}">
+              🛑 Cheating at {{ snap['timestamp'] }}
+            </a>
+            <form method="POST" action="{{ url_for('delete_detection', snap_id=snap['id']) }}" style="display:inline;">
+              <button type="submit" onclick="return confirm('Delete this detection?')">❌ Delete</button>
+            </form>
+          </li>
+        {% else %}
+          <li>No alerts yet</li>
+        {% endfor %}
       </ul>
     </nav>
 
@@ -25,21 +36,23 @@
     <main class="main-content">
       <div class="camera-container">
         <div class="video-wrapper">
-          <img id="video-frame" alt="AI Detection Feed">
+          <img id="video-frame" src="" alt="AI Detection Feed will appear here">
         </div>
         <div id="cheating-status" class="status-text">
           No cheating detected
         </div>
         <div class="controls">
-  <button id="start-btn">Start Camera</button>
-  <button id="stop-btn">Stop Camera</button>
-  <br>
-  <select id="camera-select" class="camera-select"></select>
-</div>
+          <button id="start-btn">Start Camera</button>
+          <button id="stop-btn">Stop Camera</button>
+          <br />
+          <label for="camera-select" class="sr-only">Choose Camera</label>
+          <select id="camera-select" class="camera-select"></select>
+        </div>
       </div>
     </main>
   </div>
 
+  <!-- Scripts -->
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="{{ url_for('static', filename='client.js') }}"></script>
 </body>

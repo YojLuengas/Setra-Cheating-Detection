@@ -2,13 +2,28 @@ import io
 import base64
 import time
 import uuid
+import os
 import cv2
 import numpy as np
 from PIL import Image
-from flask import Flask, render_template, make_response
+from flask import Flask, render_template, make_response, send_file, redirect, url_for, request
 from flask_socketio import SocketIO, emit
 import mediapipe as mp
 from ultralytics import YOLO
+import mysql.connector
+
+# Ensure snapshots directory exists
+if not os.path.exists("snapshots"):
+    os.makedirs("snapshots")
+
+# Global DB connection
+db = mysql.connector.connect(
+    host="localhost",
+    user="root",
+    password="",
+    database="sentra_db"
+)
+cursor = db.cursor()
 
 # Flask + SocketIO
 app = Flask(__name__)
@@ -22,7 +37,7 @@ yolo_model = YOLO(MODEL_PATH)
 mp_face_mesh = mp.solutions.face_mesh
 face_mesh = mp_face_mesh.FaceMesh(
     static_image_mode=False,
-    max_num_faces=1,
+    max_num_faces=10,
     refine_landmarks=True,
     min_detection_confidence=0.5,
     min_tracking_confidence=0.5
@@ -110,19 +125,34 @@ def handle_frame(message):
         if now - last_cheating_notification_time >= 2:
             alert_msgs.append("Cheating detected")
 
-            out_b64 = cv2_to_b64(original, jpeg_quality=80)
             snap_id = str(uuid.uuid4())
-            timestamp = time.strftime("%Y-%m-%d %I:%M:%S %p")
+            timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+
+            # Save snapshot locally
+            filename = f"{snap_id}.jpg"
+            filepath = os.path.join("snapshots", filename)
+            cv2.imwrite(filepath, original)
 
             snapshot = {
                 "id": snap_id,
-                "image": out_b64,
+                "image": None,
                 "timestamp": timestamp,
-                "epoch": now
+                "epoch": now,
+                "filepath": filepath
             }
 
-            all_snapshots.append(snapshot)        # log everything
-            notified_snapshots.append(snapshot)   # ✅ only store notified
+            # Insert into DB
+            try:
+                sql = "INSERT INTO detections (id, timestamp, epoch, image_path) VALUES (%s, %s, %s, %s)"
+                vals = (snap_id, timestamp, now, filepath)
+                cursor.execute(sql, vals)
+                db.commit()
+                print(f"Inserted cheating detection {snap_id} into DB with file path.")
+            except Exception as e:
+                print(f"DB insert error: {e}")
+
+            all_snapshots.append(snapshot)
+            notified_snapshots.append(snapshot)
 
             socketio.emit('cheating_notification', {
                 'message': f'Cheating detected at {timestamp}! Click for details.',
@@ -156,31 +186,54 @@ def handle_frame(message):
 # --- Routes ---
 @app.route("/")
 def home():
-    return render_template("index.html")
+    return render_template("index.html", cheating_snapshots=notified_snapshots)
 
 @app.route("/cheating/<snap_id>")
 def cheating(snap_id):
-    snap = next((s for s in notified_snapshots if s["id"] == snap_id), None)  # ✅ only notified
+    snap = next((s for s in notified_snapshots if s["id"] == snap_id), None)
     if snap:
         return render_template(
             "cheating.html",
             snapshot_id=snap_id,
             timestamp=snap["timestamp"],
-            cheating_snapshots=notified_snapshots  # ✅ only notified
+            cheating_snapshots=notified_snapshots
         )
     else:
         return "Snapshot not found", 404
 
 @app.route("/cheating_snapshot/<snap_id>")
 def cheating_snapshot(snap_id):
-    snap = next((s for s in all_snapshots if s["id"] == snap_id), None)  # serve from all
-    if snap:
-        header, b64 = snap["image"].split(',', 1)
-        img_bytes = base64.b64decode(b64)
-        response = make_response(img_bytes)
-        response.headers.set('Content-Type', 'image/jpeg')
-        return response
+    snap = next((s for s in all_snapshots if s["id"] == snap_id), None)
+    if snap and "filepath" in snap and os.path.exists(snap["filepath"]):
+        return send_file(snap["filepath"], mimetype='image/jpeg')
     return "Snapshot not found", 404
+
+@app.route("/delete_detection/<snap_id>", methods=["POST"])
+def delete_detection(snap_id):
+    # Find snapshot in memory
+    snap = next((s for s in notified_snapshots if s["id"] == snap_id), None)
+
+    # Delete from DB
+    try:
+        cursor.execute("DELETE FROM detections WHERE id = %s", (snap_id,))
+        db.commit()
+        print(f"Deleted detection {snap_id} from DB.")
+    except Exception as e:
+        print(f"Error deleting from DB: {e}")
+
+    # Delete image file
+    if snap and "filepath" in snap and os.path.exists(snap["filepath"]):
+        try:
+            os.remove(snap["filepath"])
+            print(f"Deleted snapshot file: {snap['filepath']}")
+        except Exception as e:
+            print(f"Error deleting file: {e}")
+
+    # Remove from memory
+    notified_snapshots[:] = [s for s in notified_snapshots if s["id"] != snap_id]
+    all_snapshots[:] = [s for s in all_snapshots if s["id"] != snap_id]
+
+    return redirect(url_for('home'))
 
 # --- Run ---
 if __name__ == "__main__":
@@ -189,4 +242,3 @@ if __name__ == "__main__":
     print(f"🚀 Server running at: http://127.0.0.1:{port}")
     print(f"🌐 Accessible on your network at: http://{host}:{port}")
     socketio.run(app, host=host, port=port, debug=True)
-    
