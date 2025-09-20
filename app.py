@@ -6,6 +6,7 @@ import os
 import cv2
 import numpy as np
 from PIL import Image
+<<<<<<< HEAD
 from flask import Flask, render_template, make_response, send_file, redirect, url_for, request
 from flask_socketio import SocketIO, emit
 import mediapipe as mp
@@ -22,6 +23,21 @@ db = mysql.connector.connect(
     user="root",
     password="",
     database="sentra_db"
+=======
+from flask import Flask, render_template, make_response, redirect, url_for, request
+from flask_socketio import SocketIO, emit
+import mediapipe as mp
+from ultralytics import YOLO
+import mysql.connector   # ✅ DB support added
+from datetime import datetime
+
+# --- Database Connection ---
+db = mysql.connector.connect(
+    host="localhost",
+    user="root",
+    password="",          # put your MySQL password here if any
+    database="sentra_db"  # make sure this DB exists in phpMyAdmin
+>>>>>>> c562c46d92c640d926cfc703f25221af44612cce
 )
 cursor = db.cursor()
 
@@ -154,8 +170,23 @@ def handle_frame(message):
             all_snapshots.append(snapshot)
             notified_snapshots.append(snapshot)
 
+            # ✅ Save to DB
+            try:
+                sql = "INSERT INTO detections (id, timestamp, epoch, image_path) VALUES (%s, %s, %s, %s)"
+                vals = (snap_id, timestamp, now, "base64_inline")  # image is inline base64 here
+                cursor.execute(sql, vals)
+                db.commit()
+                print(f"✅ Inserted detection {snap_id} into DB")
+            except Exception as e:
+                print(f"⚠️ DB insert error: {e}")
+
+            now_dt = datetime.now()
+            time_str = now_dt.strftime("%I:%M %p")  # e.g., "02:15 PM"
+
             socketio.emit('cheating_notification', {
-                'message': f'Cheating detected at {timestamp}! Click for details.',
+                'message': 'Cheating detected',
+                'time': time_str,
+                'timestamp': now_dt.strftime("%Y-%m-%d %I:%M:%S %p"),
                 'url': f'/cheating/{snap_id}'
             })
 
@@ -208,6 +239,7 @@ def cheating_snapshot(snap_id):
         return send_file(snap["filepath"], mimetype='image/jpeg')
     return "Snapshot not found", 404
 
+<<<<<<< HEAD
 @app.route("/delete_detection/<snap_id>", methods=["POST"])
 def delete_detection(snap_id):
     # Find snapshot in memory
@@ -234,6 +266,41 @@ def delete_detection(snap_id):
     all_snapshots[:] = [s for s in all_snapshots if s["id"] != snap_id]
 
     return redirect(url_for('home'))
+=======
+@app.route("/api/notifications")
+def get_notifications():
+    cursor.execute("SELECT id, timestamp FROM detections ORDER BY epoch DESC")
+    rows = cursor.fetchall()
+    notifications = [
+        {
+            "id": row[0],
+            "message": "Cheating detected",
+            "time": row[1].split()[-2] + " " + row[1].split()[-1],  # Show only time part
+            "timestamp": row[1],  # Full timestamp
+            "url": f"/cheating/{row[0]}"
+        }
+        for row in rows
+    ]
+    return {"notifications": notifications}
+
+
+@app.route("/api/delete/<snap_id>", methods=["DELETE"])
+def delete_notification(snap_id):
+    try:
+        # delete from DB
+        cursor.execute("DELETE FROM detections WHERE id = %s", (snap_id,))
+        db.commit()
+
+        # also clean from in-memory snapshots
+        global all_snapshots, notified_snapshots
+        all_snapshots = [s for s in all_snapshots if s["id"] != snap_id]
+        notified_snapshots = [s for s in notified_snapshots if s["id"] != snap_id]
+
+        return {"success": True}
+    except Exception as e:
+        return {"success": False, "error": str(e)}, 500
+
+>>>>>>> c562c46d92c640d926cfc703f25221af44612cce
 
 # --- Run ---
 if __name__ == "__main__":
@@ -241,4 +308,8 @@ if __name__ == "__main__":
     port = 5000
     print(f"🚀 Server running at: http://127.0.0.1:{port}")
     print(f"🌐 Accessible on your network at: http://{host}:{port}")
+<<<<<<< HEAD
     socketio.run(app, host=host, port=port, debug=True)
+=======
+    socketio.run(app, host=host, port=port, debug=True)
+>>>>>>> c562c46d92c640d926cfc703f25221af44612cce
