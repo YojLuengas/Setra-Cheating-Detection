@@ -5,20 +5,33 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Cheating Detection</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"> <!-- for icons -->
 </head>
 <body>
-  <!-- Header -->
-  <header>
-    <h1>Cheating Detection System</h1>
-  </header>
 
   <div class="container">
-    <!-- Sidebar -->
-    <nav class="sidebar">
-      <h2>Notifications</h2>
-      <ul id="notifications">
-        <li>No alerts yet</li>
+    <!-- Left Sidebar -->
+    <aside class="sidebar">
+      <ul class="menu-top">
+        <li id="alerts-menu">
+          <i class="fa-regular fa-bell"></i>
+          <span>Alerts</span>
+          <span id="alert-badge" class="badge">0</span>
+        </li>
+        <li><i class="fa-regular fa-clock"></i><span>Records</span></li>
+        <li><i class="fa-regular fa-user"></i><span>Users</span></li>
       </ul>
+      <ul class="menu-bottom">
+        <li><i class="fa-solid fa-gear gear-icon"></i><span>Settings</span></li>
+      </ul>
+    </aside>
+
+    <!-- Notification Panel -->
+    <nav class="notifPanel">
+      <h2>Notifications</h2>
+      <div id="notifications">
+        <p id="no-alerts-msg">No alerts yet</p>
+      </div>
     </nav>
 
     <!-- Main Content -->
@@ -40,7 +53,10 @@
     </main>
   </div>
 
+  <!-- Socket.IO -->
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-  <script src="{{ url_for('static', filename='client.js') }}"></script>
+
+  <!-- Entry point (modular JS) -->
+  <script type="module" src="{{ url_for('static', filename='main.js') }}" defer></script>
 </body>
 </html>

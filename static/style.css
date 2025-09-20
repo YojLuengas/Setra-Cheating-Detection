@@ -32,27 +32,41 @@ header {
   flex: 1;
   height: calc(100vh - 60px);
   overflow: hidden;
+  margin-left: 70px;
 }
 
-/* Sidebar */
-.sidebar {
-  width: 250px;
+/* Notification Panel */
+.notifPanel {
+  position: fixed;
+  top: 0;
+  left: 70px;
+  height: 100vh;
+  width: 300px;
   background: #2c2c54;
   color: white;
   padding: 20px;
-  overflow-y: auto;
+  overflow-y: visible;
+  transform: translateX(-100%);
+  transition: transform 0.35s cubic-bezier(0.4,0,0.2,1);
+  z-index: 1001;
+  box-shadow: 2px 0 12px rgba(0,0,0,0.08);
+  display: block; 
 }
 
-.sidebar h2 {
+.notifPanel.open {
+  transform: translateX(0);
+}
+
+.notifPanel h2 {
   font-size: 18px;
   margin-bottom: 15px;
 }
 
-.sidebar ul {
+.notifPanel ul {
   list-style: none;
 }
 
-.sidebar ul li {
+.notifPanel ul li {
   background: #444;
   margin: 8px 0;
   padding: 8px;
@@ -233,52 +247,188 @@ button:hover {
   padding: 0;
 }
 
-/* Each item */
+/* Notification item */
 .notification-item {
+  display: flex;
+  flex-direction: column;
+  padding: 12px 16px;
+  border-bottom: 1px solid #232347;
+  background: transparent;
+  align-items: stretch;
+  cursor: pointer;
+  transition: background 0.2s;
+  position: relative;   /* <-- Add this line */
+}
+
+.notification-item:hover {
+  background: #232347;
+}
+
+.notif-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #f8f9fa;
-  border: 1px solid #ddd;
-  padding: 8px 12px;
-  margin: 6px 0;
-  border-radius: 6px;
-  font-size: 14px;
-  line-height: 1.4;
-  transition: background 0.2s ease;
 }
 
-/* Text only */
-.notif-text {
-  color: #ffffff;
+.notif-msg {
+  font-weight: 500;
+  color: #fff;
+  font-size: 1rem;
+  letter-spacing: 0.01em;
+}
+
+.notif-time {
+  color: #b0b0c3;
+  font-size: 0.8rem;   /* smaller than before */
+  font-weight: 400;
+  margin-left: 0;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Unread notifications*/
+.notification-item.unread {
+  background: #232347;
+  border-left: 4px solid #ff3b3b;
+}
+
+/* Read notifications: normal text, default background */
+.notification-item.read {
+  background: transparent;
   font-weight: normal;
-  flex: 1;
+  border-left: 4px solid transparent;
+  /* opacity: 0.7;  <-- REMOVE THIS */
+  color: #b0b0c3;
 }
 
-/* Link-style cheating alerts */
+/* Cheating alerts (highlighted) */
 .notif-link {
-  color: #d9534f;
-  font-weight: bold;
-  text-decoration: underline;
+  color: #e63946;
+  font-weight: 600;
+  text-decoration: none;
   cursor: pointer;
   flex: 1;
 }
 
-/* X button */
-.delete-btn {
+/* 3-dot menu wrapper */
+.menu-wrapper {
+  display: flex;
+  align-items: center;
+  margin: 0 0 0 8px; /* or margin: 0 2px 0 8px; for a tiny right gap */
+}
+
+/* 3-dot button */
+.menu-btn {
   background: transparent;
   border: none;
-  color: #666;
-  font-size: 16px;
+  font-size: 18px;
   cursor: pointer;
-  margin-left: 10px;
+  color: #999;
+  padding: 4px;
+  border-radius: 50%;
+  transition: color 0.2s ease; /* Remove background transition */
 }
 
-.delete-btn:hover {
-  color: #d9534f;
+/* Only change color on hover, no background */
+.menu-btn:hover {
+  background: transparent;
+  color: #7e7d7d;
+}
+
+/* Dropdown menu */
+.menu-dropdown {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: 28px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  min-width: 140px;
+  overflow: hidden;
+  z-index: 1000;
+}
+
+/* Dropdown items */
+.menu-item {
+  padding: 10px 14px;
+  font-size: 14px;
+  color: #333;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.menu-item:hover {
+  background: #f8f9fa;
+}
+
+/* Sidebar Layout */
+.sidebar {
+  width: 70px;
+  background: #1c1c1c;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between; /* pushes Settings to bottom */
+  align-items: center;
+  padding: 1rem 0;
+  position: fixed;
+  left: 0;
+  top: 0;
+  height: 100vh;
+  z-index: 1002;
+}
+
+.sidebar ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  width: 100%;
+}
+
+.sidebar li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 15px 0;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.sidebar i {
+  font-size: 22px;
+  margin-bottom: 6px;
+  color: #bbb;
+  transition: color 0.2s ease;
+}
+
+.sidebar li:hover i {
+  color: #fff; /* brighten on hover */
 }
 
 
+.sidebar span {
+  font-size: 12px;
+  text-align: center;
+}
 
+.badge {
+  background: #ff4444;
+  color: #fff;
+  font-size: 12px;
+  font-weight: bold;
+  border-radius: 50%;
+  padding: 2px 6px;
+  margin-left: 6px;
+  display: none; /* hidden by default */
+}
 
+#alerts-menu {
+  position: relative;
+}
+
+#alerts-menu .badge {
+  position: absolute;
+  top: 0;
+  right: 10px;
+}
 

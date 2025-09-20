@@ -4,8 +4,12 @@
   <meta charset="UTF-8">
   <title>Cheating Detected</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  
+  <!-- Socket.IO -->
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-  <script src="{{ url_for('static', filename='client.js') }}" defer></script>
+
+  <!-- Load ES modules -->
+  <script type="module" src="{{ url_for('static', filename='main.js') }}" defer></script>
 </head>
 <body>
   <div class="cheating-message">

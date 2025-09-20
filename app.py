@@ -10,6 +10,7 @@ from flask_socketio import SocketIO, emit
 import mediapipe as mp
 from ultralytics import YOLO
 import mysql.connector   # ✅ DB support added
+from datetime import datetime
 
 # --- Database Connection ---
 db = mysql.connector.connect(
@@ -144,8 +145,13 @@ def handle_frame(message):
             except Exception as e:
                 print(f"⚠️ DB insert error: {e}")
 
+            now_dt = datetime.now()
+            time_str = now_dt.strftime("%I:%M %p")  # e.g., "02:15 PM"
+
             socketio.emit('cheating_notification', {
-                'message': f'Cheating detected at {timestamp}! Click for details.',
+                'message': 'Cheating detected',
+                'time': time_str,
+                'timestamp': now_dt.strftime("%Y-%m-%d %I:%M:%S %p"),
                 'url': f'/cheating/{snap_id}'
             })
 
@@ -209,7 +215,9 @@ def get_notifications():
     notifications = [
         {
             "id": row[0],
-            "message": f"Cheating detected at {row[1]}! Click for details.",
+            "message": "Cheating detected",
+            "time": row[1].split()[-2] + " " + row[1].split()[-1],  # Show only time part
+            "timestamp": row[1],  # Full timestamp
             "url": f"/cheating/{row[0]}"
         }
         for row in rows

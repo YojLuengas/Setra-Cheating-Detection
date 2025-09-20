@@ -1,4 +1,4 @@
-const video = document.getElementById('video-frame');
+/*const video = document.getElementById('video-frame');
 const canvas = document.createElement('canvas');
 const startBtn = document.getElementById('start-btn');
 const stopBtn = document.getElementById('stop-btn');
@@ -419,4 +419,4 @@ async function startSelectedCamera() {
 window.onload = async () => {
   setBlackScreen();
   await listCameras();
-};
+};*/
