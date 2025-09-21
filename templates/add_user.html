@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Add User{% endblock %}
+
+{% block content %}
+<!-- Back Button -->
+<a href="{{ url_for('admin_page') }}" class="btn btn-secondary mb-3">⬅ Back to Dashboard</a>
+<h2>Add New User</h2>
+<form method="POST" action="{{ url_for('add_user') }}">
+      <div class="mb-3">
+    <label>Name</label>
+    <input name="name" class="form-control" required>
+  </div>
+  <div class="mb-3">
+    <label>Username</label>
+    <input name="username" class="form-control" required>
+  </div>
+  <div class="mb-3">
+    <label>Password</label>
+    <input name="password" type="password" class="form-control" required>
+  </div>
+  <div class="mb-3">
+  </div>
+  <button type="submit" class="btn btn-success">Add User</button>
+</form>
+{% endblock %}

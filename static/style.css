@@ -432,3 +432,20 @@ button:hover {
   right: 10px;
 }
 
+.logout-btn {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 14px;
+  cursor: pointer;
+  margin-left: 10px;
+  padding: 5px 10px;
+}
+
+.logout-btn i {
+  margin-right: 5px;
+}
+
+.logout-btn:hover {
+  color: #d9534f; /* red hover effect */
+}
