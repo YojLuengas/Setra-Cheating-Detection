@@ -41,10 +41,10 @@ header {
   top: 0;
   left: 70px;
   height: 100vh;
-  width: 300px;
+  width: 340px;
   background: #2c2c54;
   color: white;
-  padding: 20px;
+  padding: 20px 0 20px 30px;;
   overflow-y: visible;
   transform: translateX(-100%);
   transition: transform 0.35s cubic-bezier(0.4,0,0.2,1);
@@ -58,7 +58,7 @@ header {
 }
 
 .notifPanel h2 {
-  font-size: 18px;
+  font-size: 25px;
   margin-bottom: 15px;
 }
 
@@ -209,24 +209,7 @@ button:hover {
   }
 }
 
-/* Camera Dropdown */
-.camera-select {
-  padding: 10px 20px;
-  margin: 5px;
-  border: none;
-  border-radius: 6px;
-  background: #0077ff;
-  color: white;
-  cursor: pointer;
-  font-size: 16px;
-  width: auto; /* auto but matches button width */
-  min-width: 160px; /* keep same width as buttons */
-  text-align: center;
-}
 
-.camera-select:hover {
-  background: #005fcc;
-}
 .delete-btn {
   margin-left: 10px;
   background: transparent;
@@ -251,13 +234,13 @@ button:hover {
 .notification-item {
   display: flex;
   flex-direction: column;
-  padding: 12px 16px;
+  padding: 16px 18px;
   border-bottom: 1px solid #232347;
   background: transparent;
   align-items: stretch;
   cursor: pointer;
   transition: background 0.2s;
-  position: relative;   /* <-- Add this line */
+  position: relative;
 }
 
 .notification-item:hover {
@@ -271,25 +254,26 @@ button:hover {
 }
 
 .notif-msg {
-  font-weight: 500;
+  font-weight: 600;
   color: #fff;
-  font-size: 1rem;
-  letter-spacing: 0.01em;
+  font-size: 1.15rem;
+  letter-spacing: 0.02em;
 }
 
 .notif-time {
   color: #b0b0c3;
-  font-size: 0.8rem;   /* smaller than before */
+  font-size: 0.95rem;
   font-weight: 400;
-  margin-left: 0;
-  white-space: nowrap;
-  flex-shrink: 0;
+  margin-top: 4px;
 }
+
 
 /* Unread notifications*/
 .notification-item.unread {
   background: #232347;
-  border-left: 4px solid #ff3b3b;
+  border-left: 5px solid #ff3b3b;
+  border-top-left-radius: 10px;
+  border-bottom-left-radius: 10px;
 }
 
 /* Read notifications: normal text, default background */
@@ -314,25 +298,25 @@ button:hover {
 .menu-wrapper {
   display: flex;
   align-items: center;
-  margin: 0 0 0 8px; /* or margin: 0 2px 0 8px; for a tiny right gap */
+  position: relative;
 }
 
 /* 3-dot button */
 .menu-btn {
   background: transparent;
   border: none;
-  font-size: 18px;
+  font-size: 20px;
   cursor: pointer;
   color: #999;
   padding: 4px;
   border-radius: 50%;
-  transition: color 0.2s ease; /* Remove background transition */
+  transition: color 0.2s ease;
 }
 
 /* Only change color on hover, no background */
 .menu-btn:hover {
   background: transparent;
-  color: #7e7d7d;
+  color: #999;
 }
 
 /* Dropdown menu */
@@ -363,12 +347,12 @@ button:hover {
 
 /* Sidebar Layout */
 .sidebar {
-  width: 70px;
+  width: 80px;
   background: #1c1c1c;
   color: #fff;
   display: flex;
   flex-direction: column;
-  justify-content: space-between; /* pushes Settings to bottom */
+  justify-content: space-between;
   align-items: center;
   padding: 1rem 0;
   position: fixed;
@@ -389,25 +373,25 @@ button:hover {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 15px 0;
+  padding: 18px 0;
   cursor: pointer;
   transition: background 0.2s;
 }
 
 .sidebar i {
-  font-size: 22px;
+  font-size: 28px;
   margin-bottom: 6px;
   color: #bbb;
   transition: color 0.2s ease;
 }
 
 .sidebar li:hover i {
-  color: #fff; /* brighten on hover */
+  color: #fff;
 }
 
 
 .sidebar span {
-  font-size: 12px;
+  font-size: 14px;
   text-align: center;
 }
 
@@ -416,7 +400,7 @@ button:hover {
   color: #fff;
   font-size: 12px;
   font-weight: bold;
-  border-radius: 50%;
+  border-radius: 100%;
   padding: 2px 6px;
   margin-left: 6px;
   display: none; /* hidden by default */
@@ -428,8 +412,8 @@ button:hover {
 
 #alerts-menu .badge {
   position: absolute;
-  top: 0;
-  right: 10px;
+  top: 10px;
+  right: 14px;
 }
 
 .logout-btn {
@@ -447,5 +431,467 @@ button:hover {
 }
 
 .logout-btn:hover {
-  color: #d9534f; /* red hover effect */
+  color: #fff;
+  background: none;
+}
+
+ /* Setup Screen Overlay */
+.setup-screen {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+}
+
+.setup-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 32px 40px;   /* more breathing space */
+  box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+  max-width: 1200px;    /* allow larger screens */
+  width: 10in;          /* ~960px */
+}
+
+.setup-card h2 {
+  margin-bottom: 16px;
+  font-size: 25px;
+  font-weight: 600;
+  color: #333;
+}
+
+/* Tabs */
+.setup-tabs {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  justify-content: center;
+}
+
+.setup-tabs .tab {
+  padding: 8px 16px;
+  border: none;
+  border-bottom: 3px solid transparent;
+  background: none;
+  font-weight: 500;
+  font-size: 18px;
+  cursor: pointer;
+  color: #666;
+}
+
+.setup-tabs .tab.active {
+  border-color: #007bff;
+  color: #007bff;
+}
+
+.setup-tabs .tab:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Form Layout */
+.setup-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.form-row {
+  display: flex;
+  gap: 16px;
+}
+
+.form-group {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.form-group label {
+  font-size: 16px;
+  margin-bottom: 6px;
+  font-weight: 500;
+  color: #444;
+}
+
+.form-group input,
+.form-group select {
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  font-size: 14px;
+}
+
+/* Camera Dropdown */
+.camera-select {
+  padding: 10px 20px;
+  margin: 5px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 16px;
+  width: 425px; /* auto but matches button width */
+  min-width: 160px; /* keep same width as buttons */
+  text-align: center;
+}
+
+/* Actions */
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.cancel-btn,
+.next-btn {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.cancel-btn {
+  background: #f5f5f5;
+  color: #333;
+}
+
+.next-btn {
+  background: #007bff;
+  color: #fff;
+}
+
+.status-item {
+  display: flex;
+  align-items: center;
+  gap: 8px; 
+}
+
+#internet-status {
+  font-size: 18px;
+  color: gray; 
+  transition: color 0.3s;
+}
+
+/* Online/offline states */
+#internet-status.online {
+  color: #28a745;
+}
+
+#internet-status.offline {
+  color: #dc3545;
+}
+
+.camera-status-container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start; 
+  gap: 16px;
+  width: 100%;
+  max-width: 650px;
+}
+
+.status-row {
+  display: flex;
+  justify-content: flex-start; 
+  gap: 40px;
+  width: 100%;
+}
+
+
+/* Each status item layout */
+.status-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: unset;
+}
+
+/* Camera preview container */
+.camera-preview-container {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+/* Camera preview video */
+#camera-preview {
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  width: 100%;
+  max-width: 800px;
+  height: 400px;
+  object-fit: cover;
+}
+
+
+/* Smaller Camera Button */
+.camera-btn {
+  width: 90px;
+  height: 70px;
+  border-radius: 8px;
+  background: transparent;
+  border: 2px solid white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.3s;
+  padding: 0;
+}
+
+/* Off state */
+.camera-btn.off {
+  background: rgba(255,0,0,0.6);
+  border: none;
+  
+}
+
+/* Icon wrapper - allow icon to look bigger than button */
+.camera-icon-wrapper {
+  width: 50px;   
+  height: 50px;
+  position: relative;
+}
+
+/* Images fill wrapper */
+.camera-icon,
+.camera-slash {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+
+/* By default, hide the slash */
+.camera-slash {
+  display: none;
+}
+
+/* When the button has "off", show the slash and maybe hide the onCam */
+.camera-btn.off .camera-slash {
+  display: block;
+}
+
+.camera-btn.off .camera-icon {
+  display: none; /* hide the regular camera when off */
+}
+
+/* Remove default button focus/hover effects for ON state */
+.camera-btn:not(.off):focus,
+.camera-btn:not(.off):hover,
+.camera-btn:not(.off):active {
+  background: transparent;
+  outline: none;
+}
+
+/* Keep OFF state background on hover */
+.camera-btn.off:hover,
+.camera-btn.off:focus,
+.camera-btn.off:active {
+  background: rgba(255,0,0,0.6);
+}
+
+.camera-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(8px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  border-radius: 8px;
+  z-index: 10;
+  color: white;
+}
+
+.status-text{
+  font-size: 1.3rem;
+  color: #fff;
+}
+
+/* Video wrapper to allow overlaying status */
+.camera-video-wrapper {
+  position: relative;
+  width: 100%;
+  max-width: 800px;
+}
+
+/* Position camera status dot on top-right corner of video */
+#camera-status {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #8e9a90;
+  border-radius: 50%;
+  transition: background-color 0.3s;
+  z-index: 2;
+}
+
+/* Online/offline colors */
+#camera-status.online {
+  background-color: #28a745; 
+}
+
+#camera-status.offline {
+  background-color: #dc3545;
+}
+
+.camera-controls {
+  position: absolute;
+  bottom: 15px;       /* distance from the bottom of the video */
+  left: 50%;           /* start from the center */
+  transform: translateX(-50%); /* center horizontally */
+  z-index: 20;         /* above overlay */
+}
+
+/* Modal Background */
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.4);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 2000;
+  animation: fadeIn 0.3s ease;
+}
+
+/* Modal Box */
+.modal-content {
+  background: #fff;
+  padding: 30px 40px;
+  border-radius: 20px;
+  text-align: center;
+  width: 360px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+  border: 2px solid #00b894; /* default green */
+  animation: scaleIn 0.3s ease;
+}
+
+.modal-icon {
+  font-size: 48px;
+  color: #00b894; /* green */
+  margin-bottom: 15px;
+}
+
+.modal-content h3 {
+  font-size: 22px;
+  margin-bottom: 10px;
+}
+
+.modal-content p {
+  color: #555;
+  font-size: 14px;
+  margin-bottom: 20px;
+}
+
+/* Actions */
+.modal-actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+}
+
+.cancel-btn,
+.confirm-btn {
+  padding: 10px 18px;
+  border-radius: 25px;
+  border: 2px solid transparent;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+/* Shared Button Styles */
+.cancel-btn,
+.next-btn {
+  padding: 10px 22px;
+  border-radius: 25px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.2s;
+  border: 2px solid transparent;
+}
+
+/* Back/Cancel */
+.cancel-btn {
+  background: #fff;
+  color: #333;
+  border: 2px solid #bbb;
+}
+
+.cancel-btn:hover {
+  background: #f1f1f1;
+}
+
+/* Next/Proceed/Confirm */
+.next-btn {
+  background: #00b894;   /* green */
+  color: #fff;
+}
+
+.next-btn:hover {
+  background: #019267;   /* darker green */
+}
+
+
+.confirm-btn {
+  background: #00b894;
+  color: #fff;
+}
+
+.confirm-btn:hover {
+  background: #019267;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scaleIn {
+  from { transform: scale(0.9); }
+  to { transform: scale(1); }
+}
+
+/* Confirm values styled like inputs */
+.confirm-value {
+  background: #f9f9f9;
+  border: 1px solid #ccc;
+  padding: 10px 12px;
+  border-radius: 6px;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  color: #333;
+}
+
+.confirm-value-cam {
+  background: #f9f9f9;
+  border: 1px solid #ccc;
+  padding: 10px 12px;
+  border-radius: 6px;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  color: #333;
+  width: 425px; /* match button width */
+  min-width: 160px; /* keep same width as buttons */
+  text-align: center;
 }

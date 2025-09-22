@@ -60,7 +60,7 @@ function appendNotification(data) {
     menuWrapper.classList.add("menu-wrapper");
 
     const menuBtn = document.createElement("button");
-    menuBtn.textContent = "⋮";
+  menuBtn.innerHTML = '<i class="fa-solid fa-ellipsis-h"></i>';
     menuBtn.classList.add("menu-btn");
 
     const menuDropdown = document.createElement("div");
