@@ -1,3 +1,4 @@
+# app.py - cleaned & fixed version (bcrypt-based auth + admin user management)
 import io
 import base64
 import time
@@ -5,13 +6,30 @@ import uuid
 import cv2
 import numpy as np
 from PIL import Image
-from flask import Flask, render_template, make_response
+from datetime import datetime
+from functools import wraps
+from flask import (
+    Flask, render_template, make_response, redirect, url_for,
+    request, session, flash, jsonify
+)
 from flask_socketio import SocketIO, emit
+import mysql.connector
 import mediapipe as mp
 from ultralytics import YOLO
+import bcrypt
+
+# --- Database Connection ---
+db = mysql.connector.connect(
+    host="localhost",
+    user="root",
+    password="",          # put your MySQL password here if any
+    database="sentra_db"  # make sure this DB exists
+)
+cursor = db.cursor()
 
 # Flask + SocketIO
 app = Flask(__name__)
+app.secret_key = "replace_this_with_a_strong_random_secret"  # CHANGE THIS in production!
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 
 # Load YOLO model
@@ -29,8 +47,8 @@ face_mesh = mp_face_mesh.FaceMesh(
 )
 
 # Store snapshots
-all_snapshots = []        # all detections
-notified_snapshots = []   # ✅ only snapshots shown in notifications
+all_snapshots = []
+notified_snapshots = []
 last_cheating_notification_time = 0
 
 # --- Helpers ---
@@ -58,7 +76,184 @@ def estimate_head_rotation(image_rgb, face_landmarks):
     except Exception:
         return 0.0
 
-# --- Socket Events ---
+# ----------------------------
+# Authentication helpers
+# ----------------------------
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            flash("Please login to access that page.", "warning")
+            return redirect(url_for('login', next=request.path))
+        return f(*args, **kwargs)
+    return decorated_function
+
+# --- Auth Routes (bcrypt) ---
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password_raw = request.form.get("password", "")
+        if not username or not password_raw:
+            flash("Please provide username and password.", "warning")
+            return redirect(url_for('login'))
+
+        # Fetch id, username, password, role, status
+        cursor.execute("SELECT id, username, password_hash, role, status FROM users WHERE username = %s", (username,))
+        user = cursor.fetchone()
+
+        if user:
+            user_id, user_name, stored_hash, role, status = user
+
+            # Check if inactive
+            if status != "Active":
+                flash("Your account is inactive. Please contact the administrator.", "danger")
+                return redirect(url_for("login"))
+
+            # Validate password
+            if stored_hash and bcrypt.checkpw(password_raw.encode("utf-8"), stored_hash.encode("utf-8")):
+                # Save session
+                session["user_id"] = user_id
+                session["username"] = user_name
+                session["role"] = role if role else "user"
+                flash("Login successful!", "success")
+
+                # Redirect based on role
+                if session["role"] == "admin":
+                    return redirect(url_for("admin_page"))
+                return redirect(url_for("home"))
+            else:
+                flash("Invalid username or password.", "danger")
+        else:
+            flash("Invalid username or password.", "danger")
+
+    return render_template("login.html")
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    flash("Logged out.", "info")
+    return redirect(url_for("login"))
+
+# --- Admin routes ---
+@app.route("/admin")
+def admin_page():
+    if session.get("role") != "admin":
+        flash("Access denied! Admins only.", "danger")
+        return redirect(url_for("home") if session.get("user_id") else url_for("login"))
+
+    # Fetch users for display
+    cursor.execute("SELECT id, username, role FROM users ORDER BY id ASC")
+    users = cursor.fetchall()
+    return render_template("admin.html", users=users)
+
+@app.route("/admin/add_user", methods=["GET", "POST"])
+@login_required
+def add_user():
+    if session.get("role") != "admin":
+        flash("Access denied!", "danger")
+        return redirect(url_for("home"))
+
+    if request.method == "POST":
+        name = request.form["name"]
+        username = request.form["username"]
+        password = request.form["password"].encode("utf-8")
+
+        hashed_pw = bcrypt.hashpw(password, bcrypt.gensalt()).decode()
+
+        cursor.execute("""
+            INSERT INTO users (name, username, password_hash, status, created_by)
+            VALUES (%s, %s, %s, 'Active', %s)
+        """, (name, username, hashed_pw, session.get("username")))
+        db.commit()
+        flash("User added successfully!", "success")
+        return redirect(url_for("list_users"))
+
+    return render_template("add_user.html")
+
+
+@app.route("/admin/reset_password/<int:user_id>", methods=["POST"])
+@login_required
+def reset_password(user_id):
+    if session.get("role") != "admin":
+        flash("Access denied!", "danger")
+        return redirect(url_for("home"))
+
+    new_pass = "1234".encode("utf-8")  # default temp password
+    hashed_pw = bcrypt.hashpw(new_pass, bcrypt.gensalt()).decode()
+
+    cursor.execute("UPDATE users SET password_hash=%s, updated_by=%s WHERE id=%s",
+                   (hashed_pw, session.get("username"), user_id))
+    db.commit()
+    flash("Password reset to 1234", "info")
+    return redirect(url_for("list_users"))
+
+@app.route("/admin/deactivate_user/<int:user_id>", methods=["POST"])
+@login_required
+def deactivate_user(user_id):
+    if session.get("role") != "admin":
+        flash("Access denied!", "danger")
+        return redirect(url_for("home"))
+
+    try:
+        cursor.execute("UPDATE users SET status='Inactive', updated_by=%s WHERE id=%s",
+                       (session.get("username"), user_id))
+        db.commit()
+        flash("User deactivated successfully.", "warning")
+    except Exception as e:
+        db.rollback()
+        flash(f"Error deactivating user: {e}", "danger")
+
+    return redirect(url_for("list_users"))
+
+
+@app.route("/admin/delete_user/<int:user_id>", methods=["POST"])
+def delete_user(user_id):
+    if session.get("role") != "admin":
+        flash("Unauthorized access!", "danger")
+        return redirect(url_for("home") if session.get("user_id") else url_for("login"))
+
+    # prevent admin from deleting themselves
+    if str(user_id) == str(session.get("user_id")):
+        flash("You cannot delete your own account while logged in.", "warning")
+        return redirect(url_for("admin_page"))
+
+    try:
+        cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
+        db.commit()
+        flash("User deleted successfully.", "success")
+    except Exception as e:
+        db.rollback()
+        flash(f"Error deleting user: {e}", "danger")
+
+    return redirect(url_for("admin_page"))
+
+# Optional: route to show users in a separate page (if needed)
+@app.route("/admin/users")
+def list_users():
+    cursor.execute("SELECT id, name, username, role, status FROM users WHERE role != 'admin'")
+    users = cursor.fetchall()
+    return render_template("list_users.html", users=users)
+
+@app.route("/admin/activate_user/<int:user_id>", methods=["POST"])
+@login_required
+def activate_user(user_id):
+    if session.get("role") != "admin":
+        flash("Access denied!", "danger")
+        return redirect(url_for("home"))
+
+    try:
+        cursor.execute("UPDATE users SET status='Active', updated_by=%s WHERE id=%s",
+                       (session.get("username"), user_id))
+        db.commit()
+        flash("User activated successfully.", "success")
+    except Exception as e:
+        db.rollback()
+        flash(f"Error activating user: {e}", "danger")
+
+    return redirect(url_for("list_users"))
+
+# --- SocketIO (real-time video processing) ---
 @socketio.on('connect')
 def on_connect():
     print("✅ Client connected")
@@ -121,11 +316,26 @@ def handle_frame(message):
                 "epoch": now
             }
 
-            all_snapshots.append(snapshot)        # log everything
-            notified_snapshots.append(snapshot)   # ✅ only store notified
+            all_snapshots.append(snapshot)
+            notified_snapshots.append(snapshot)
+
+            # Save to DB
+            try:
+                sql = "INSERT INTO detections (id, timestamp, epoch, image_path) VALUES (%s, %s, %s, %s)"
+                vals = (snap_id, timestamp, now, "base64_inline")
+                cursor.execute(sql, vals)
+                db.commit()
+                print(f"✅ Inserted detection {snap_id} into DB")
+            except Exception as e:
+                print(f"⚠️ DB insert error: {e}")
+
+            now_dt = datetime.now()
+            time_str = now_dt.strftime("%I:%M %p")
 
             socketio.emit('cheating_notification', {
-                'message': f'Cheating detected at {timestamp}! Click for details.',
+                'message': 'Cheating detected',
+                'time': time_str,
+                'timestamp': now_dt.strftime("%Y-%m-%d %I:%M:%S %p"),
                 'url': f'/cheating/{snap_id}'
             })
 
@@ -153,27 +363,30 @@ def handle_frame(message):
     out_b64 = cv2_to_b64(original, jpeg_quality=60)
     emit('response_frame', {'image': out_b64, 'cheating': cheating_in_frame})
 
-# --- Routes ---
+# --- Web Routes (detection pages) ---
 @app.route("/")
+@login_required
 def home():
-    return render_template("index.html")
+    return render_template("index.html", username=session.get('username'))
 
 @app.route("/cheating/<snap_id>")
+@login_required
 def cheating(snap_id):
-    snap = next((s for s in notified_snapshots if s["id"] == snap_id), None)  # ✅ only notified
+    snap = next((s for s in notified_snapshots if s["id"] == snap_id), None)
     if snap:
         return render_template(
             "cheating.html",
             snapshot_id=snap_id,
             timestamp=snap["timestamp"],
-            cheating_snapshots=notified_snapshots  # ✅ only notified
+            cheating_snapshots=notified_snapshots
         )
     else:
         return "Snapshot not found", 404
 
 @app.route("/cheating_snapshot/<snap_id>")
+@login_required
 def cheating_snapshot(snap_id):
-    snap = next((s for s in all_snapshots if s["id"] == snap_id), None)  # serve from all
+    snap = next((s for s in all_snapshots if s["id"] == snap_id), None)
     if snap:
         header, b64 = snap["image"].split(',', 1)
         img_bytes = base64.b64decode(b64)
@@ -182,11 +395,53 @@ def cheating_snapshot(snap_id):
         return response
     return "Snapshot not found", 404
 
+@app.route("/api/notifications")
+@login_required
+def get_notifications():
+    cursor.execute("SELECT id, timestamp FROM detections ORDER BY epoch DESC")
+    rows = cursor.fetchall()
+    notifications = []
+    for row in rows:
+        snap_id, ts = row[0], row[1]
+
+        # ensure timestamp is string
+        if isinstance(ts, datetime):
+            ts_str = ts.strftime("%Y-%m-%d %I:%M:%S %p")  # e.g. 2025-09-22 10:10:15 AM
+            time_str = ts.strftime("%I:%M %p")             # e.g. 10:10 AM
+        else:
+            ts_str = str(ts)
+            time_str = " ".join(ts_str.split()[-2:])
+
+        notifications.append({
+            "id": snap_id,
+            "message": "Cheating detected",
+            "time": time_str,
+            "timestamp": ts_str,
+            "url": f"/cheating/{snap_id}"
+        })
+
+    return jsonify({"notifications": notifications})
+
+@app.route("/api/delete/<snap_id>", methods=["DELETE"])
+@login_required
+def delete_notification(snap_id):
+    try:
+        cursor.execute("DELETE FROM detections WHERE id = %s", (snap_id,))
+        db.commit()
+
+        global all_snapshots, notified_snapshots
+        all_snapshots = [s for s in all_snapshots if s["id"] != snap_id]
+        notified_snapshots = [s for s in notified_snapshots if s["id"] != snap_id]
+
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+    
+    
+
 # --- Run ---
 if __name__ == "__main__":
     host = "0.0.0.0"
     port = 5000
     print(f"🚀 Server running at: http://127.0.0.1:{port}")
-    print(f"🌐 Accessible on your network at: http://{host}:{port}")
     socketio.run(app, host=host, port=port, debug=True)
-    

@@ -4,12 +4,18 @@
   <meta charset="UTF-8">
   <title>Cheating Detected</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  
+  <!-- Socket.IO -->
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-  <script src="{{ url_for('static', filename='client.js') }}" defer></script>
+
+  <!-- Load ES modules -->
+  <script type="module" src="{{ url_for('static', filename='socket.js') }}" defer></script>
+  <script type="module" src="{{ url_for('static', filename='notifications.js') }}" defer></script>
+  <script type="module" src="{{ url_for('static', filename='cheating.js') }}" defer></script><!-- connect to js -->
 </head>
 <body>
   <div class="cheating-message">
-    <h1>Cheating Detected! HI</h1>
+    <h1>Cheating Detected!</h1>
     <p id="snapshot-timestamp">
       {% if timestamp %}Snapshot at: {{ timestamp }}{% endif %}
     </p>
