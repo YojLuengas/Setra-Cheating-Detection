@@ -209,7 +209,7 @@ function persistState(newNotif, newPoint) {
 function addNotification(message) {
   if (!notifications) return;
   if (notifications.firstChild && notifications.firstChild.textContent === "No alerts yet") {
-    notifications.removeChild(notifications.firqstChild);
+    notifications.removeChild(notifications.firstChild);
   }
   const notifData = { message };
   appendNotification(notifData);

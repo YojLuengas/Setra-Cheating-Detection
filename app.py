@@ -400,16 +400,26 @@ def cheating_snapshot(snap_id):
 def get_notifications():
     cursor.execute("SELECT id, timestamp FROM detections ORDER BY epoch DESC")
     rows = cursor.fetchall()
-    notifications = [
-        {
-            "id": row[0],
+    notifications = []
+    for row in rows:
+        snap_id, ts = row[0], row[1]
+
+        # ensure timestamp is string
+        if isinstance(ts, datetime):
+            ts_str = ts.strftime("%Y-%m-%d %I:%M:%S %p")  # e.g. 2025-09-22 10:10:15 AM
+            time_str = ts.strftime("%I:%M %p")             # e.g. 10:10 AM
+        else:
+            ts_str = str(ts)
+            time_str = " ".join(ts_str.split()[-2:])
+
+        notifications.append({
+            "id": snap_id,
             "message": "Cheating detected",
-            "time": row[1].split()[-2] + " " + row[1].split()[-1],
-            "timestamp": row[1],
-            "url": f"/cheating/{row[0]}"
-        }
-        for row in rows
-    ]
+            "time": time_str,
+            "timestamp": ts_str,
+            "url": f"/cheating/{snap_id}"
+        })
+
     return jsonify({"notifications": notifications})
 
 @app.route("/api/delete/<snap_id>", methods=["DELETE"])
@@ -426,6 +436,8 @@ def delete_notification(snap_id):
         return jsonify({"success": True})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+    
+    
 
 # --- Run ---
 if __name__ == "__main__":
