@@ -141,11 +141,35 @@ def admin_page():
     if session.get("role") != "admin":
         flash("Access denied! Admins only.", "danger")
         return redirect(url_for("home") if session.get("user_id") else url_for("login"))
+    
+    admin_username = session.get("username")
 
-    # Fetch users for display
-    cursor.execute("SELECT id, username, role FROM users ORDER BY id ASC")
-    users = cursor.fetchall()
-    return render_template("admin.html", users=users, show_sidebar=True)
+    # Fetch counts for dashboard cards
+    cursor.execute("SELECT COUNT(*) FROM users WHERE username != %s", (admin_username,))
+    total_users = cursor.fetchone()[0]
+
+    cursor.execute("SELECT COUNT(*) FROM users WHERE status = 'Active' AND username != %s", (admin_username,))
+    active_users = cursor.fetchone()[0]
+
+    cursor.execute("SELECT COUNT(*) FROM users WHERE status = 'Inactive' AND username != %s", (admin_username,))
+    inactive_users = cursor.fetchone()[0]
+
+    # Recent users excluding the logged-in admin
+    cursor.execute(
+    "SELECT username, role, status FROM users WHERE username != %s ORDER BY id DESC LIMIT 5",
+    (admin_username,)
+)
+    users_preview = cursor.fetchall()
+
+    return render_template(
+        "admin.html",
+        total_users=total_users,
+        active_users=active_users,
+        inactive_users=inactive_users,
+        users_preview=users_preview,
+        show_sidebar=True
+    )
+
 
 @app.route("/admin/add_user", methods=["GET", "POST"])
 @login_required
