@@ -145,7 +145,7 @@ def admin_page():
     # Fetch users for display
     cursor.execute("SELECT id, username, role FROM users ORDER BY id ASC")
     users = cursor.fetchall()
-    return render_template("admin.html", users=users)
+    return render_template("admin.html", users=users, show_sidebar=True)
 
 @app.route("/admin/add_user", methods=["GET", "POST"])
 @login_required
@@ -169,7 +169,7 @@ def add_user():
         flash("User added successfully!", "success")
         return redirect(url_for("list_users"))
 
-    return render_template("add_user.html")
+    return render_template("add_user.html", show_sidebar=True)
 
 
 @app.route("/admin/reset_password/<int:user_id>", methods=["POST"])
@@ -233,7 +233,7 @@ def delete_user(user_id):
 def list_users():
     cursor.execute("SELECT id, name, username, role, status FROM users WHERE role != 'admin'")
     users = cursor.fetchall()
-    return render_template("list_users.html", users=users)
+    return render_template("list_users.html", users=users, show_sidebar=True)
 
 @app.route("/admin/activate_user/<int:user_id>", methods=["POST"])
 @login_required
