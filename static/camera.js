@@ -5,7 +5,7 @@ const canvas = document.createElement("canvas");
 const startBtn = document.getElementById("start-btn");
 const stopBtn = document.getElementById("stop-btn");
 const statusDiv = document.getElementById("cheating-status");
-const cameraList = document.getElementById("camera-select"); // ✅ match HTML
+const cameraList = document.getElementById("camera-select");
 
 let stream;
 let sending = false;
