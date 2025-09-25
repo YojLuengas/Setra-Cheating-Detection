@@ -87,7 +87,40 @@ def login_required(f):
             flash("Please login to access that page.", "warning")
             return redirect(url_for('login', next=request.path))
         return f(*args, **kwargs)
+    
+    
     return decorated_function
+@app.route('/assessment-session', methods=['POST'])
+@login_required
+def create_assessment_session():
+    data = request.get_json()
+
+    course = data.get('course')
+    subject = data.get('subject')
+    exam_type = data.get('exam_type')
+    exam_datetime = data.get('exam_datetime')   # comes from <input type="datetime-local">
+    camera = data.get('camera')
+
+    try:
+        cursor.execute("""
+            INSERT INTO assessment_sessions 
+                (user_id, course, subject, exam_type, exam_datetime, camera, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """, (
+            session['user_id'],   # logged-in user
+            course,
+            subject,
+            exam_type,
+            exam_datetime,
+            camera,
+            datetime.now()
+        ))
+        db.commit()
+        return jsonify({"success": True, "message": "Assessment session created successfully!"})
+    except Exception as e:
+        db.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+
 
 # --- Auth Routes (bcrypt) ---
 @app.route("/login", methods=["GET", "POST"])
