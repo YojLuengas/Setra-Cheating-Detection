@@ -21,6 +21,11 @@ const cameraSlash = cameraToggleBtn.querySelector(".camera-slash");
 let cameraStream = null;
 let cameraOn = false;
 
+// ------------------ Prevent Form Reload ------------------
+document.getElementById("setup-form").addEventListener("submit", e => {
+  e.preventDefault();
+});
+
 // ------------------ Utility: Update Camera Button ------------------
 function updateCameraButton() {
   if (cameraOn) {
@@ -45,6 +50,7 @@ systemCheck.querySelector(".cancel-btn").addEventListener("click", () => {
   systemCheck.style.display = "none";
   examSetup.style.display = "flex";
   stopCamera();
+  document.getElementById("setup-form").reset();
 });
 
 systemCheckNext.addEventListener("click", () => {
@@ -73,19 +79,43 @@ document.getElementById("modal-cancel").addEventListener("click", () => {
   document.getElementById("confirm-modal").style.display = "none";
 });
 
-document.getElementById("modal-yes").addEventListener("click", () => {
+document.getElementById("modal-yes").addEventListener("click", async () => {
   document.getElementById("confirm-modal").style.display = "none";
   confirmScreen.style.display = "none";
   document.querySelector(".camera-container").style.display = "flex";
+
+  // Collect payload
+  const payload = {
+    course: document.getElementById("course").value,
+    subject: document.getElementById("subject").value,
+    exam_type: document.getElementById("exam-type").value,
+    exam_datetime: document.getElementById("exam-datetime").value,
+    camera: cameraSelect.value
+  };
+
+  try {
+    const res = await fetch("/assessment-session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    const result = await res.json();
+    if (result.success) {
+      console.log("Session saved:", result.message);
+    } else {
+      alert("Error: " + result.error);
+    }
+  } catch (err) {
+    console.error("Failed to save session:", err);
+  }
 });
 
 // ------------------ Camera ------------------
-// Show overlay by default
 cameraOverlay.style.opacity = 1;
 
 cameraToggleBtn.addEventListener("click", async () => {
   if (!cameraOn) {
-    // Turn on camera
     try {
       const constraints = cameraSelect.value
         ? { video: { deviceId: { exact: cameraSelect.value } } }
@@ -98,19 +128,6 @@ cameraToggleBtn.addEventListener("click", async () => {
 
       cameraOn = true;
       updateCameraButton();
-
-      // Populate camera dropdown AFTER permission
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      cameraSelect.innerHTML = "";
-      let count = 1;
-      devices.forEach(device => {
-        if (device.kind === "videoinput") {
-          const option = document.createElement("option");
-          option.value = device.deviceId;
-          option.textContent = device.label || `Camera ${count++}`;
-          cameraSelect.appendChild(option);
-        }
-      });
     } catch (err) {
       console.error("Error accessing camera:", err);
       cameraStatus.classList.remove("online");
@@ -137,23 +154,47 @@ function stopCamera() {
   updateCameraButton();
 }
 
+// Load available cameras immediately
+async function loadCameras() {
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    cameraSelect.innerHTML = "";
+    let count = 1;
+    devices.forEach(device => {
+      if (device.kind === "videoinput") {
+        const option = document.createElement("option");
+        option.value = device.deviceId;
+        option.textContent = device.label || `Camera ${count++}`;
+        cameraSelect.appendChild(option);
+      }
+    });
+  } catch (err) {
+    console.error("Error listing cameras:", err);
+  }
+}
+loadCameras();
+
 // ------------------ Internet ------------------
 function checkInternetConnectivity() {
   async function updateStatus() {
-    try {
-      await fetch("https://www.google.com", { mode: "no-cors" });
+    if (navigator.onLine) {
       internetStatus.classList.remove("offline");
       internetStatus.classList.add("online");
-    } catch {
+    } else {
       internetStatus.classList.remove("online");
       internetStatus.classList.add("offline");
     }
   }
-
   updateStatus();
   setInterval(updateStatus, 5000);
-  internetStatus.addEventListener("click", updateStatus);
 }
 
+// ------------------ Modal Close on Esc ------------------
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") {
+    document.getElementById("confirm-modal").style.display = "none";
+  }
+});
+
 // ------------------ Initialize Button ------------------
-updateCameraButton(); // ensures button visuals match cameraOn state
+updateCameraButton();
