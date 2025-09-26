@@ -10,52 +10,44 @@
 <table class="table table-bordered">
   <thead>
     <tr>
-      <th>ID</th>
       <th>Name</th>
       <th>Username</th>
-      <th>Role</th>
       <th>Status</th>
       <th>Actions</th>
     </tr>
   </thead>
   <tbody>
     {% for user in users %}
-    <tr>
-      <td>{{ user[0] }}</td>
-      <td>{{ user[1] }}</td>
-      <td>{{ user[2] }}</td>
-      <td>{{ user[3] }}</td>
-      <td>
-        {% if user[4] == "Active" %}
-          <span class="badge bg-success">Active</span>
-        {% else %}
-          <span class="badge bg-danger">Inactive</span>
-        {% endif %}
-      </td>
-      <td>
-        <!-- Reset Password -->
-        <form action="{{ url_for('reset_password', user_id=user[0]) }}" method="POST" style="display:inline;">
-          <button class="btn btn-info btn-sm" type="submit">Reset Password</button>
-        </form>
+      {% if user[2] != "admin" %}  {# Hide admin #}
+      <tr>
+        <td>{{ user[1] }}</td>
+        <td>{{ user[2] }}</td>
+        <td>{{ user[4] }}</td>
+        <td>
+          <!-- Reset Password -->
+          <form action="{{ url_for('reset_password', user_id=user[0]) }}" method="POST" style="display:inline;">
+            <button class="btn btn-info btn-sm" type="submit">Reset Password</button>
+          </form>
 
-        <!-- Activate / Deactivate -->
-        {% if user[4] == "Active" %}
-        <form action="{{ url_for('deactivate_user', user_id=user[0]) }}" method="POST" style="display:inline;">
-          <button class="btn btn-warning btn-sm" type="submit">Deactivate</button>
-        </form>
-        {% else %}
-        <form action="{{ url_for('activate_user', user_id=user[0]) }}" method="POST" style="display:inline;">
-          <button class="btn btn-success btn-sm" type="submit">Activate</button>
-        </form>
-        {% endif %}
+          <!-- Activate / Deactivate -->
+          {% if user[4] == "Active" %}
+          <form action="{{ url_for('deactivate_user', user_id=user[0]) }}" method="POST" style="display:inline;">
+            <button class="btn btn-warning btn-sm" type="submit">Deactivate</button>
+          </form>
+          {% else %}
+          <form action="{{ url_for('activate_user', user_id=user[0]) }}" method="POST" style="display:inline;">
+            <button class="btn btn-success btn-sm" type="submit">Activate</button>
+          </form>
+          {% endif %}
 
-        <!-- Delete -->
-        <form action="{{ url_for('delete_user', user_id=user[0]) }}" method="POST" style="display:inline;"
-              onsubmit="return confirm('Are you sure you want to delete this user?');">
-          <button class="btn btn-danger btn-sm" type="submit">Delete</button>
-        </form>
-      </td>
-    </tr>
+          <!-- Delete -->
+          <form action="{{ url_for('delete_user', user_id=user[0]) }}" method="POST" style="display:inline;"
+                onsubmit="return confirm('Are you sure you want to delete this user?');">
+            <button class="btn btn-danger btn-sm" type="submit">Delete</button>
+          </form>
+        </td>
+      </tr>
+      {% endif %}
     {% endfor %}
   </tbody>
 </table>
