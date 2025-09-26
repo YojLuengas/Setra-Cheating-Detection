@@ -895,3 +895,116 @@ button:hover {
   min-width: 160px; /* keep same width as buttons */
   text-align: center;
 }
+
+/* admin page */
+body.dashboard-body {
+  background: #f5f7fb;
+  font-family: 'Inter', sans-serif;
+}
+
+/* Admin Sidebar */
+.admin-sidebar {
+  width: 240px;
+  height: 100vh;
+  background: #fff;
+  border-right: 1px solid #eee;
+  padding: 20px 15px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+}
+
+.admin-sidebar .sidebar-header h4 {
+  font-size: 1.2rem;
+  color: #4F46E5;
+  display: flex;
+  align-items: center;
+}
+
+.admin-sidebar .sidebar-header {
+  margin-bottom: 15px; /* small gap only */
+}
+
+.admin-sidebar .sidebar-section {
+  margin-bottom: 15px;
+  margin-top: 5px;
+}
+
+.admin-sidebar .sidebar-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #9ca3af;
+  margin: 10px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.admin-sidebar .sidebar-section.account {
+  margin-top: auto;
+}
+
+.admin-sidebar .nav-link {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  text-align: left;
+  width: 100%;
+  padding: 10px 14px;
+  gap: 10px;
+}
+
+.admin-sidebar .nav-item {
+  width: 100%; 
+}
+
+.admin-sidebar .sidebar-section.account ul,
+.admin-sidebar .sidebar-section.account li {
+  display: block;
+  width: 100%;
+}
+
+.admin-sidebar .nav-link:hover {
+  background: #f3f4f6;
+  color: #111;
+}
+
+.admin-sidebar .nav-link.active {
+  background: #4F46E5;
+  color: #fff;
+  box-shadow: 0 3px 8px rgba(79,70,229,0.25);
+}
+
+/* Topbar */
+.search-bar {
+  border-radius: 12px;
+  border: 1px solid #ddd;
+  padding: 6px 12px;
+  width: 220px;
+}
+
+.profile-circle {
+  width: 40px;
+  height: 40px;
+  background: #4F46E5;
+  color: #fff;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Dashboard cards */
+.dashboard-card {
+  border-radius: 20px;
+  border: none;
+}
+
+.dashboard-card h5 {
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.dashboard-card p {
+  margin: 0;
+}

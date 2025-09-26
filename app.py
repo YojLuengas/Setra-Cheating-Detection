@@ -175,11 +175,35 @@ def admin_page():
     if session.get("role") != "admin":
         flash("Access denied! Admins only.", "danger")
         return redirect(url_for("home") if session.get("user_id") else url_for("login"))
+    
+    admin_username = session.get("username")
 
-    # Fetch users for display
-    cursor.execute("SELECT id, username, role FROM users ORDER BY id ASC")
-    users = cursor.fetchall()
-    return render_template("admin.html", users=users)
+    # Fetch counts for dashboard cards
+    cursor.execute("SELECT COUNT(*) FROM users WHERE username != %s", (admin_username,))
+    total_users = cursor.fetchone()[0]
+
+    cursor.execute("SELECT COUNT(*) FROM users WHERE status = 'Active' AND username != %s", (admin_username,))
+    active_users = cursor.fetchone()[0]
+
+    cursor.execute("SELECT COUNT(*) FROM users WHERE status = 'Inactive' AND username != %s", (admin_username,))
+    inactive_users = cursor.fetchone()[0]
+
+    # Recent users excluding the logged-in admin
+    cursor.execute(
+    "SELECT username, role, status FROM users WHERE username != %s ORDER BY id DESC LIMIT 5",
+    (admin_username,)
+)
+    users_preview = cursor.fetchall()
+
+    return render_template(
+        "admin.html",
+        total_users=total_users,
+        active_users=active_users,
+        inactive_users=inactive_users,
+        users_preview=users_preview,
+        show_sidebar=True
+    )
+
 
 @app.route("/admin/add_user", methods=["GET", "POST"])
 @login_required
@@ -203,7 +227,7 @@ def add_user():
         flash("User added successfully!", "success")
         return redirect(url_for("list_users"))
 
-    return render_template("add_user.html")
+    return render_template("add_user.html", show_sidebar=True)
 
 
 @app.route("/admin/reset_password/<int:user_id>", methods=["POST"])
@@ -267,7 +291,7 @@ def delete_user(user_id):
 def list_users():
     cursor.execute("SELECT id, name, username, role, status FROM users WHERE role != 'admin'")
     users = cursor.fetchall()
-    return render_template("list_users.html", users=users)
+    return render_template("list_users.html", users=users, show_sidebar=True)
 
 @app.route("/admin/activate_user/<int:user_id>", methods=["POST"])
 @login_required
@@ -440,8 +464,8 @@ def get_notifications():
 
         # ensure timestamp is string
         if isinstance(ts, datetime):
-            ts_str = ts.strftime("%Y-%m-%d %I:%M:%S %p")  
-            time_str = ts.strftime("%I:%M %p")             
+            ts_str = ts.strftime("%Y-%m-%d %I:%M:%S %p")  # e.g. 2025-09-22 10:10:15 AM
+            time_str = ts.strftime("%I:%M %p")             # e.g. 10:10 AM
         else:
             ts_str = str(ts)
             time_str = " ".join(ts_str.split()[-2:])
@@ -470,6 +494,8 @@ def delete_notification(snap_id):
         return jsonify({"success": True})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+    
+    
 
 # --- Run ---
 if __name__ == "__main__":

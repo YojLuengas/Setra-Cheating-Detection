@@ -27,29 +27,35 @@ function initSocket(video, statusDiv) {
     });
 
     socket.on("cheating_notification", (data) => {
-      if (!seenSnapshots.has(data.url)) {
-        seenSnapshots.add(data.url);
-        appendNotification(data);
+  if (!seenSnapshots.has(data.url)) {
+    seenSnapshots.add(data.url);
+    appendNotification(data);
 
-        const snapId = data.url.split("/").pop();
-        const timestampMatch = data.message.match(/at (.+)!/);
-        const timestamp = timestampMatch ? timestampMatch[1] : new Date().toLocaleString();
-        const epoch = Date.now() / 1000;
+    const snapId = data.url.split("/").pop();
+    const timestampMatch = data.message.match(/at (.+)!/);
+    const timestamp = timestampMatch ? timestampMatch[1] : new Date().toLocaleString();
+    const epoch = Date.now() / 1000;
 
-        const timeline = document.getElementById("timeline");
-        if (timeline) {
-          const point = document.createElement("div");
-          point.className = "timeline-point";
-          point.dataset.id = snapId;
-          point.dataset.timestamp = timestamp;
-          point.dataset.epoch = epoch;
-          point.title = "Taken at " + timestamp;
+    const timeline = document.getElementById("timeline");
+    if (timeline) {
+      const point = document.createElement("div");
+      point.className = "timeline-point";
+      point.dataset.id = snapId;
+      point.dataset.timestamp = timestamp;
+      point.dataset.epoch = epoch;
+      point.title = "Taken at " + timestamp;
 
-          timeline.appendChild(point);
-        }
+      timeline.appendChild(point);
 
-        persistState(data, { id: snapId, timestamp, epoch });
-      }
+      // ⏩ Update timeline
+      if (window.refreshTimeline) window.refreshTimeline();
+
+      // ⏩ Auto-jump to newest snapshot (force = true)
+      if (window.autoSwitchTo) window.autoSwitchTo(point, true);
+    }
+
+    persistState(data, { id: snapId, timestamp, epoch });
+  }
     });
   }
 }
