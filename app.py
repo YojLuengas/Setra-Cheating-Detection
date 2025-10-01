@@ -150,7 +150,7 @@ def login():
                 session["user_id"] = user_id
                 session["username"] = user_name
                 session["role"] = role if role else "user"
-                flash("Login successful!", "success")
+                print("Login successful!", "success")
 
                 # Redirect based on role
                 if session["role"] == "admin":
@@ -166,7 +166,7 @@ def login():
 @app.route("/logout")
 def logout():
     session.clear()
-    flash("Logged out.", "info")
+    print ("Logged out.", "info")
     return redirect(url_for("login"))
 
 # --- Admin routes ---

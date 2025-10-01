@@ -1008,3 +1008,97 @@ body.dashboard-body {
 .dashboard-card p {
   margin: 0;
 }
+
+/* Login Page Styles */
+.login-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background: #f9f9f9;
+}
+
+.login-card {
+  max-width: 400px;
+  width: 100%;
+  padding: 2rem;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+}
+
+/* Logo Block */
+.login-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.login-logo {
+  width: 60%;
+ transform: translateX(-5px); /* move logo 10px left */
+}
+
+.login-title-logo {
+  max-width: 160px;
+  width: 80%;
+  margin-top: -50px;   /* pull it up closer to the app logo */
+}
+
+
+/* Tagline */
+.login-subtitle {
+  font-size: 0.9rem;
+  color: #777;
+}
+
+/* Input styles */
+.input-group {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid #ccc; /* underline style */
+  padding: 6px 0;
+  margin-bottom: 16px;
+}
+
+/* Icon on the left */
+.input-group .login-input-icon {
+  background: none;
+  border: none;
+  color: #999;
+  font-size: 1.1rem;
+  padding-right: 8px;
+}
+
+/* Input field */
+.input-group .login-input {
+  border: none;
+  outline: none;
+  flex: 1;
+  font-size: 0.95rem;
+  padding: 6px 0;
+  color: #333;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* Focus state: darker underline */
+.input-group:focus-within {
+  border-bottom: 1px solid #8bbafc;
+}
+
+.login-btn {
+  background: #ffffff;        /* white background */
+  color: #182242;             /* dark navy text (matches your logo) */
+  border: none;
+  font-weight: bold;
+  padding: 0.6rem;
+  border-radius: 30px;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.25); /* darker shadow */
+  transition: all 0.2s ease;
+}
+
+.login-btn:hover {
+  background: #f5f5f5;        /* slightly darker white on hover */
+  box-shadow: 0 6px 12px rgba(0,0,0,0.3);
+}

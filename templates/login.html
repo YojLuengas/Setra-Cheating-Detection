@@ -2,30 +2,39 @@
 {% block title %}Login{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center">
-  <div class="col-md-5">
-    <div class="card shadow p-4">
-      <h3 class="text-center mb-4">Login</h3>
+<div class="login-container">
+  <div class="login-card text-center">
+    
+   <!-- Logo Block -->
+<div class="login-header mb-4">
+  <img src="/static/logo/Lsentra.png" alt="App Icon" class="login-logo">
+  <img src="/static/logo/Tsentra.png" alt="Title Logo" class="login-title-logo">
+  <p class="text-muted login-subtitle">Please login to your account</p>
+</div>
 
 
-      <form method="POST" action="{{ url_for('login') }}">
-        <div class="mb-3">
-          <label class="form-label">Username</label>
-          <input name="username" class="form-control" placeholder="Enter your username" required autofocus>
-        </div>
+    <!-- Login Form -->
+    <form method="POST" action="{{ url_for('login') }}">
+      
+      <div class="mb-3 input-group">
+        <span class="input-group-text login-input-icon">
+          <i class="fa fa-user"></i>
+        </span>
+        <input name="username" class="form-control login-input" placeholder="Username" required autofocus>
+      </div>
 
-        <div class="mb-3">
-          <label class="form-label">Password</label>
-          <input name="password" type="password" class="form-control" placeholder="Enter your password" required>
-        </div>
+      <div class="mb-3 input-group">
+        <span class="input-group-text login-input-icon">
+          <i class="fa fa-lock"></i>
+        </span>
+        <input name="password" type="password" class="form-control login-input" placeholder="Password" required>
+      </div>
 
-        <div class="d-grid">
-          <button class="btn btn-primary" type="submit">
-            <i class="fa-solid fa-right-to-bracket"></i> Login
-          </button>
-        </div>
-      </form>
-    </div>
+      <!-- Sign in button -->
+      <div class="d-grid mb-3">
+        <button class="btn login-btn" type="submit">LOGIN</button>
+      </div>
+    </form>
   </div>
 </div>
 {% endblock %}
