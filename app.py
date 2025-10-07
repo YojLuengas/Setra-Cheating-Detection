@@ -1,3 +1,4 @@
+# app_fixed.py
 import os
 import io
 import base64
@@ -9,7 +10,20 @@ from PIL import Image
 from datetime import datetime
 from functools import wraps
 from threading import Lock
-from flask import ( Flask, render_template, request, redirect, url_for, session, flash,jsonify, send_file, abort, Response,)
+
+from flask import (
+    Flask,
+    render_template,
+    request,
+    redirect,
+    url_for,
+    session,
+    flash,
+    jsonify,
+    send_file,
+    abort,
+    Response,
+)
 from flask_socketio import SocketIO, emit
 import mysql.connector
 import mediapipe as mp
@@ -63,51 +77,6 @@ all_snapshots = []
 notified_snapshots = []
 last_cheating_notification_time = 0
 frame_lock = Lock()
-
-# ---------- Helpers ----------
-def b64_to_cv2(data_b64):
-    """Convert data:image/...;base64,... to BGR numpy array."""
-    try:
-        if "," in data_b64:
-            _, b64 = data_b64.split(",", 1)
-        else:
-            b64 = data_b64
-        img = Image.open(io.BytesIO(base64.b64decode(b64))).convert("RGB")
-        return np.array(img)[:, :, ::-1].copy()  # RGB->BGR
-    except Exception as e:
-        logger.exception("b64_to_cv2 error: %s", e)
-        return None
-
-def cv2_to_b64(img_bgr, jpeg_quality=70):
-    """Return base64 data URL (JPEG). jpeg_quality: 1-100."""
-    try:
-        enc_success, buffer = cv2.imencode(".jpg", img_bgr, [int(cv2.IMWRITE_JPEG_QUALITY), int(jpeg_quality)])
-        if not enc_success:
-            return None
-        b64 = base64.b64encode(buffer).decode("utf-8")
-        return "data:image/jpeg;base64," + b64
-    except Exception as e:
-        logger.exception("cv2_to_b64 error: %s", e)
-        return None
-
-def save_image_to_disk(img_bgr, snap_id=None, jpeg_quality=85):
-    """Save image to UPLOAD_FOLDER and return filepath (relative)."""
-    try:
-        if snap_id is None:
-            snap_id = str(uuid.uuid4())
-        filename = f"{snap_id}.jpg"
-        filepath = os.path.join(UPLOAD_FOLDER, filename)
-        enc_success, buffer = cv2.imencode(".jpg", img_bgr, [int(cv2.IMWRITE_JPEG_QUALITY), int(jpeg_quality)])
-        if not enc_success:
-            logger.error("Failed to encode image to JPEG.")
-            return None
-        with open(filepath, "wb") as f:
-            f.write(buffer.tobytes())
-        # store path relative to project root
-        return filepath.replace("\\", "/")
-    except Exception as e:
-        logger.exception("save_image_to_disk error: %s", e)
-        return None
 
 def estimate_head_rotation(image_rgb, face_landmarks):
     """Simple yaw estimator using landmarks; returns yaw ratio (approx)."""
@@ -347,11 +316,11 @@ def handle_frame(message):
             return
         original = frame.copy()
         h, w = frame.shape[:2]
-        scale = 40 / max(h, w)
+        scale = 640 / max(h, w)
         small = cv2.resize(frame, (int(w * scale), int(h * scale)))
         # YOLO predict (be defensive in parsing results)
         try:
-            results = yolo_model.predict(small, imgsz=640, conf=0.50, verbose=False)
+            results = yolo_model.predict(small, imgsz=640, conf=0.30, verbose=False)
         except Exception as e:
             logger.exception("YOLO prediction error: %s", e)
             results = []
@@ -539,5 +508,5 @@ def delete_notification(snap_id):
 if __name__ == "__main__":
     host = "0.0.0.0"
     port = 5000
-    logger.info("Server running at: http://127.0.0.1:%s", port)
+    logger.info("🚀 Server running at: http://127.0.0.1:%s", port)
     socketio.run(app, host=host, port=port, debug=True)
