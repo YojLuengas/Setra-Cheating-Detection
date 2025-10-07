@@ -895,3 +895,210 @@ button:hover {
   min-width: 160px; /* keep same width as buttons */
   text-align: center;
 }
+
+/* admin page */
+body.dashboard-body {
+  background: #f5f7fb;
+  font-family: 'Inter', sans-serif;
+}
+
+/* Admin Sidebar */
+.admin-sidebar {
+  width: 240px;
+  height: 100vh;
+  background: #fff;
+  border-right: 1px solid #eee;
+  padding: 20px 15px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+}
+
+.admin-sidebar .sidebar-header h4 {
+  font-size: 1.2rem;
+  color: #4F46E5;
+  display: flex;
+  align-items: center;
+}
+
+.admin-sidebar .sidebar-header {
+  margin-bottom: 15px; /* small gap only */
+}
+
+.admin-sidebar .sidebar-section {
+  margin-bottom: 15px;
+  margin-top: 5px;
+}
+
+.admin-sidebar .sidebar-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #9ca3af;
+  margin: 10px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.admin-sidebar .sidebar-section.account {
+  margin-top: auto;
+}
+
+.admin-sidebar .nav-link {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  text-align: left;
+  width: 100%;
+  padding: 10px 14px;
+  gap: 10px;
+}
+
+.admin-sidebar .nav-item {
+  width: 100%; 
+}
+
+.admin-sidebar .sidebar-section.account ul,
+.admin-sidebar .sidebar-section.account li {
+  display: block;
+  width: 100%;
+}
+
+.admin-sidebar .nav-link:hover {
+  background: #f3f4f6;
+  color: #111;
+}
+
+.admin-sidebar .nav-link.active {
+  background: #4F46E5;
+  color: #fff;
+  box-shadow: 0 3px 8px rgba(79,70,229,0.25);
+}
+
+/* Topbar */
+.search-bar {
+  border-radius: 12px;
+  border: 1px solid #ddd;
+  padding: 6px 12px;
+  width: 220px;
+}
+
+.profile-circle {
+  width: 40px;
+  height: 40px;
+  background: #4F46E5;
+  color: #fff;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Dashboard cards */
+.dashboard-card {
+  border-radius: 20px;
+  border: none;
+}
+
+.dashboard-card h5 {
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.dashboard-card p {
+  margin: 0;
+}
+
+/* Login Page Styles */
+.login-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background: #f9f9f9;
+}
+
+.login-card {
+  max-width: 400px;
+  width: 100%;
+  padding: 2rem;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+}
+
+/* Logo Block */
+.login-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.login-logo {
+  width: 60%;
+ transform: translateX(-5px); /* move logo 10px left */
+}
+
+.login-title-logo {
+  max-width: 160px;
+  width: 80%;
+  margin-top: -50px;   /* pull it up closer to the app logo */
+}
+
+
+/* Tagline */
+.login-subtitle {
+  font-size: 0.9rem;
+  color: #777;
+}
+
+/* Input styles */
+.input-group {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid #ccc; /* underline style */
+  padding: 6px 0;
+  margin-bottom: 16px;
+}
+
+/* Icon on the left */
+.input-group .login-input-icon {
+  background: none;
+  border: none;
+  color: #999;
+  font-size: 1.1rem;
+  padding-right: 8px;
+}
+
+/* Input field */
+.input-group .login-input {
+  border: none;
+  outline: none;
+  flex: 1;
+  font-size: 0.95rem;
+  padding: 6px 0;
+  color: #333;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* Focus state: darker underline */
+.input-group:focus-within {
+  border-bottom: 1px solid #8bbafc;
+}
+
+.login-btn {
+  background: #ffffff;        /* white background */
+  color: #182242;             /* dark navy text (matches your logo) */
+  border: none;
+  font-weight: bold;
+  padding: 0.6rem;
+  border-radius: 30px;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.25); /* darker shadow */
+  transition: all 0.2s ease;
+}
+
+.login-btn:hover {
+  background: #f5f5f5;        /* slightly darker white on hover */
+  box-shadow: 0 6px 12px rgba(0,0,0,0.3);
+}

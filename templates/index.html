@@ -6,7 +6,7 @@
   <title>Cheating Detection</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <script src="{{ url_for('static', filename='setup.js') }}" defer></script>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
 
@@ -19,8 +19,16 @@
           <span>Alerts</span>
           <span id="alert-badge" class="badge">0</span>
         </li>
-        <li><i class="fa-solid fa-clock"></i><span>Records</span></li>
-        <li><i class="fa-solid fa-gear"></i><span>Settings</span></li>
+        <li>
+          <a href="{{ url_for('records') }}">
+            <i class="fa-solid fa-clock"></i>
+          </a>
+          <span>Records</span>
+        </li>
+        <li>
+          <i class="fa-solid fa-gear"></i>
+          <span>Settings</span>
+        </li>
       </ul>
 
       <ul class="menu-bottom">
@@ -46,180 +54,182 @@
 
     <!-- Main Content -->
     <main class="main-content">
-  <!-- Exam Setup Screen -->
-  <div id="exam-setup" class="setup-screen">
-    <div class="setup-card">
-      <h2>Assessment Session Setup</h2>
 
-      <!-- Tabs -->
-      <div class="setup-tabs">
-        <button class="tab active">Basic Info</button>
-        <button class="tab" disabled>System Check</button>
-        <button class="tab" disabled>Confirm</button>
-      </div>
+      <!-- Exam Setup Screen -->
+      <div id="exam-setup" class="setup-screen">
+        <div class="setup-card">
+          <h2>Assessment Session Setup</h2>
 
-      <form id="setup-form" class="setup-form">
-        <div class="form-row">
-          <div class="form-group">
-            <label>Course & Section</label>
-            <input type="text" id="course" required>
-          </div>
-          <div class="form-group">
-            <label>Subject</label>
-            <input type="text" id="subject" required>
-          </div>
-        </div>
-
-        <div class="form-row">
-          <div class="form-group">
-            <label>Assessment Type</label>
-            <select id="exam-type" required>
-              <option value="" disabled selected>Select Assessment Type</option>
-              <option value="prelim">Prelim Exam</option>
-              <option value="midterm">Midterm Exam</option>
-              <option value="prefinal">Prefinal Exam</option>
-              <option value="final">Final Exam</option>
-              <option value="quiz">Quiz</option>
-              <option value="other">Other</option>
-            </select>
+          <!-- Tabs -->
+          <div class="setup-tabs">
+            <button class="tab active">Basic Info</button>
+            <button class="tab" disabled>System Check</button>
+            <button class="tab" disabled>Confirm</button>
           </div>
 
-          <div class="form-group">
-            <label>Date & Time</label>
-            <input type="datetime-local" id="exam-datetime" required>
-          </div>
-        </div>
-
-        <div class="form-row">
-          <div class="form-group">
-            <label>Select Camera</label>
-            <select id="camera-select" class="camera-select"></select>
-          </div>
-        </div>
-
-        <div class="form-actions">
-          <button type="button" class="cancel-btn">Cancel</button>
-          <button type="button" id="exam-next-btn" class="next-btn">Next</button> 
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- System Check Screen -->
-  <div id="system-check" class="setup-screen" style="display:none;">
-    <div class="setup-card">
-      <h2>System & Camera Check</h2>
-
-      <div class="setup-tabs">
-        <button class="tab completed">Basic Info</button>
-        <button class="tab active">System Check</button>
-        <button class="tab" disabled>Confirm</button>
-      </div>
-
-      <div class="camera-status-container">
-        <!-- Internet Status -->
-        <div class="status-item">
-          <span class="status-label">Internet Connectivity</span>
-          <i id="internet-status" class="fa-solid fa-wifi offline"></i>
-        </div>
-
-        <!-- Camera Preview -->
-        <div class="camera-preview-container">
-          <label>Camera Preview</label>
-          <div class="camera-video-wrapper">
-            <video id="camera-preview" autoplay muted></video>
-            <div id="camera-status" class="status-indicator offline"></div>
-            <div id="camera-overlay" class="camera-overlay">
-              <span id="camera-status-text" class="status-text">Camera is off</span>
+          <form id="setup-form" class="setup-form">
+            <div class="form-row">
+              <div class="form-group">
+                <label>Course & Section</label>
+                <input type="text" id="course" required>
+              </div>
+              <div class="form-group">
+                <label>Subject</label>
+                <input type="text" id="subject" required>
+              </div>
             </div>
-            <div class="camera-controls">
-              <button type="button" id="camera-toggle-btn" class="camera-btn off">
-                <div class="camera-icon-wrapper">
-                  <img src="/static/icons/onCam.png" alt="Camera On" class="camera-icon">
-                  <img src="/static/icons/offCam.png" alt="Slash" class="camera-slash">
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>Assessment Type</label>
+                <select id="exam-type" required>
+                  <option value="" disabled selected>Select Assessment Type</option>
+                  <option value="prelim">Prelim Exam</option>
+                  <option value="midterm">Midterm Exam</option>
+                  <option value="prefinal">Prefinal Exam</option>
+                  <option value="final">Final Exam</option>
+                  <option value="quiz">Quiz</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Date & Time</label>
+                <input type="datetime-local" id="exam-datetime" required>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>Select Camera</label>
+                <select id="camera-select" class="camera-select"></select>
+              </div>
+            </div>
+
+            <div class="form-actions">
+              <button type="button" class="cancel-btn">Cancel</button>
+              <button type="button" id="exam-next-btn" class="next-btn">Next</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- System Check Screen -->
+      <div id="system-check" class="setup-screen" style="display:none;">
+        <div class="setup-card">
+          <h2>System & Camera Check</h2>
+
+          <div class="setup-tabs">
+            <button class="tab completed">Basic Info</button>
+            <button class="tab active">System Check</button>
+            <button class="tab" disabled>Confirm</button>
+          </div>
+
+          <div class="camera-status-container">
+            <!-- Internet Status -->
+            <div class="status-item">
+              <span class="status-label">Internet Connectivity</span>
+              <i id="internet-status" class="fa-solid fa-wifi offline"></i>
+            </div>
+
+            <!-- Camera Preview -->
+            <div class="camera-preview-container">
+              <label>Camera Preview</label>
+              <div class="camera-video-wrapper">
+                <video id="camera-preview" autoplay muted></video>
+                <div id="camera-status" class="status-indicator offline"></div>
+                <div id="camera-overlay" class="camera-overlay">
+                  <span id="camera-status-text" class="status-text">Camera is off</span>
                 </div>
-              </button>
+                <div class="camera-controls">
+                  <button type="button" id="camera-toggle-btn" class="camera-btn off">
+                    <div class="camera-icon-wrapper">
+                      <img src="/static/icons/onCam.png" alt="Camera On" class="camera-icon">
+                      <img src="/static/icons/offCam.png" alt="Slash" class="camera-slash">
+                    </div>
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>        
+          </div>
+
+          <div class="form-actions">
+            <button type="button" class="cancel-btn">Back</button>
+            <button type="button" id="system-check-next" class="next-btn">Next</button>
+          </div>
         </div>
       </div>
 
-      <div class="form-actions">
-        <button type="button" class="cancel-btn">Back</button>
-        <button type="button" id="system-check-next" class="next-btn">Next</button>
+      <!-- Confirm Screen -->
+      <div id="confirm-screen" class="setup-screen" style="display:none;">
+        <div class="setup-card">
+          <h2>Confirm Assessment Setup</h2>
+
+          <div class="setup-tabs">
+            <button class="tab completed">Basic Info</button>
+            <button class="tab completed">System Check</button>
+            <button class="tab active">Confirm</button>
+          </div>
+
+          <div class="setup-form">
+            <div class="form-row">
+              <div class="form-group">
+                <label>Course & Section</label>
+                <div class="confirm-value" id="confirm-course"></div>
+              </div>
+              <div class="form-group">
+                <label>Subject</label>
+                <div class="confirm-value" id="confirm-subject"></div>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>Assessment Type</label>
+                <div class="confirm-value" id="confirm-exam-type"></div>
+              </div>
+              <div class="form-group">
+                <label>Date & Time</label>
+                <div class="confirm-value" id="confirm-datetime"></div>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>Camera</label>
+                <div class="confirm-value-cam" id="confirm-camera"></div>
+              </div>
+            </div>
+
+            <div class="form-actions">
+              <button type="button" id="confirm-back" class="cancel-btn">Back</button>
+              <button type="button" id="confirm-submit" class="next-btn">Confirm</button>
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
+
+      <!-- Camera Container -->
+      <div class="camera-container" style="display:none;">
+        <div class="video-wrapper">
+          <img id="video-frame" src="" alt="AI Detection Feed will appear here">
+        </div>
+        <div id="cheating-status" class="status-text">
+          No cheating detected
+        </div>
+        <div class="controls">
+          <button id="start-btn">Start Camera</button>
+          <button id="stop-btn">Stop Camera</button>
+          <br>
+        </div>
+      </div>
+
+    </main>
   </div>
 
-  <!-- Confirm Screen -->
-<div id="confirm-screen" class="setup-screen" style="display:none;">
-  <div class="setup-card">
-    <h2>Confirm Assessment Setup</h2>
-
-    <div class="setup-tabs">
-      <button class="tab completed">Basic Info</button>
-      <button class="tab completed">System Check</button>
-      <button class="tab active">Confirm</button>
-    </div>
-
-    <div class="setup-form">
-      <div class="form-row">
-        <div class="form-group">
-          <label>Course & Section</label>
-          <div class="confirm-value" id="confirm-course"></div>
-        </div>
-        <div class="form-group">
-          <label>Subject</label>
-          <div class="confirm-value" id="confirm-subject"></div>
-        </div>
-      </div>
-
-      <div class="form-row">
-        <div class="form-group">
-          <label>Assessment Type</label>
-          <div class="confirm-value" id="confirm-exam-type"></div>
-        </div>
-        <div class="form-group">
-          <label>Date & Time</label>
-          <div class="confirm-value" id="confirm-datetime"></div>
-        </div>
-      </div>
-
-      <div class="form-row">
-        <div class="form-group">
-          <label>Camera</label>
-          <div class="confirm-value-cam" id="confirm-camera"></div>
-        </div>
-      </div>
-
-      <div class="form-actions">
-        <button type="button" id="confirm-back" class="cancel-btn">Back</button>
-        <button type="button" id="confirm-submit" class="next-btn">Confirm</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-  <!-- Camera Container -->
-  <div class="camera-container" style="display:none;">
-    <div class="video-wrapper">
-      <img id="video-frame" src="" alt="AI Detection Feed will appear here">
-    </div>
-    <div id="cheating-status" class="status-text">
-      No cheating detected
-    </div>
-    <div class="controls">
-      <button id="start-btn">Start Camera</button>
-      <button id="stop-btn">Stop Camera</button>
-      <br>
-    </div>
-  </div>
-</main>
-
-  </div>
   <!-- Socket.IO -->
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script type="module" src="{{ url_for('static', filename='main.js') }}" defer></script>
+
   <!-- Confirm Modal -->
   <div id="confirm-modal" class="modal" style="display:none;">
     <div class="modal-content">
@@ -233,6 +243,7 @@
         <button id="modal-yes" class="confirm-btn">Yes</button>
       </div>
     </div>
-</div>
+  </div>
+
 </body>
 </html>
