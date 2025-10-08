@@ -45,11 +45,22 @@
   {% for det in detections %}
   <tr>
     <td>
-      <img src="{{ det.image_url }}" alt="Snapshot" width="120" />
+      <img class="record-snapshot" src="{{ det.image_url }}" alt="Snapshot" width="120" />
     </td>
     <td>{{ det.timestamp }}</td>
   </tr>
   {% endfor %}
 </table>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  document.querySelectorAll(".record-snapshot").forEach(function(img) {
+    fetch(img.src)
+      .then(response => response.text())
+      .then(dataUrl => {
+        img.src = dataUrl;
+      });
+  });
+});
+</script>
 </body>
 </html>

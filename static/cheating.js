@@ -136,19 +136,36 @@ window.autoSwitchTo = function (point, force = true) {
   if (!point) return;
 
   const snapId = point.dataset.id;
-  const timestamp = point.dataset.timestamp;
+  if (!snapId) return;
 
-  // Manual click (force=false) → always switch
-  // Auto (force=true) → switch only if not locked
+  const imgEl = document.getElementById("cheating-snapshot-img");
+  const tsEl = document.getElementById("snapshot-timestamp");
+  if (!imgEl) return;
+
+  // Only auto-switch if not locked OR it's a manual click
   if (!force || !userLockedSnapshot) {
-    document.querySelector(".snapshot-img").src =
-      "/cheating_snapshot/" + snapId;
-    document.getElementById("snapshot-timestamp").textContent =
-      "Snapshot at: " + timestamp;
-    document
-      .querySelectorAll(".timeline-point")
-      .forEach((tp) => tp.classList.remove("active"));
+    // 🔵 Update blue active indicator
+    document.querySelectorAll(".timeline-point").forEach((tp) => {
+      tp.classList.remove("active");
+    });
     point.classList.add("active");
+
+    const url = "/cheating_snapshot/" + snapId;
+    fetch(url)
+      .then((res) => res.text())
+      .then((data) => {
+        if (!data) return;
+        imgEl.src = data.startsWith("data:")
+          ? data
+          : "data:image/jpeg;base64," + data;
+
+        if (tsEl && point.dataset.timestamp) {
+          tsEl.textContent = "Snapshot at: " + point.dataset.timestamp;
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to load snapshot", err);
+      });
   }
 };
 
@@ -159,6 +176,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const pathParts = window.location.pathname.split("/");
   const currentSnapId = pathParts[pathParts.length - 1];
   const timeline = document.getElementById("timeline");
+
   if (timeline) {
     const allPoints = timeline.querySelectorAll(".timeline-point");
     const targetPoint = Array.from(allPoints).find(

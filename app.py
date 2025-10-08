@@ -78,6 +78,38 @@ notified_snapshots = []
 last_cheating_notification_time = 0
 frame_lock = Lock()
 
+# ---------- Helpers ----------
+def b64_to_cv2(data_b64):
+    """Convert data:image/...;base64,... to BGR numpy array."""
+    try:
+        if "," in data_b64:
+            _, b64 = data_b64.split(",", 1)
+        else:
+            b64 = data_b64
+        img = Image.open(io.BytesIO(base64.b64decode(b64))).convert("RGB")
+        return np.array(img)[:, :, ::-1].copy()  # RGB->BGR
+    except Exception as e:
+        logger.exception("b64_to_cv2 error: %s", e)
+        return None
+
+def cv2_to_b64(img_bgr, jpeg_quality=70):
+    """Return base64 data URL (JPEG). jpeg_quality: 1-100."""
+    try:
+        enc_success, buffer = cv2.imencode(".jpg", img_bgr, [int(cv2.IMWRITE_JPEG_QUALITY), int(jpeg_quality)])
+        if not enc_success:
+            return None
+        b64 = base64.b64encode(buffer).decode("utf-8")
+        return "data:image/jpeg;base64," + b64
+    except Exception as e:
+        logger.exception("cv2_to_b64 error: %s", e)
+        return None
+
+def save_image_to_disk(img_bgr, snap_id=None, jpeg_quality=85):
+    # Instead of saving to disk, encode to base64 and return
+    _, buffer = cv2.imencode('.jpg', img_bgr, [int(cv2.IMWRITE_JPEG_QUALITY), jpeg_quality])
+    img_b64 = base64.b64encode(buffer).decode('utf-8')
+    return img_b64
+
 def estimate_head_rotation(image_rgb, face_landmarks):
     """Simple yaw estimator using landmarks; returns yaw ratio (approx)."""
     h, w, _ = image_rgb.shape
@@ -423,23 +455,13 @@ def cheating(snap_id):
 @app.route("/cheating_snapshot/<snap_id>")
 @login_required
 def cheating_snapshot(snap_id):
-    try:
-        cursor.execute("SELECT image_path FROM detections WHERE id = %s", (snap_id,))
-        row = cursor.fetchone()
-        if row and row[0]:
-            image_path = row[0]
-            # ensure absolute safe path
-            if not os.path.isabs(image_path):
-                image_path = os.path.join(os.getcwd(), image_path)
-            if os.path.exists(image_path):
-                # determine mime by extension
-                ext = os.path.splitext(image_path)[1].lower()
-                mimetype = "image/jpeg" if ext in [".jpg", ".jpeg"] else "image/png"
-                return send_file(image_path, mimetype=mimetype)
-        return "Snapshot not found", 404
-    except Exception as e:
-        logger.exception("cheating_snapshot error: %s", e)
-        return "Internal error", 500
+    cursor.execute("SELECT image_path FROM detections WHERE id = %s", (snap_id,))
+    row = cursor.fetchone()
+    if row and row[0]:
+        img_b64 = row[0]
+        # Return raw base64 image data
+        return f'data:image/jpeg;base64,{img_b64}'
+    return "Snapshot not found", 404
 
 @app.route("/records")
 @login_required
