@@ -298,7 +298,6 @@ def activate_user(user_id):
         logger.exception("activate_user error: %s", e)
         flash("Unable to activate user.", "danger")
     return redirect(url_for("list_users"))
-
 # ---------- Assessment session ----------
 @app.route("/assessment-session", methods=["POST"])
 @login_required
@@ -322,11 +321,37 @@ def create_assessment_session():
             ),
         )
         db.commit()
+
+        # ✅ Remember that assessment started
+        session["assessment_started"] = True
+
         return jsonify({"success": True, "message": "Assessment session created successfully!"})
     except Exception as e:
         db.rollback()
         logger.exception("create_assessment_session error: %s", e)
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+# ---------- Camera page ----------
+@app.route("/camera")
+@login_required
+def camera_page():
+    """Camera interface for active assessment."""
+    if session.get("assessment_started"):
+        return render_template("camera.html", username=session.get("username"))
+    else:
+        flash("Please start your assessment first.", "warning")
+        return redirect(url_for("home"))
+
+
+# ---------- Finish assessment ----------
+@app.route("/finish-assessment")
+@login_required
+def finish_assessment():
+    """End current assessment and return to setup."""
+    session.pop("assessment_started", None)
+    flash("Assessment finished successfully.", "success")
+    return redirect(url_for("home"))
 
 # ---------- SocketIO frame handler ----------
 @socketio.on("connect")
@@ -433,24 +458,11 @@ def handle_frame(message):
 @app.route("/")
 @login_required
 def home():
-    return render_template("index.html", username=session.get("username"))
-
-@app.route("/cheating/<snap_id>")
-@login_required
-def cheating(snap_id):
-    try:
-        cursor.execute("SELECT id, timestamp FROM detections WHERE id = %s", (snap_id,))
-        row = cursor.fetchone()
-        if not row:
-            return "Snapshot not found", 404
-
-        cursor.execute("SELECT id, timestamp, epoch FROM detections ORDER BY epoch DESC")
-        cheating_snapshots = [{"id": r[0], "timestamp": r[1], "epoch": r[2]} for r in cursor.fetchall()]
-
-        return render_template("cheating.html", snapshot_id=snap_id, timestamp=row[1], cheating_snapshots=cheating_snapshots)
-    except Exception as e:
-        logger.exception("cheating page error: %s", e)
-        return "Internal server error", 500
+    """
+    Main page — shows the setup screen or camera screen depending on session.
+    """
+    camera_active = session.get("assessment_started", False)
+    return render_template("index.html", username=session.get("username"), camera_active=camera_active)
 
 @app.route("/cheating_snapshot/<snap_id>")
 @login_required

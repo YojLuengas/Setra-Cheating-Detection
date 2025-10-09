@@ -207,21 +207,28 @@
           </div>
         </div>
       </div>
+      
+<div class="camera-container" style="display:none;">
+  <div class="video-wrapper">
+    <img id="video-frame" src="" alt="AI Detection Feed will appear here">
+  </div>
 
-      <!-- Camera Container -->
-      <div class="camera-container" style="display:none;">
-        <div class="video-wrapper">
-          <img id="video-frame" src="" alt="AI Detection Feed will appear here">
-        </div>
-        <div id="cheating-status" class="status-text">
-          No cheating detected
-        </div>
-        <div class="controls">
-          <button id="start-btn">Start Camera</button>
-          <button id="stop-btn">Stop Camera</button>
-          <br>
-        </div>
-      </div>
+  <div id="cheating-status" class="status-text">
+    No cheating detected
+  </div>
+
+  <div class="controls">
+    <button id="start-btn">Start Camera</button>
+    <button id="stop-btn">Stop Camera</button>
+    <br>
+    <!-- ✅ Finish Button -->
+    <form action="{{ url_for('finish_assessment') }}" method="GET" style="margin-top: 10px;">
+      <button type="submit" id="finish-btn" class="cancel-btn">Finish Assessment</button>
+      <body data-camera-active="{{ 'true' if camera_active else 'false' }}">
+      </body>
+    </form>
+  </div>
+</div>
 
     </main>
   </div>
