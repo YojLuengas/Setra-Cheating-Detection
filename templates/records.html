@@ -3,41 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <title>Detection Records</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f7f7f7;
-    }
-    h2 {
-      text-align: center;
-      margin-top: 20px;
-    }
-    table {
-      border-collapse: collapse;
-      width: 95%;
-      margin: 20px auto;
-      background: white;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-    }
-    th, td {
-      border: 1px solid #ddd;
-      padding: 10px;
-      text-align: center;
-    }
-    th {
-      background: #f0f0f0;
-    }
-    img {
-      max-width: 180px;
-      border-radius: 8px;
-    }
-  </style>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
   <h2>Cheating Detection Records</h2>
-  <!-- Example for records.html -->
-<!-- Example for records.html -->
-<table>
+
+<table class="records-table">
   <tr>
     <th>Snapshot</th>
     <th>Timestamp</th>

@@ -352,7 +352,7 @@ def handle_frame(message):
         small = cv2.resize(frame, (int(w * scale), int(h * scale)))
         # YOLO predict (be defensive in parsing results)
         try:
-            results = yolo_model.predict(small, imgsz=640, conf=0.30, verbose=False)
+            results = yolo_model.predict(small, imgsz=640, conf=0.40, verbose=False)
         except Exception as e:
             logger.exception("YOLO prediction error: %s", e)
             results = []
