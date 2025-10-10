@@ -12,9 +12,9 @@
     {% if folders %}
     <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:16px;">
       {% for f in folders %}
-      <a href="{{ url_for('records_folder', day=f.day) }}" class="folder-card" style="text-decoration:none;">
+      <a href="{{ url_for('records_folder', folder_name=f.folder_name) }}" class="folder-card" style="text-decoration:none;">
         <div style="background:#fff; padding:16px; border-radius:10px; box-shadow:0 6px 18px rgba(16,42,67,0.06);">
-          <div style="font-weight:600; color:#0b3d91; font-size:16px;">{{ f.day }}</div>
+          <div style="font-weight:600; color:#0b3d91; font-size:16px;">{{ f.folder_name }}</div>
           <div style="margin-top:8px; color:#6b7280;">{{ f.count }} snapshot{{ 's' if f.count|int != 1 else '' }}</div>
         </div>
       </a>

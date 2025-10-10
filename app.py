@@ -305,7 +305,7 @@ def create_assessment_session():
     try:
         cursor.execute(
             """
-            INSERT INTO assessment_sessions 
+            INSERT INTO assessment_sessions
                 (user_id, course, subject, exam_type, exam_datetime, camera, created_at)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
             """,
@@ -319,7 +319,14 @@ def create_assessment_session():
                 datetime.now(),
             ),
         )
+        assessment_session_id = cursor.lastrowid
+        folder_name = f"{data.get('course', '').replace(' ', '_')}_{data.get('subject', '').replace(' ', '_')}_{data.get('exam_type', '').replace(' ', '_')}_{str(uuid.uuid4())[:8]}"
+        cursor.execute(
+            "INSERT INTO records (assessment_session_id, user_id, folder_name, created_at) VALUES (%s, %s, %s, %s)",
+            (assessment_session_id, session["user_id"], folder_name, datetime.now())
+        )
         db.commit()
+        session["assessment_session_id"] = assessment_session_id
         return jsonify({"success": True, "message": "Assessment session created successfully!"})
     except Exception as e:
         db.rollback()
@@ -394,7 +401,7 @@ def handle_frame(message):
             all_snapshots.append(snapshot)
             notified_snapshots.append(snapshot)
             try:
-                cursor.execute("INSERT INTO detections (id, timestamp, epoch, image_path) VALUES (%s, %s, %s, %s)", (snap_id, timestamp, epoch_now, saved_path))
+                cursor.execute("INSERT INTO detections (id, timestamp, epoch, image_path, assessment_session_id, user_id) VALUES (%s, %s, %s, %s, %s, %s)", (snap_id, timestamp, epoch_now, saved_path, session.get("assessment_session_id"), session.get("user_id")))
                 db.commit()
             except Exception as e:
                 db.rollback()
@@ -465,36 +472,35 @@ def cheating_snapshot(snap_id):
 @login_required
 def records():
     """
-    Show folders (grouped by date) with counts.
+    Show folders with counts.
     """
     try:
         cursor.execute("""
-            SELECT DATE(timestamp) AS day, COUNT(*) AS cnt
-            FROM detections
-            GROUP BY day
-            ORDER BY day DESC
+            SELECT folder_name, (SELECT COUNT(*) FROM detections WHERE assessment_session_id = records.assessment_session_id) AS cnt
+            FROM records
+            ORDER BY created_at DESC
         """)
         rows = cursor.fetchall()
-        folders = [{"day": r[0].strftime("%Y-%m-%d") if isinstance(r[0], datetime) else str(r[0]), "count": r[1]} for r in rows]
+        folders = [{"folder_name": r[0], "count": r[1]} for r in rows]
     except Exception as e:
         logger.exception("records folders fetch error: %s", e)
         folders = []
     return render_template("records.html", folders=folders)
 
-@app.route("/records/folder/<day>")
+@app.route("/records/folder/<folder_name>")
 @login_required
-def records_folder(day):
+def records_folder(folder_name):
     """
-    Show snapshots inside a folder (day). day expected as YYYY-MM-DD.
+    Show snapshots inside a folder.
     """
     try:
-        # basic validation
-        try:
-            datetime.strptime(day, "%Y-%m-%d")
-        except Exception:
-            abort(400)
+        cursor.execute("SELECT assessment_session_id FROM records WHERE folder_name = %s", (folder_name,))
+        row = cursor.fetchone()
+        if not row:
+            abort(404)
+        assessment_session_id = row[0]
 
-        cursor.execute("SELECT id, timestamp, image_path FROM detections WHERE DATE(timestamp) = %s ORDER BY timestamp DESC", (day,))
+        cursor.execute("SELECT id, timestamp, image_path FROM detections WHERE assessment_session_id = %s ORDER BY timestamp DESC", (assessment_session_id,))
         rows = cursor.fetchall()
     except Exception as e:
         logger.exception("records folder fetch error: %s", e)
@@ -510,7 +516,7 @@ def records_folder(day):
         else:
             ts_str = str(ts)
         snapshots.append({"id": snap_id, "timestamp": ts_str, "image_url": img_url})
-    return render_template("records_folder.html", day=day, snapshots=snapshots)
+    return render_template("records_folder.html", folder_name=folder_name, snapshots=snapshots)
 
 # ---------- API routes ----------
 @app.route("/api/notifications")
@@ -565,3 +571,4 @@ if __name__ == "__main__":
     port = 5000
     logger.info("🚀 Server running at: http://127.0.0.1:%s", port)
     socketio.run(app, host=host, port=port, debug=True)
+    
