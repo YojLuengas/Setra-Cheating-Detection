@@ -32,8 +32,6 @@ import bcrypt
 import logging
 
 # ---------- Config ----------
-UPLOAD_FOLDER = os.path.join("static", "uploads")
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 DB_CONFIG = {
     "host": "localhost",
@@ -466,20 +464,55 @@ def cheating_snapshot(snap_id):
 @app.route("/records")
 @login_required
 def records():
+    """
+    Show folders (grouped by date) with counts.
+    """
     try:
-        cursor.execute("SELECT id, timestamp, epoch, image_path FROM detections ORDER BY timestamp DESC")
-        detections = cursor.fetchall()
+        cursor.execute("""
+            SELECT DATE(timestamp) AS day, COUNT(*) AS cnt
+            FROM detections
+            GROUP BY day
+            ORDER BY day DESC
+        """)
+        rows = cursor.fetchall()
+        folders = [{"day": r[0].strftime("%Y-%m-%d") if isinstance(r[0], datetime) else str(r[0]), "count": r[1]} for r in rows]
     except Exception as e:
-        logger.exception("records fetch error: %s", e)
-        detections = []
+        logger.exception("records folders fetch error: %s", e)
+        folders = []
+    return render_template("records.html", folders=folders)
 
-    records = []
-    for det in detections:
-        snap_id, timestamp, epoch, image_path = det
+@app.route("/records/folder/<day>")
+@login_required
+def records_folder(day):
+    """
+    Show snapshots inside a folder (day). day expected as YYYY-MM-DD.
+    """
+    try:
+        # basic validation
+        try:
+            datetime.strptime(day, "%Y-%m-%d")
+        except Exception:
+            abort(400)
+
+        cursor.execute("SELECT id, timestamp, image_path FROM detections WHERE DATE(timestamp) = %s ORDER BY timestamp DESC", (day,))
+        rows = cursor.fetchall()
+    except Exception as e:
+        logger.exception("records folder fetch error: %s", e)
+        rows = []
+
+    snapshots = []
+    for r in rows:
+        snap_id, ts, img_path = r
+        # image served by cheating_snapshot endpoint (returns data URI)
         img_url = url_for("cheating_snapshot", snap_id=snap_id)
-        records.append({"id": snap_id, "timestamp": timestamp, "epoch": epoch, "image_url": img_url})
-    return render_template("records.html", detections=records)
+        if isinstance(ts, datetime):
+            ts_str = ts.strftime("%Y-%m-%d %I:%M:%S %p")
+        else:
+            ts_str = str(ts)
+        snapshots.append({"id": snap_id, "timestamp": ts_str, "image_url": img_url})
+    return render_template("records_folder.html", day=day, snapshots=snapshots)
 
+# ---------- API routes ----------
 @app.route("/api/notifications")
 @login_required
 def get_notifications():

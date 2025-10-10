@@ -2,36 +2,27 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Detection Records</title>
+  <title>Detection Records - Folders</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-  <h2>Cheating Detection Records</h2>
+  <main style="padding:28px; max-width:1100px; margin:0 auto;">
+    <h2 style="margin-bottom:18px;">Detection Records</h2>
 
-<table class="records-table">
-  <tr>
-    <th>Snapshot</th>
-    <th>Timestamp</th>
-  </tr>
-  {% for det in detections %}
-  <tr>
-    <td>
-      <img class="record-snapshot" src="{{ det.image_url }}" alt="Snapshot" width="120" />
-    </td>
-    <td>{{ det.timestamp }}</td>
-  </tr>
-  {% endfor %}
-</table>
-<script>
-document.addEventListener("DOMContentLoaded", function() {
-  document.querySelectorAll(".record-snapshot").forEach(function(img) {
-    fetch(img.src)
-      .then(response => response.text())
-      .then(dataUrl => {
-        img.src = dataUrl;
-      });
-  });
-});
-</script>
+    {% if folders %}
+    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:16px;">
+      {% for f in folders %}
+      <a href="{{ url_for('records_folder', day=f.day) }}" class="folder-card" style="text-decoration:none;">
+        <div style="background:#fff; padding:16px; border-radius:10px; box-shadow:0 6px 18px rgba(16,42,67,0.06);">
+          <div style="font-weight:600; color:#0b3d91; font-size:16px;">{{ f.day }}</div>
+          <div style="margin-top:8px; color:#6b7280;">{{ f.count }} snapshot{{ 's' if f.count|int != 1 else '' }}</div>
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+    {% else %}
+      <p>No records yet.</p>
+    {% endif %}
+  </main>
 </body>
 </html>
