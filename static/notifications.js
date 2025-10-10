@@ -3,7 +3,7 @@ const seenSnapshots = new Set(JSON.parse(sessionStorage.getItem("seenSnapshots")
 
 // Badge elements
 const badge = document.getElementById("alert-badge");
-export let alertCount = 0;
+let alertCount = 0;
 
 
 
