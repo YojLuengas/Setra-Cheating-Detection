@@ -1,4 +1,4 @@
-import { appendNotification, persistState } from "./notifications.js";
+import { appendNotification, persistState, alertCount, updateBadge } from "./notifications.js";
 
 let socket;
 let seenSnapshots = new Set(JSON.parse(sessionStorage.getItem("seenSnapshots") || "[]"));
@@ -30,8 +30,9 @@ function initSocket(video, statusDiv) {
   if (!seenSnapshots.has(data.url)) {
     seenSnapshots.add(data.url);
     appendNotification(data);
+    alertCount++;
+    updateBadge();
 
-    const snapId = data.url.split("/").pop();
     const timestampMatch = data.message.match(/at (.+)!/);
     const timestamp = timestampMatch ? timestampMatch[1] : new Date().toLocaleString();
     const epoch = Date.now() / 1000;

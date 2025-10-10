@@ -3,18 +3,26 @@ const seenSnapshots = new Set(JSON.parse(sessionStorage.getItem("seenSnapshots")
 
 // Badge elements
 const badge = document.getElementById("alert-badge");
-let alertCount = 0;
+export let alertCount = 0;
 
 
 
 // --- Update badge display ---
 function updateBadge() {
-  if (!badge) return;
+  const badge1 = document.getElementById("alert-badge");
+  const badge2 = document.getElementById("notification-count");
   if (alertCount > 0) {
-    badge.style.display = "inline-block";
-    badge.textContent = alertCount;
+    if (badge1) {
+      badge1.style.display = "inline-block";
+      badge1.textContent = alertCount;
+    }
+    if (badge2) {
+      badge2.style.display = "inline-block";
+      badge2.textContent = alertCount;
+    }
   } else {
-    badge.style.display = "none";
+    if (badge1) badge1.style.display = "none";
+    if (badge2) badge2.style.display = "none";
   }
 }
 
@@ -182,12 +190,6 @@ function appendNotification(data) {
   }
 
   if (notifications) notifications.prepend(li);
-
-  // --- Add this block ---
-  if (isUnread) {
-    alertCount++;
-    updateBadge();
-  }
 }
 
 // --- Persist notifications & timeline points ---
@@ -214,6 +216,8 @@ function addNotification(message) {
   const notifData = { message };
   appendNotification(notifData);
   persistState(notifData, null);
+  alertCount++;
+  updateBadge();
 }
 
 // --- Restore notifications on page load ---
@@ -255,4 +259,4 @@ if (alertsMenu) {
   updateBadge();
 });
 
-export { addNotification, appendNotification, persistState };
+export { addNotification, appendNotification, persistState, alertCount, updateBadge };

@@ -144,6 +144,26 @@ document.getElementById("modal-yes").addEventListener("click", async () => {
     const result = await res.json();
     if (result.success) {
       console.log("Session saved:", result.message);
+      // Clear notifications for new session
+      const notifications = document.getElementById('notifications');
+      if (notifications) {
+        notifications.innerHTML = '';
+        let noAlertsMsg = document.getElementById("no-alerts-msg");
+        if (!noAlertsMsg) {
+          noAlertsMsg = document.createElement("p");
+          noAlertsMsg.id = "no-alerts-msg";
+          noAlertsMsg.textContent = "No alerts yet";
+          notifications.appendChild(noAlertsMsg);
+        }
+      }
+      // Reset badge
+      const badge = document.getElementById("alert-badge");
+      if (badge) {
+        badge.style.display = "none";
+      }
+      // Clear sessionStorage for notifications
+      sessionStorage.removeItem("seenSnapshots");
+      sessionStorage.removeItem("notifications");
     } else {
       alert("Error: " + result.error);
     }
@@ -198,6 +218,14 @@ function stopCamera() {
 // Load available cameras immediately
 async function loadCameras() {
   try {
+    // Request permission first to populate device labels
+    const tempStream = await navigator.mediaDevices.getUserMedia({ video: true });
+    tempStream.getTracks().forEach(t => t.stop());
+  } catch (err) {
+    console.error('Error requesting camera permission:', err);
+  }
+
+  try {
     const devices = await navigator.mediaDevices.enumerateDevices();
     cameraSelect.innerHTML = "";
     let count = 1;
@@ -209,6 +237,10 @@ async function loadCameras() {
         cameraSelect.appendChild(option);
       }
     });
+
+    if (devices.length > 0 && !cameraSelect.value) {
+      cameraSelect.value = devices[0].deviceId;
+    }
   } catch (err) {
     console.error("Error listing cameras:", err);
   }

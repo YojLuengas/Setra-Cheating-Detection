@@ -444,15 +444,17 @@ def home():
 @login_required
 def cheating(snap_id):
     try:
-        cursor.execute("SELECT id, timestamp FROM detections WHERE id = %s", (snap_id,))
+        cursor.execute("SELECT id, timestamp, assessment_session_id FROM detections WHERE id = %s AND user_id = %s", (snap_id, session["user_id"]))
         row = cursor.fetchone()
         if not row:
             return "Snapshot not found", 404
 
-        cursor.execute("SELECT id, timestamp, epoch FROM detections ORDER BY epoch DESC")
+        snap_id, ts, assessment_session_id = row
+
+        cursor.execute("SELECT id, timestamp, epoch FROM detections WHERE assessment_session_id = %s ORDER BY epoch DESC", (assessment_session_id,))
         cheating_snapshots = [{"id": r[0], "timestamp": r[1], "epoch": r[2]} for r in cursor.fetchall()]
 
-        return render_template("cheating.html", snapshot_id=snap_id, timestamp=row[1], cheating_snapshots=cheating_snapshots)
+        return render_template("cheating.html", snapshot_id=snap_id, timestamp=ts, cheating_snapshots=cheating_snapshots)
     except Exception as e:
         logger.exception("cheating page error: %s", e)
         return "Internal server error", 500
@@ -460,28 +462,49 @@ def cheating(snap_id):
 @app.route("/cheating_snapshot/<snap_id>")
 @login_required
 def cheating_snapshot(snap_id):
-    cursor.execute("SELECT image_path FROM detections WHERE id = %s", (snap_id,))
+    cursor.execute("SELECT image_path FROM detections WHERE id = %s AND user_id = %s", (snap_id, session["user_id"]))
     row = cursor.fetchone()
     if row and row[0]:
-        img_b64 = row[0]
-        # Return raw base64 image data
-        return f'data:image/jpeg;base64,{img_b64}'
+        image_path = row[0]
+        if not os.path.isabs(image_path):
+            image_path = os.path.join(os.getcwd(), image_path)
+        # Check if it's a file path (old snapshots) or base64 (new snapshots)
+        if os.path.isfile(image_path):
+            # Serve the file from disk
+            return send_file(image_path, mimetype='image/jpeg')
+        else:
+            # Treat as base64 data
+            return f'data:image/jpeg;base64,{row[0]}'
     return "Snapshot not found", 404
 
 @app.route("/records")
 @login_required
 def records():
     """
-    Show folders with counts.
+    Show folders with counts and first snapshot thumbnail.
     """
     try:
         cursor.execute("""
-            SELECT folder_name, (SELECT COUNT(*) FROM detections WHERE assessment_session_id = records.assessment_session_id) AS cnt
-            FROM records
-            ORDER BY created_at DESC
-        """)
+            SELECT r.folder_name, as_.course, as_.subject, as_.exam_type, COUNT(d.id) as cnt,
+                   (SELECT d2.image_path FROM detections d2 WHERE d2.assessment_session_id = r.assessment_session_id ORDER BY d2.timestamp ASC LIMIT 1) as first_image
+            FROM records r
+            LEFT JOIN assessment_sessions as_ ON r.assessment_session_id = as_.id
+            LEFT JOIN detections d ON r.assessment_session_id = d.assessment_session_id
+            WHERE r.user_id = %s
+            GROUP BY r.assessment_session_id
+            ORDER BY r.created_at DESC
+        """, (session["user_id"],))
         rows = cursor.fetchall()
-        folders = [{"folder_name": r[0], "count": r[1]} for r in rows]
+        folders = []
+        for r in rows:
+            course, subject, exam_type = r[1], r[2], r[3]
+            display_title = f"{course} - {subject} ({exam_type})" if course and subject and exam_type else r[0]
+            folders.append({
+                "folder_name": r[0],
+                "display_title": display_title,
+                "count": r[4],
+                "first_image": f"data:image/jpeg;base64,{r[5]}" if r[5] else None
+            })
     except Exception as e:
         logger.exception("records folders fetch error: %s", e)
         folders = []
@@ -494,7 +517,7 @@ def records_folder(folder_name):
     Show snapshots inside a folder.
     """
     try:
-        cursor.execute("SELECT assessment_session_id FROM records WHERE folder_name = %s", (folder_name,))
+        cursor.execute("SELECT assessment_session_id FROM records WHERE folder_name = %s AND user_id = %s", (folder_name, session["user_id"]))
         row = cursor.fetchone()
         if not row:
             abort(404)
@@ -518,12 +541,106 @@ def records_folder(folder_name):
         snapshots.append({"id": snap_id, "timestamp": ts_str, "image_url": img_url})
     return render_template("records_folder.html", folder_name=folder_name, snapshots=snapshots)
 
+
+@app.route("/delete_record/<folder_name>", methods=["POST"])
+@login_required
+def delete_record(folder_name):
+    """
+    Delete a record folder and all associated data.
+    """
+    try:
+        # Get assessment_session_id for the folder
+        cursor.execute("SELECT assessment_session_id FROM records WHERE folder_name = %s AND user_id = %s", (folder_name, session["user_id"]))
+        row = cursor.fetchone()
+        if not row:
+            flash("Folder not found.", "danger")
+            return redirect(url_for("records"))
+        assessment_session_id = row[0]
+
+        # Get all image paths for deletions
+        cursor.execute("SELECT image_path FROM detections WHERE assessment_session_id = %s", (assessment_session_id,))
+        image_paths = [r[0] for r in cursor.fetchall()]
+
+        # Delete detections
+        cursor.execute("DELETE FROM detections WHERE assessment_session_id = %s", (assessment_session_id,))
+
+        # Delete record
+        cursor.execute("DELETE FROM records WHERE folder_name = %s AND user_id = %s", (folder_name, session["user_id"]))
+
+        # Delete assessment session
+        cursor.execute("DELETE FROM assessment_sessions WHERE id = %s", (assessment_session_id,))
+
+        db.commit()
+
+        # Delete image files if they are file paths (for old snapshots)
+        for img_path in image_paths:
+            if img_path and not img_path.startswith("data:"):  # Not base64
+                full_path = os.path.join(os.getcwd(), img_path) if not os.path.isabs(img_path) else img_path
+                try:
+                    if os.path.exists(full_path):
+                        os.remove(full_path)
+                except Exception:
+                    logger.exception("Failed to delete image file: %s", full_path)
+
+        flash("Folder and all data deleted successfully.", "success")
+    except Exception as e:
+        db.rollback()
+        logger.exception("delete_record error: %s", e)
+        flash("Failed to delete folder.", "danger")
+    return redirect(url_for("records"))
+
+
+@app.route("/delete_snapshot/<snap_id>", methods=["POST"])
+@login_required
+def delete_snapshot(snap_id):
+    """
+    Delete a single snapshot and associated data.
+    """
+    try:
+        cursor.execute("SELECT image_path, assessment_session_id FROM detections WHERE id = %s AND user_id = %s", (snap_id, session["user_id"]))
+        row = cursor.fetchone()
+        if not row:
+            flash("Snapshot not found.", "danger")
+            return redirect(url_for("records"))
+        image_path, assessment_session_id = row
+
+        cursor.execute("DELETE FROM detections WHERE id = %s AND user_id = %s", (snap_id, session["user_id"]))
+        db.commit()
+
+        # Delete image file if it's a file path (not base64)
+        if image_path and not image_path.startswith("data:"):
+            full_path = os.path.join(os.getcwd(), image_path) if not os.path.isabs(image_path) else image_path
+            try:
+                if os.path.exists(full_path):
+                    os.remove(full_path)
+            except Exception:
+                logger.exception("Failed to delete image file: %s", full_path)
+
+        # Get folder_name to redirect back to the folder view
+        cursor.execute("SELECT folder_name FROM records WHERE assessment_session_id = %s AND user_id = %s", (assessment_session_id, session["user_id"]))
+        folder_row = cursor.fetchone()
+        if folder_row:
+            folder_name = folder_row[0]
+            flash("Snapshot deleted successfully.", "success")
+            return redirect(url_for("records_folder", folder_name=folder_name))
+        else:
+            flash("Snapshot deleted, but folder not found.", "warning")
+            return redirect(url_for("records"))
+    except Exception as e:
+        db.rollback()
+        logger.exception("delete_snapshot error: %s", e)
+        flash("Failed to delete snapshot.", "danger")
+        return redirect(url_for("records"))
+
 # ---------- API routes ----------
 @app.route("/api/notifications")
 @login_required
 def get_notifications():
     try:
-        cursor.execute("SELECT id, timestamp FROM detections ORDER BY epoch DESC")
+        assessment_session_id = session.get("assessment_session_id")
+        if not assessment_session_id:
+            return jsonify({"notifications": []})
+        cursor.execute("SELECT id, timestamp FROM detections WHERE assessment_session_id = %s ORDER BY epoch DESC", (assessment_session_id,))
         notifications = []
         for row in cursor.fetchall():
             snap_id, ts = row[0], row[1]
@@ -543,10 +660,10 @@ def get_notifications():
 @login_required
 def delete_notification(snap_id):
     try:
-        cursor.execute("SELECT image_path FROM detections WHERE id = %s", (snap_id,))
+        cursor.execute("SELECT image_path FROM detections WHERE id = %s AND user_id = %s", (snap_id, session["user_id"]))
         row = cursor.fetchone()
         image_path = row[0] if row else None
-        cursor.execute("DELETE FROM detections WHERE id = %s", (snap_id,))
+        cursor.execute("DELETE FROM detections WHERE id = %s AND user_id = %s", (snap_id, session["user_id"]))
         db.commit()
         global all_snapshots, notified_snapshots
         all_snapshots = [s for s in all_snapshots if s["id"] != snap_id]
