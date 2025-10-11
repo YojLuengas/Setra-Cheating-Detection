@@ -57,7 +57,11 @@ async function startCamera() {
     initSocket(video, statusDiv);
 
     stream = await navigator.mediaDevices.getUserMedia({
-      video: currentDeviceId ? { deviceId: { exact: currentDeviceId } } : true,
+      video: {
+        deviceId: currentDeviceId ? { exact: currentDeviceId } : undefined,
+        width: 800,
+        height: 720
+      },
       audio: false
     });
 
@@ -132,15 +136,10 @@ async function sendLoop(videoElement) {
 }
 
 function captureFrame(videoElement) {
-  const vw = videoElement.videoWidth;
-  const vh = videoElement.videoHeight;
-  const size = Math.min(vw, vh);
-  const sx = (vw - size) / 2;
-  const sy = (vh - size) / 2;
-  canvas.width = size;
-  canvas.height = size;
+  canvas.width = 800;
+  canvas.height = 720;
   const ctx = canvas.getContext("2d");
-  ctx.drawImage(videoElement, sx, sy, size, size, 0, 0, size, size);
+  ctx.drawImage(videoElement, 0, 0, 800, 720);
   return canvas.toDataURL("image/jpeg", 0.6);
 }
 

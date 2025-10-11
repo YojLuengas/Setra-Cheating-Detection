@@ -1422,7 +1422,7 @@ body.dashboard-body {
 
 .camera-container img#video-frame,
 .camera-container video#video-frame {
-  width: 720px;
+  width: 800px;
   height: 720px;
   object-fit: contain;
   background: #000;

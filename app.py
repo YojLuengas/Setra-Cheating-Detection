@@ -373,6 +373,7 @@ def handle_frame(message):
         frame = b64_to_cv2(img_b64)
         if frame is None:
             return
+        # Frame is already 800x720 from client
         original = frame.copy()
         h, w = frame.shape[:2]
         scale = 640 / max(h, w)
