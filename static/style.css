@@ -18,7 +18,7 @@ body {
 
 /* Header */
 header {
-  background: #0077ff;
+  background: #0b3d91;
   color: white;
   padding: 15px 20px;
   text-align: center;
@@ -44,7 +44,7 @@ header {
   width: 340px;
   background: #2c2c54;
   color: white;
-  padding: 20px 0 20px 30px;;
+  padding: 20px 0 20px 30px;
   overflow-y: visible;
   transform: translateX(-100%);
   transition: transform 0.35s cubic-bezier(0.4,0,0.2,1);
@@ -114,14 +114,14 @@ button {
   margin: 5px;
   border: none;
   border-radius: 6px;
-  background: #0077ff;
+  background: #0b3d91;
   color: white;
   cursor: pointer;
   font-size: 16px;
 }
 
 button:hover {
-  background: #005fcc;
+  background: #0a357f;
 }
 
 /* -------------------
@@ -173,7 +173,7 @@ button:hover {
 }
 
 .timeline-point.active {
-  background: #0077ff;
+  background: #0b3d91;
   border-color: yellow;
 }
 
@@ -479,8 +479,8 @@ button:hover {
 }
 
 .setup-tabs .tab.active {
-  border-color: #007bff;
-  color: #007bff;
+  border-color: #0b3d91;
+  color: #0b3d91;
 }
 
 .setup-tabs .tab:disabled {
@@ -557,7 +557,7 @@ button:hover {
 }
 
 .next-btn {
-  background: #007bff;
+  background: #0b3d91;
   color: #fff;
 }
 
@@ -852,22 +852,22 @@ button:hover {
 
 /* Next/Proceed/Confirm */
 .next-btn {
-  background: #00b894;   /* green */
+  background: #051f4b;   /* green */
   color: #fff;
 }
 
 .next-btn:hover {
-  background: #019267;   /* darker green */
+  background: #0e49b0;   /* darker green */
 }
 
 
 .confirm-btn {
-  background: #00b894;
+  background: #051f4b;
   color: #fff;
 }
 
 .confirm-btn:hover {
-  background: #019267;
+  background: #0e49b0;
 }
 
 /* Animations */
@@ -929,7 +929,7 @@ body.dashboard-body {
 
 .admin-sidebar .sidebar-header h4 {
   font-size: 1.2rem;
-  color: #4F46E5;
+  color: #0b3d91;
   display: flex;
   align-items: center;
 }
@@ -983,9 +983,9 @@ body.dashboard-body {
 }
 
 .admin-sidebar .nav-link.active {
-  background: #4F46E5;
+  background: #0b3d91;
   color: #fff;
-  box-shadow: 0 3px 8px rgba(79,70,229,0.25);
+  box-shadow: 0 3px 8px rgba(11,61,145,0.25);
 }
 
 /* Topbar */
@@ -999,7 +999,7 @@ body.dashboard-body {
 .profile-circle {
   width: 40px;
   height: 40px;
-  background: #4F46E5;
+  background: #0b3d91;
   color: #fff;
   border-radius: 50%;
   display: flex;
@@ -1102,7 +1102,7 @@ body.dashboard-body {
 
 .login-btn {
   background: #ffffff;        /* white background */
-  color: #182242;             /* dark navy text (matches your logo) */
+  color: #0b3d91;             /* dark blue text */
   border: none;
   font-weight: bold;
   padding: 0.6rem;
@@ -1221,7 +1221,7 @@ body.dashboard-body {
 
 .folder-name {
   font-weight: 600;
-  color: #0b3d91;
+  color: #051f4b;
   font-size: 18px;
   line-height: 1.2;
   word-wrap: break-word;
@@ -1318,20 +1318,28 @@ body.dashboard-body {
 }
 
 .back-link {
-  color: #0b3d91; /* dark blue */
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: #051f4b;
+  color: #ffffff;
+  font-weight: 600;
   text-decoration: none;
-  font-weight: 500;
-  transition: color 0.2s ease;
+  border: 1px solid rgba(15,23,42,0.06);
+  box-shadow: 0 2px 6px rgba(2,6,23,0.03);
+  transition: background 0.2s ease;
 }
 
 .back-link:hover {
-  color: #00b894; /* green on hover */
-  text-decoration: underline;
+  background: #0b3d91;
+  text-decoration: none;
 }
 
 /* Delete Button - Keep red but theme-friendly */
 .delete-btn {
-  background: #dc3545; /* red for delete */
+  background: #a61919; /* red for delete */
   color: #ffffff;
   border: none;
   padding: 8px 16px;
@@ -1368,7 +1376,7 @@ body.dashboard-body {
 }
 
 #confirmDelete {
-  background: #00b894; /* green for confirm */
+  background: #051f4b; /* green for confirm */
   color: #ffffff;
   border: none;
   padding: 10px 20px;
@@ -1380,7 +1388,7 @@ body.dashboard-body {
 }
 
 #confirmDelete:hover {
-  background: #019267; /* darker green */
+  background: #0c43a1; /* darker green */
 }
 
 .cancel {
@@ -1456,14 +1464,14 @@ body.dashboard-body {
 }
 
 #start-btn {
-  background: #182242;
+  background: #051f4b;
   color: #fff;
-  box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+  box-shadow: 0 4px 12px rgba(11, 61, 145, 0.3);
 }
 
 #start-btn:hover {
-  background: #263566;
-  box-shadow: 0 6px 16px rgba(0, 123, 255, 0.4);
+  background: #0b3785;
+  box-shadow: 0 6px 16px rgba(11, 61, 145, 0.4);
 }
 
 #stop-btn {
@@ -1635,11 +1643,10 @@ body.dashboard-body {
 
 .timeline-point:hover {
   transform: translate(-50%, -50%) scale(1.2);
-  background: #007bff;
+  background: #0b3d91;
 }
 .timeline-point.active {
-  background: #007bff;
-  box-shadow: 0 0 12px rgba(0,123,255,0.6);
+  background: #0b3d91;
 }
 
 /* Timeline labels */
@@ -1731,7 +1738,3 @@ body.dashboard-body {
     height: 168px;
   }
 }
-
-
-
-
