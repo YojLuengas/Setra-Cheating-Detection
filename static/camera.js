@@ -1,4 +1,4 @@
-import { initSocket, emitFrame } from "./socket.js";
+import { initSocket, emitFrame, disconnectSocket } from "./socket.js";
 
 let video, startBtn, stopBtn, statusDiv, cameraList;
 const canvas = document.createElement("canvas");
@@ -97,6 +97,9 @@ function stopCamera() {
     vid = null;
   }
   setBlackScreen();
+
+  // Close socket connection to ensure new session on reconnect
+  disconnectSocket();
 
   showTemporaryStatus("Camera stopped");
 }

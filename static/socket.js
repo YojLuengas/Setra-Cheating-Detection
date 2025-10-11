@@ -66,4 +66,12 @@ function emitFrame(frameB64) {
   }
 }
 
-export { initSocket, emitFrame };
+// Function to disconnect socket
+function disconnectSocket() {
+  if (socket) {
+    socket.disconnect();
+    socket = null;
+  }
+}
+
+export { initSocket, emitFrame, disconnectSocket };

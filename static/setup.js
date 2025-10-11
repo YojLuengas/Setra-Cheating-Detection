@@ -90,6 +90,7 @@ systemCheck.querySelector(".cancel-btn").addEventListener("click", () => {
 });
 
 systemCheckNext.addEventListener("click", () => {
+  stopCamera(); // Stop preview camera before proceeding
   systemCheck.style.display = "none";
   confirmScreen.style.display = "flex";
 
@@ -119,6 +120,19 @@ document.getElementById("modal-yes").addEventListener("click", async () => {
   document.getElementById("confirm-modal").style.display = "none";
   confirmScreen.style.display = "none";
   document.querySelector(".camera-container").style.display = "flex";
+
+  // Reset camera button states for new assessment
+  const startBtn = document.getElementById("start-btn");
+  const stopBtn = document.getElementById("stop-btn");
+  if (startBtn) startBtn.disabled = false;
+  if (stopBtn) stopBtn.disabled = false;
+
+  // Ensure any previous camera is stopped
+  try {
+    window.stopCamera();
+  } catch (e) {
+    console.warn("Error stopping previous camera:", e);
+  }
 
   // Persist that an assessment is active so refresh keeps camera view
   try {

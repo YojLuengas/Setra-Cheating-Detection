@@ -301,6 +301,8 @@ def activate_user(user_id):
 @app.route("/assessment-session", methods=["POST"])
 @login_required
 def create_assessment_session():
+    # Ensure any previous assessment session is cleared
+    session.pop("assessment_session_id", None)
     data = request.get_json(silent=True) or {}
     try:
         cursor.execute(
