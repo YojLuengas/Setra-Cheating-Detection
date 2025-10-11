@@ -7,14 +7,71 @@ document.addEventListener('DOMContentLoaded', function() {
     const closeBtn = document.querySelector('.close');
     let currentForm = null;
     let selectedForms = [];
+    let bulkDeleteBtn;
+    let bulkDeleteBtnSnapshots;
 
     // Check if on folders page
     const isFoldersPage = document.querySelectorAll('.folder-card').length > 0;
+    const isSnapshotsPage = document.querySelectorAll('.snapshot-card').length > 0;
+
+    // Functions to disable/enable checkboxes to prevent glitching during modal
+    const disableCheckboxes = () => {
+      document.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+        cb.disabled = true;
+      });
+    };
+    const enableCheckboxes = () => {
+      document.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+        cb.disabled = false;
+      });
+    };
+
+    // Functions to dim/enable delete buttons and forms during modal
+    const disableDeleteElements = () => {
+      document.querySelectorAll('.delete-form').forEach(form => {
+        form.style.opacity = '0.5';
+        form.style.pointerEvents = 'none';
+      });
+      document.querySelectorAll('.delete-selected-btn').forEach(btn => {
+        btn.disabled = true;
+        btn.style.opacity = '0.5';
+        btn.style.pointerEvents = 'none';
+      });
+      // Add backdrop to dim the background
+      let backdrop = document.querySelector('.modal-backdrop');
+      if (!backdrop) {
+        backdrop = document.createElement('div');
+        backdrop.className = 'modal-backdrop';
+        backdrop.style.position = 'fixed';
+        backdrop.style.top = '0';
+        backdrop.style.left = '0';
+        backdrop.style.width = '100%';
+        backdrop.style.height = '100%';
+        backdrop.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+        backdrop.style.zIndex = '999';
+        document.body.appendChild(backdrop);
+      }
+    };
+    const enableDeleteElements = () => {
+      document.querySelectorAll('.delete-form').forEach(form => {
+        form.style.opacity = '1';
+        form.style.pointerEvents = '';
+      });
+      document.querySelectorAll('.delete-selected-btn').forEach(btn => {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        btn.style.pointerEvents = '';
+      });
+      // Remove backdrop
+      const backdrop = document.querySelector('.modal-backdrop');
+      if (backdrop) {
+        backdrop.remove();
+      }
+    };
 
     if (isFoldersPage) {
       // Add checkboxes and bulk delete button
       const recordsHeader = document.querySelector('.records-header');
-      let bulkDeleteBtn;
       if (recordsHeader) {
         bulkDeleteBtn = document.createElement('button');
         bulkDeleteBtn.textContent = 'Delete Selected';
@@ -41,8 +98,10 @@ document.addEventListener('DOMContentLoaded', function() {
           }
           const modalP = modal.querySelector('p');
           modalP.textContent = `Are you sure you want to delete ${selectedForms.length} selected folder${selectedForms.length > 1 ? 's' : ''} and all their snapshots?`;
+          disableCheckboxes();
+          disableDeleteElements();
           modal.style.display = 'block';
-          bulkDeleteBtn.style.display = 'none'; // Hide button when modal opens
+          modal.style.zIndex = '1000';
         });
       }
 
@@ -54,15 +113,78 @@ document.addEventListener('DOMContentLoaded', function() {
         }
       };
 
-      // Add checkboxes to folder cards
+      // Add checkboxes to folder cards beside delete button
       document.querySelectorAll('.folder-card').forEach(card => {
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
-        checkbox.style.marginRight = '10px';
+        checkbox.style.width = '25px';
+        checkbox.style.height = '25px'; // Match delete button height
+        checkbox.style.marginRight = '1px';
+        checkbox.style.verticalAlign = 'middle'; // Align with delete button
         checkbox.addEventListener('change', toggleDeleteButton);
-        const folderContent = card.querySelector('.folder-content');
-        if (folderContent) {
-          folderContent.insertBefore(checkbox, folderContent.firstChild);
+        const deleteForm = card.querySelector('.delete-form');
+        if (deleteForm) {
+          deleteForm.insertBefore(checkbox, deleteForm.firstChild);
+        }
+      });
+    }
+
+    if (isSnapshotsPage) {
+      // Add checkboxes and bulk delete button for snapshots
+      const recordsHeader = document.querySelector('.records-header');
+      if (recordsHeader) {
+        bulkDeleteBtnSnapshots = document.createElement('button');
+        bulkDeleteBtnSnapshots.textContent = 'Delete Selected';
+        bulkDeleteBtnSnapshots.className = 'delete-selected-btn';
+        bulkDeleteBtnSnapshots.style.marginLeft = '10px';
+        bulkDeleteBtnSnapshots.style.padding = '5px 10px';
+        bulkDeleteBtnSnapshots.style.backgroundColor = '#dc3545';
+        bulkDeleteBtnSnapshots.style.color = 'white';
+        bulkDeleteBtnSnapshots.style.border = 'none';
+        bulkDeleteBtnSnapshots.style.borderRadius = '4px';
+        bulkDeleteBtnSnapshots.style.cursor = 'pointer';
+        bulkDeleteBtnSnapshots.style.display = 'none'; // Hidden initially
+        recordsHeader.appendChild(bulkDeleteBtnSnapshots);
+
+        bulkDeleteBtnSnapshots.addEventListener('click', function() {
+          selectedForms = [];
+          document.querySelectorAll('.snapshot-card input[type="checkbox"]:checked').forEach(checkbox => {
+            const form = checkbox.closest('.snapshot-card').querySelector('.delete-form');
+            if (form) selectedForms.push(form);
+          });
+          if (selectedForms.length === 0) {
+            alert('No snapshots selected.');
+            return;
+          }
+          const modalP = modal.querySelector('p');
+          modalP.textContent = `Are you sure you want to delete ${selectedForms.length} selected snapshot${selectedForms.length > 1 ? 's' : ''}?`;
+          disableCheckboxes();
+          disableDeleteElements();
+          modal.style.display = 'block';
+          modal.style.zIndex = '1000';
+        });
+      }
+
+      // Function to toggle delete button visibility for snapshots
+      const toggleDeleteButtonSnapshots = () => {
+        const checkedBoxes = document.querySelectorAll('.snapshot-card input[type="checkbox"]:checked');
+        if (bulkDeleteBtnSnapshots) {
+          bulkDeleteBtnSnapshots.style.display = checkedBoxes.length > 0 ? 'inline-block' : 'none';
+        }
+      };
+
+      // Add checkboxes to snapshot cards beside delete button
+      document.querySelectorAll('.snapshot-card').forEach(card => {
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.style.width = '25px';
+        checkbox.style.height = '25px'; // Match delete button height
+        checkbox.style.marginRight = '1px';
+        checkbox.style.verticalAlign = 'middle'; // Align with delete button
+        checkbox.addEventListener('change', toggleDeleteButtonSnapshots);
+        const deleteForm = card.querySelector('.delete-form');
+        if (deleteForm) {
+          deleteForm.insertBefore(checkbox, deleteForm.firstChild);
         }
       });
     }
@@ -78,7 +200,10 @@ document.addEventListener('DOMContentLoaded', function() {
         } else {
           modalP.textContent = 'Are you sure you want to delete this snapshot?';
         }
+        disableCheckboxes();
+        disableDeleteElements();
         modal.style.display = 'block';
+        modal.style.zIndex = '1000';
       });
     });
 
@@ -94,17 +219,30 @@ document.addEventListener('DOMContentLoaded', function() {
               const card = currentForm.closest('.folder-card') || currentForm.closest('.snapshot-card');
               if (card) card.remove();
               modal.style.display = 'none';
+              enableCheckboxes();
+              enableDeleteElements();
             } else {
               alert('Delete failed');
               modal.style.display = 'none';
+              enableCheckboxes();
+              enableDeleteElements();
             }
           }).catch(error => {
             console.error('Error:', error);
             alert('Delete failed');
             modal.style.display = 'none';
+            enableCheckboxes();
+            enableDeleteElements();
           });
         } else if (selectedForms.length > 0) {
           // Bulk delete
+          const isBulkFolders = selectedForms[0].closest('.folder-card') !== null;
+          // Hide bulk button immediately on confirm
+          if (isBulkFolders && bulkDeleteBtn) {
+            bulkDeleteBtn.style.display = 'none';
+          } else if (!isBulkFolders && bulkDeleteBtnSnapshots) {
+            bulkDeleteBtnSnapshots.style.display = 'none';
+          }
           let deleteCount = 0;
           selectedForms.forEach(form => {
             fetch(form.action, {
@@ -112,7 +250,7 @@ document.addEventListener('DOMContentLoaded', function() {
               body: new FormData(form)
             }).then(response => {
               if (response.ok) {
-                const card = form.closest('.folder-card');
+                const card = form.closest('.folder-card') || form.closest('.snapshot-card');
                 if (card) card.remove();
               } else {
                 console.error('Delete failed for', form.action);
@@ -120,14 +258,26 @@ document.addEventListener('DOMContentLoaded', function() {
               deleteCount++;
               if (deleteCount === selectedForms.length) {
                 modal.style.display = 'none';
-                toggleDeleteButton(); // Hide button after delete
+                enableCheckboxes();
+                enableDeleteElements();
+                if (isBulkFolders) {
+                  toggleDeleteButton(); // Update visibility after delete
+                } else {
+                  toggleDeleteButtonSnapshots(); // Update visibility after delete
+                }
               }
             }).catch(error => {
               console.error('Error:', error);
               deleteCount++;
               if (deleteCount === selectedForms.length) {
                 modal.style.display = 'none';
-                toggleDeleteButton(); // Hide button after delete
+                enableCheckboxes();
+                enableDeleteElements();
+                if (isBulkFolders) {
+                  toggleDeleteButton(); // Update visibility after delete
+                } else {
+                  toggleDeleteButtonSnapshots(); // Update visibility after delete
+                }
               }
             });
           });
@@ -138,14 +288,26 @@ document.addEventListener('DOMContentLoaded', function() {
     if (cancelBtn) {
       cancelBtn.addEventListener('click', function() {
         modal.style.display = 'none';
-        if (isFoldersPage) toggleDeleteButton(); // Show button back if cancelled
+        enableCheckboxes();
+        enableDeleteElements();
+        if (isFoldersPage) {
+          toggleDeleteButton(); // Show button back if cancelled
+        } else if (isSnapshotsPage) {
+          toggleDeleteButtonSnapshots(); // Show button back if cancelled
+        }
       });
     }
 
     if (closeBtn) {
       closeBtn.addEventListener('click', function() {
         modal.style.display = 'none';
-        if (isFoldersPage) toggleDeleteButton(); // Show button back if closed
+        enableCheckboxes();
+        enableDeleteElements();
+        if (isFoldersPage) {
+          toggleDeleteButton(); // Show button back if closed
+        } else if (isSnapshotsPage) {
+          toggleDeleteButtonSnapshots(); // Show button back if closed
+        }
       });
     }
   }
