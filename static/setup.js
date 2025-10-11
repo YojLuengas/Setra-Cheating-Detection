@@ -297,21 +297,7 @@ function stopAssessment() {
     console.warn("Error stopping assessment camera", e);
   }
 
-  // Mark all unread notifications as read
-  const notifications = document.getElementById('notifications');
-  if (notifications) {
-    const unreadItems = notifications.querySelectorAll('.notification-item.unread');
-    unreadItems.forEach(li => {
-      li.classList.remove('unread');
-      li.classList.add('read');
-      const snapId = li.dataset.snapId;
-      if (snapId) {
-        window.seenSnapshots.add(snapId);
-      }
-    });
-    window.updateBadge();
-    window.persistState(null, null);
-  }
+
 
   // Clear persisted assessment state so refresh returns to setup
   try {
