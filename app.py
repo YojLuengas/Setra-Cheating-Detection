@@ -337,6 +337,22 @@ def create_assessment_session():
         logger.exception("create_assessment_session error: %s", e)
         return jsonify({"success": False, "error": str(e)}), 500
 
+@app.route("/stop-assessment", methods=["POST"])
+@login_required
+def stop_assessment_session():
+    try:
+        # Clear the assessment session ID from session
+        session.pop("assessment_session_id", None)
+        # Reset global variables
+        global all_snapshots, notified_snapshots, last_cheating_notification_time
+        all_snapshots = []
+        notified_snapshots = []
+        last_cheating_notification_time = 0
+        return jsonify({"success": True, "message": "Assessment session stopped successfully!"})
+    except Exception as e:
+        logger.exception("stop_assessment_session error: %s", e)
+        return jsonify({"success": False, "error": str(e)}), 500
+
 # ---------- SocketIO frame handler ----------
 @socketio.on("connect")
 def on_connect():

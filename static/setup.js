@@ -276,7 +276,7 @@ document.addEventListener("keydown", e => {
 updateCameraButton();
 
 // ------------------ New: Stop Assessment (stop camera + go back to setup) ------------------
-function stopAssessment() {
+async function stopAssessment() {
   // stop camera stream if active
   try {
     if (cameraStream) {
@@ -304,6 +304,13 @@ function stopAssessment() {
     setAssessmentActive(false);
   } catch (e) {
     console.warn("storage unavailable:", e);
+  }
+
+  // Call backend to stop assessment session
+  try {
+    await fetch("/stop-assessment", { method: "POST" });
+  } catch (e) {
+    console.error("Failed to stop assessment session:", e);
   }
 
   // hide camera container and show initial setup screen

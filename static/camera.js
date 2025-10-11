@@ -82,12 +82,18 @@ async function startCamera() {
 function stopCamera() {
   sending = false;
   if (stream) {
-    stream.getTracks().forEach(t => t.stop());
+    try {
+      stream.getTracks().forEach(track => {
+        try { track.stop(); } catch (e) { console.warn("Error stopping track:", e); }
+      });
+    } catch (e) { console.warn("Error stopping stream:", e); }
     stream = null;
   }
   if (vid) {
-    vid.srcObject = null;
-    vid.remove();
+    try {
+      vid.srcObject = null;
+      vid.remove();
+    } catch (e) { console.warn("Error removing vid:", e); }
     vid = null;
   }
   setBlackScreen();
