@@ -506,7 +506,7 @@ def records():
     """
     try:
         cursor.execute("""
-            SELECT r.folder_name, as_.course, as_.subject, as_.exam_type, COUNT(d.id) as cnt,
+            SELECT r.folder_name, as_.course, as_.subject, as_.exam_type, as_.exam_datetime, COUNT(d.id) as cnt,
                    (SELECT d2.image_path FROM detections d2 WHERE d2.assessment_session_id = r.assessment_session_id ORDER BY d2.timestamp ASC LIMIT 1) as first_image
             FROM records r
             LEFT JOIN assessment_sessions as_ ON r.assessment_session_id = as_.id
@@ -518,13 +518,16 @@ def records():
         rows = cursor.fetchall()
         folders = []
         for r in rows:
-            course, subject, exam_type = r[1], r[2], r[3]
-            display_title = f"{course} - {subject} ({exam_type})" if course and subject and exam_type else r[0]
+            course, subject, exam_type, exam_datetime = r[1], r[2], r[3], r[4]
+            if course and subject and exam_type and exam_datetime:
+                display_title = f"{course} - {subject} ({exam_type}) - {exam_datetime.strftime('%Y-%m-%d')}"
+            else:
+                display_title = r[0]
             folders.append({
                 "folder_name": r[0],
                 "display_title": display_title,
-                "count": r[4],
-                "first_image": f"data:image/jpeg;base64,{r[5]}" if r[5] else None
+                "count": r[5],
+                "first_image": f"data:image/jpeg;base64,{r[6]}" if r[6] else None
             })
     except Exception as e:
         logger.exception("records folders fetch error: %s", e)
