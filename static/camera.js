@@ -21,14 +21,6 @@ function setBlackScreen() {
 
 async function getCameras() {
   try {
-    // Request permission first to populate device labels
-    const tempStream = await navigator.mediaDevices.getUserMedia({ video: true });
-    tempStream.getTracks().forEach(t => t.stop());
-  } catch (err) {
-    console.error('Error requesting camera permission:', err);
-  }
-
-  try {
     const devices = await navigator.mediaDevices.enumerateDevices();
     if (!cameraList) return;
 
