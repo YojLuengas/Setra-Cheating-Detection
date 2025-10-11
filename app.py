@@ -326,6 +326,10 @@ def create_assessment_session():
             (assessment_session_id, session["user_id"], folder_name, datetime.now())
         )
         db.commit()
+        global all_snapshots, notified_snapshots, last_cheating_notification_time
+        all_snapshots = []
+        notified_snapshots = []
+        last_cheating_notification_time = 0
         session["assessment_session_id"] = assessment_session_id
         return jsonify({"success": True, "message": "Assessment session created successfully!"})
     except Exception as e:
