@@ -1,4 +1,4 @@
-# app_fixed.py
+
 import os
 import io
 import base64
@@ -112,20 +112,24 @@ def save_image_to_disk(img_bgr, snap_id=None, jpeg_quality=85):
     return img_b64
 
 def estimate_head_rotation(image_rgb, face_landmarks):
-    """Simple yaw estimator using landmarks; returns yaw ratio (approx)."""
+    """Simple yaw and roll estimator using landmarks; returns yaw and roll ratios (approx)."""
     h, w, _ = image_rgb.shape
     try:
         lmk = face_landmarks.landmark
-        # This is approximate: uses outer eye landmarks as proxy for yaw
-        # Indices used by MediaPipe face mesh:
+        # Yaw: uses outer eye landmarks as proxy
         left = lmk[33]   # left eye outer
         right = lmk[263] # right eye outer
-        center = lmk[1]  # sometimes nose tip
-        # compute relative center offset
+        center = lmk[1]  # nose tip
         yaw = (center.x * w - (left.x * w + right.x * w) / 2) / w
-        return float(yaw)
+
+        # Roll: approximate using vertical offset of eyes
+        left_eye_y = lmk[33].y * h
+        right_eye_y = lmk[263].y * h
+        roll = (left_eye_y - right_eye_y) / w  # normalized by width for consistency
+
+        return float(yaw), float(roll)
     except Exception:
-        return 0.0
+        return 0.0, 0.0
 
 def login_required(f):
     @wraps(f)
@@ -365,10 +369,10 @@ def on_connect():
 
 @socketio.on("frame")
 def handle_frame(message):
-    global all_snapshots, notified_snapshots, last_cheating_notification_time, consecutive_cheating_frames, consecutive_non_cheating_frames, stable_cheating
+    global all_snapshots, notified_snapshots, last_cheating_notification_time
     if not frame_lock.acquire(blocking=False):
+        # Drop frame if still processing previous one
         return
-
     try:
         img_b64 = message.get("image")
         if not img_b64:
@@ -376,132 +380,92 @@ def handle_frame(message):
         frame = b64_to_cv2(img_b64)
         if frame is None:
             return
-
         original = frame.copy()
         h, w = frame.shape[:2]
         scale = 640 / max(h, w)
         small = cv2.resize(frame, (int(w * scale), int(h * scale)))
-
-        # ---------------- YOLO DETECTION ----------------
+        # YOLO predict (be defensive in parsing results)
         try:
-            results = yolo_model.predict(small, imgsz=640, conf=0.45, verbose=False)
+            results = yolo_model.predict(small, imgsz=640, conf=0.40, verbose=False)
         except Exception as e:
             logger.exception("YOLO prediction error: %s", e)
             results = []
-
-        cheating_in_frame = False
-        alert_msgs = []
-        detections = []
-
-        suspicious_classes = ["cell phone", "book", "laptop", "monitor", "screen"]
-
+        detections, cheating_in_frame = [], False
         if len(results) > 0 and hasattr(results[0], "boxes"):
             for box in results[0].boxes:
                 try:
-                    xyxy = box.xyxy[0].cpu().numpy()
-                    conf = float(box.conf[0].cpu().numpy())
-                    cls = int(box.cls[0].cpu().numpy())
-                    label = yolo_model.model.names.get(cls, str(cls))
-
+                    # Many ultralytics versions return tensors or numpy arrays
+                    xyxy = box.xyxy[0].cpu().numpy() if hasattr(box.xyxy, "__len__") else np.array(box.xyxy).flatten()
+                    conf = float(box.conf[0].cpu().numpy()) if hasattr(box.conf, "__len__") else float(box.conf)
+                    cls = int(box.cls[0].cpu().numpy()) if hasattr(box.cls, "__len__") else int(box.cls)
+                    label = yolo_model.model.names.get(cls, str(cls)) if hasattr(yolo_model, "model") else str(cls)
                     x1, y1, x2, y2 = [int(v / scale) for v in xyxy]
-
                     detections.append((label, conf, (x1, y1, x2, y2)))
-
-                    if label.lower() in suspicious_classes:
-                        cheating_in_frame = True
-                        alert_msgs.append(f"Detected {label}")
                 except Exception:
-                    continue
+                    # fallback: attempt to read simpler attributes
+                    try:
+                        bb = box.xyxy
+                        x1, y1, x2, y2 = [int(v / scale) for v in bb]
+                        conf = float(getattr(box, "conf", 0.0))
+                        cls = int(getattr(box, "cls", 0))
+                        label = yolo_model.model.names.get(cls, str(cls)) if hasattr(yolo_model, "model") else str(cls)
+                        detections.append((label, conf, (x1, y1, x2, y2)))
+                    except Exception:
+                        logger.exception("Failed to parse detection box.")
+                        continue
 
-        # ---------------- FACE DETECTION ----------------
-        results_face = face_mesh.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-        if not results_face or not getattr(results_face, "multi_face_landmarks", None):
-            cheating_in_frame = True
-            alert_msgs.append("No face detected")
-        else:
-            faces = results_face.multi_face_landmarks
-            if len(faces) > 1:
-                cheating_in_frame = True
-                alert_msgs.append("Multiple faces detected")
-            else:
-                yaw_deg = estimate_head_rotation(frame, faces[0]) * 90
-                if abs(yaw_deg) > 30:
-                    cheating_in_frame = True
-                    alert_msgs.append("Looking away")
-                cv2.putText(original, f"Yaw:{yaw_deg:.1f}", (10, 30),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
-
-        # ---------------- CHEATING LOGIC ----------------
-        if cheating_in_frame:
-            consecutive_cheating_frames += 1
-            consecutive_non_cheating_frames = 0
-        else:
-            consecutive_cheating_frames = 0
-            consecutive_non_cheating_frames += 1
-
-        if consecutive_cheating_frames >= 3:
-            stable_cheating = True
-        elif consecutive_non_cheating_frames >= 3:
-            stable_cheating = False
-
-        # ---------------- DRAW DETECTIONS ----------------
-        color = (0, 0, 255) if stable_cheating else (0, 255, 0)
         for label, conf, (x1, y1, x2, y2) in detections:
+            color = (0, 0, 255) if label.lower() == "cheating" else (0, 255, 0)
             cv2.rectangle(original, (x1, y1), (x2, y2), color, 2)
-            cv2.putText(original, f"{label} {conf:.2f}", (x1, y1 - 8),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+            cv2.putText(original, f"{label} {conf:.2f}", (x1, max(y1 - 8, 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+            if label.lower() == "cheating":
+                cheating_in_frame = True
 
-        # ---------------- SNAPSHOT ON CHEATING ----------------
-        if consecutive_cheating_frames >= 3 and time.time() - last_cheating_notification_time >= 2:
+        # If cheating label detected, save snapshot (rate-limited)
+        if cheating_in_frame and time.time() - last_cheating_notification_time >= 2:
             snap_id = str(uuid.uuid4())
-            img_b64 = save_image_to_disk(original, snap_id=snap_id, jpeg_quality=85)
+            saved_path = save_image_to_disk(original, snap_id=snap_id, jpeg_quality=85)
             timestamp = datetime.now()
-            alert_msg = " | ".join(alert_msgs) if alert_msgs else "Cheating detected"
-
-            snapshot = {
-                "id": snap_id,
-                "image_path": img_b64,
-                "timestamp": timestamp.strftime("%Y-%m-%d %I:%M:%S %p"),
-                "epoch": time.time(),
-                "alert": alert_msg
-            }
+            epoch_now = time.time()
+            assessment_session_id = session.get("assessment_session_id")
+            snapshot = {"id": snap_id, "image_path": saved_path, "timestamp": timestamp.strftime("%Y-%m-%d %I:%M:%S %p"), "epoch": epoch_now}
             all_snapshots.append(snapshot)
             notified_snapshots.append(snapshot)
-
             try:
-                cursor.execute(
-                    "INSERT INTO detections (id, timestamp, epoch, image_path, assessment_session_id, user_id) VALUES (%s, %s, %s, %s, %s, %s)",
-                    (snap_id, timestamp, time.time(), img_b64, session.get("assessment_session_id"), session.get("user_id"))
-                )
+                cursor.execute("INSERT INTO detections (id, timestamp, epoch, image_path, assessment_session_id, user_id) VALUES (%s, %s, %s, %s, %s, %s)", (snap_id, timestamp, epoch_now, saved_path, assessment_session_id, session["user_id"]))
                 db.commit()
             except Exception as e:
                 db.rollback()
                 logger.exception("DB insert error: %s", e)
-
-            socketio.emit("cheating_notification", {
-                "message": alert_msg,
-                "time": timestamp.strftime("%I:%M %p"),
-                "timestamp": timestamp.strftime("%Y-%m-%d %I:%M:%S %p"),
-                "url": f"/cheating/{snap_id}"
-            })
+            now_dt = datetime.now()
+            socketio.emit("cheating_notification", {"message": "Cheating detected", "time": now_dt.strftime("%I:%M %p"), "timestamp": now_dt.strftime("%Y-%m-%d %I:%M:%S %p"), "url": f"/cheating/{snap_id}"})
             last_cheating_notification_time = time.time()
 
-        # ---------------- VISUAL FEEDBACK ----------------
-        status_text = "NO CHEATING DETECTED" if not stable_cheating else "CHEATING DETECTED"
-        color = (0, 255, 0) if not stable_cheating else (0, 0, 255)
-        cv2.putText(original, status_text, (10, original.shape[0] - 20),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
+        # Face/pose check: estimate yaw and alert if looking away
+        results_face = face_mesh.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+        alert_msgs = []
+        if results_face and getattr(results_face, "multi_face_landmarks", None):
+            try:
+                yaw, roll = estimate_head_rotation(frame, results_face.multi_face_landmarks[0])
+                yaw_deg = yaw * 90
+                if abs(yaw_deg) > 25:
+                    alert_msgs.append("Looking away")
+                cv2.putText(original, f"Yaw:{yaw_deg:.1f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 0), 2)
+            except Exception:
+                logger.exception("face yaw estimation failed")
 
-        emit("response_frame", {
-            "image": cv2_to_b64(original, jpeg_quality=60),
-            "cheating": stable_cheating,
-            "alerts": alert_msgs
-        })
+        status_text = "OK" if not alert_msgs else "; ".join(alert_msgs)
+        color = (0, 255, 0) if not alert_msgs else (0, 0, 255)
+        cv2.putText(original, status_text, (10, original.shape[0] - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
 
+        out_b64 = cv2_to_b64(original, jpeg_quality=60)
+        emit("response_frame", {"image": out_b64, "cheating": cheating_in_frame})
     finally:
-        frame_lock.release()
-
-
+        try:
+            frame_lock.release()
+        except Exception:
+            pass
+        
 # ---------- UI / Snapshot routes ----------
 @app.route("/")
 @login_required
