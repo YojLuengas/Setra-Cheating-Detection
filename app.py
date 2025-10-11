@@ -386,8 +386,9 @@ def handle_frame(message):
                         continue
 
         for label, conf, (x1, y1, x2, y2) in detections:
-            cv2.rectangle(original, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            cv2.putText(original, f"{label} {conf:.2f}", (x1, max(y1 - 8, 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+            rect_color = (0, 0, 255) if label.lower() == "cheating" else (0, 255, 0)
+            cv2.rectangle(original, (x1, y1), (x2, y2), rect_color, 2)
+            cv2.putText(original, f"{label} {conf:.2f}", (x1, max(y1 - 8, 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, rect_color, 2)
             if label.lower() == "cheating":
                 cheating_in_frame = True
 
@@ -422,8 +423,8 @@ def handle_frame(message):
             except Exception:
                 logger.exception("face yaw estimation failed")
 
-        status_text = "OK" if not alert_msgs else "; ".join(alert_msgs)
-        color = (0, 255, 0) if not alert_msgs else (0, 0, 255)
+        status_text = "NO CHEATING DETECTED" if not cheating_in_frame else "CHEATING DETECTED"
+        color = (0, 255, 0) if not cheating_in_frame else (0, 0, 255)
         cv2.putText(original, status_text, (10, original.shape[0] - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
 
         out_b64 = cv2_to_b64(original, jpeg_quality=60)

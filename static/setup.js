@@ -21,6 +21,8 @@ const cameraSlash = cameraToggleBtn.querySelector(".camera-slash");
 let cameraStream = null;
 let cameraOn = false;
 
+
+
 // const ASSESSMENT_KEY = "assessmentActive";
 const ASSESSMENT_KEY = "sentra_assessment_active";
 
@@ -164,6 +166,7 @@ document.getElementById("modal-yes").addEventListener("click", async () => {
       // Clear sessionStorage for notifications
       sessionStorage.removeItem("seenSnapshots");
       sessionStorage.removeItem("notifications");
+      window.updateBadge();
     } else {
       alert("Error: " + result.error);
     }
@@ -285,6 +288,29 @@ function stopAssessment() {
     cameraOn = false;
   } catch (e) {
     console.warn("Error stopping camera stream", e);
+  }
+
+  // Stop assessment camera if running
+  try {
+    window.stopCamera();
+  } catch (e) {
+    console.warn("Error stopping assessment camera", e);
+  }
+
+  // Mark all unread notifications as read
+  const notifications = document.getElementById('notifications');
+  if (notifications) {
+    const unreadItems = notifications.querySelectorAll('.notification-item.unread');
+    unreadItems.forEach(li => {
+      li.classList.remove('unread');
+      li.classList.add('read');
+      const snapId = li.dataset.snapId;
+      if (snapId) {
+        window.seenSnapshots.add(snapId);
+      }
+    });
+    window.updateBadge();
+    window.persistState(null, null);
   }
 
   // Clear persisted assessment state so refresh returns to setup

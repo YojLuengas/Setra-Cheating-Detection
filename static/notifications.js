@@ -1,5 +1,5 @@
 const notifications = document.getElementById('notifications');
-const seenSnapshots = new Set(JSON.parse(sessionStorage.getItem("seenSnapshots") || "[]"));
+let seenSnapshots = new Set();
 
 // Badge elements
 const badge = document.getElementById("alert-badge");
@@ -9,16 +9,18 @@ let alertCount = 0;
 
 // --- Update badge display ---
 function updateBadge() {
+  const notifications = document.getElementById('notifications');
+  const total = notifications ? notifications.querySelectorAll('.notification-item').length : 0;
   const badge1 = document.getElementById("alert-badge");
   const badge2 = document.getElementById("notification-count");
-  if (alertCount > 0) {
+  if (total > 0) {
     if (badge1) {
       badge1.style.display = "inline-block";
-      badge1.textContent = alertCount;
+      badge1.textContent = total;
     }
     if (badge2) {
       badge2.style.display = "inline-block";
-      badge2.textContent = alertCount;
+      badge2.textContent = total;
     }
   } else {
     if (badge1) badge1.style.display = "none";
@@ -81,18 +83,15 @@ function appendNotification(data) {
       if (li.classList.contains("unread")) {
         li.classList.remove("unread");
         li.classList.add("read");
-        alertCount--;
-        updateBadge();
         seenSnapshots.add(snapId);
         persistState();
       } else {
         li.classList.remove("read");
         li.classList.add("unread");
-        alertCount++;
-        updateBadge();
         seenSnapshots.delete(snapId);
         persistState();
       }
+      updateBadge();
       menuDropdown.style.display = "none";
     };
 
@@ -102,13 +101,10 @@ function appendNotification(data) {
     removeItem.onclick = async () => {
       const res = await fetch(`/api/delete/${snapId}`, { method: "DELETE" });
       if (res.ok) {
-        if (li.classList.contains("unread")) {
-          alertCount--;
-          updateBadge();
-        }
         li.remove();
         seenSnapshots.delete(snapId);
         persistState();
+        updateBadge();
       }
     };
 
@@ -154,6 +150,7 @@ function appendNotification(data) {
     li.appendChild(timeWrapper);
 
     const snapId = data.url.split("/").pop();
+    li.dataset.snapId = snapId;
     if (data.read || seenSnapshots.has(snapId)) {
       li.classList.add("read");
     } else {
@@ -171,12 +168,11 @@ function appendNotification(data) {
       if (li.classList.contains("unread")) {
         li.classList.remove("unread");
         li.classList.add("read");
-        alertCount--;
-        updateBadge();
 
         data.read = true;
         seenSnapshots.add(snapId);
         persistState();
+        updateBadge();
       }
     };
 
@@ -216,12 +212,14 @@ function addNotification(message) {
   const notifData = { message };
   appendNotification(notifData);
   persistState(notifData, null);
-  alertCount++;
   updateBadge();
 }
 
 // --- Restore notifications on page load ---
 window.addEventListener("DOMContentLoaded", async () => {
+  const storedSeen = JSON.parse(sessionStorage.getItem("seenSnapshots") || "[]");
+  storedSeen.forEach(id => seenSnapshots.add(id));
+
   const res = await fetch("/api/notifications");
   const data = await res.json();
   notifications.innerHTML = "";
@@ -254,9 +252,11 @@ if (alertsMenu) {
   });
 }
 
-  // Recalculate unread count after restoring notifications
-  alertCount = document.querySelectorAll(".notification-item.unread").length;
   updateBadge();
 });
 
-export { addNotification, appendNotification, persistState, alertCount, updateBadge };
+window.seenSnapshots = seenSnapshots;
+window.persistState = persistState;
+window.alertCount = alertCount;
+window.updateBadge = updateBadge;
+export { addNotification, appendNotification, persistState, alertCount, updateBadge, seenSnapshots };

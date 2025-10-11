@@ -52,6 +52,7 @@ async function getCameras() {
 }
 
 async function startCamera() {
+  stopCamera(); // Stop any previous camera before starting new
   try {
     initSocket(video, statusDiv);
 
@@ -163,4 +164,5 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 });
 
+window.stopCamera = stopCamera;
 export { getCameras, startCamera, stopCamera };

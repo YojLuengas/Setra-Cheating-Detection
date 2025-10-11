@@ -1,7 +1,6 @@
-import { appendNotification, persistState, alertCount, updateBadge } from "./notifications.js";
+import { appendNotification, persistState, alertCount, updateBadge, seenSnapshots } from "./notifications.js";
 
 let socket;
-let seenSnapshots = new Set(JSON.parse(sessionStorage.getItem("seenSnapshots") || "[]"));
 
 function initSocket(video, statusDiv) {
   if (!socket) {
@@ -27,10 +26,9 @@ function initSocket(video, statusDiv) {
     });
 
     socket.on("cheating_notification", (data) => {
-  if (!seenSnapshots.has(data.url)) {
-    seenSnapshots.add(data.url);
+  const snapId = data.url.split("/").pop();
+  if (!seenSnapshots.has(snapId)) {
     appendNotification(data);
-    alertCount++;
     updateBadge();
 
     const timestampMatch = data.message.match(/at (.+)!/);
