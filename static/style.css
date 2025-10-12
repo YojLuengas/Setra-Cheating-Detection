@@ -1833,4 +1833,52 @@ body.dashboard-body {
     width: 225px;
     height: 168px;
   }
+<<<<<<< HEAD
 }
+=======
+}
+/* === Validation Effects === */
+@keyframes shake {
+  0% { transform: translateX(0); }
+  20% { transform: translateX(-10px); }
+  40% { transform: translateX(10px); }
+  60% { transform: translateX(-10px); }
+  80% { transform: translateX(10px); }
+  100% { transform: translateX(0); }
+}
+
+.shake {
+  animation: shake 0.4s ease;
+}
+.error-glow {
+  box-shadow: 0 0 15px 3px rgba(255, 0, 0, 0.6);
+}
+.card.error-glow {
+  box-shadow: inset 0 0 10px rgba(255, 0, 0, 0.6);
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
+}
+.card.shake {
+  animation: shake 0.4s ease;
+}
+
+.field-status {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.85em;
+  font-weight: 500;
+}
+
+#internet-status.online {
+  color: limegreen;
+  text-shadow: 0 0 6px rgba(0, 255, 0, 0.7);
+}
+#internet-status.offline {
+  color: red;
+  text-shadow: 0 0 6px rgba(255, 0, 0, 0.6);
+}
+>>>>>>> 94f20968f702589618b8d57e6fa7f204dfbb9099
