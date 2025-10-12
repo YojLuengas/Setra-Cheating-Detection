@@ -1,7 +1,6 @@
-import { appendNotification, persistState } from "./notifications.js";
+import { appendNotification, persistState, alertCount, updateBadge, seenSnapshots } from "./notifications.js";
 
 let socket;
-let seenSnapshots = new Set(JSON.parse(sessionStorage.getItem("seenSnapshots") || "[]"));
 
 function initSocket(video, statusDiv) {
   if (!socket) {
@@ -19,19 +18,21 @@ function initSocket(video, statusDiv) {
         statusDiv.textContent = "Cheating detected!";
         statusDiv.style.color = "#ff4444";
         statusDiv.style.fontWeight = "bold";
+        video.style.borderColor = "#ff4444";
       } else {
         statusDiv.textContent = "No cheating detected";
         statusDiv.style.color = "#228B22";
         statusDiv.style.fontWeight = "bold";
+        video.style.borderColor = "#228B22";
       }
     });
 
     socket.on("cheating_notification", (data) => {
-  if (!seenSnapshots.has(data.url)) {
-    seenSnapshots.add(data.url);
+  const snapId = data.url.split("/").pop();
+  if (!seenSnapshots.has(snapId)) {
     appendNotification(data);
+    updateBadge();
 
-    const snapId = data.url.split("/").pop();
     const timestampMatch = data.message.match(/at (.+)!/);
     const timestamp = timestampMatch ? timestampMatch[1] : new Date().toLocaleString();
     const epoch = Date.now() / 1000;
@@ -67,4 +68,12 @@ function emitFrame(frameB64) {
   }
 }
 
-export { initSocket, emitFrame };
+// Function to disconnect socket
+function disconnectSocket() {
+  if (socket) {
+    socket.disconnect();
+    socket = null;
+  }
+}
+
+export { initSocket, emitFrame, disconnectSocket };

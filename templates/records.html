@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Detection Records - Folders</title>
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo/Lsentra2.png') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="records-body">
+  <main class="records-main">
+    <div class="records-header">
+      <div class="header-content">
+        <h2>Detection Records</h2>
+        <p class="header-description">View and manage your detection folders</p>
+      </div>
+      <div class="header-actions">
+        <input type="text" id="folder-search" placeholder="Search folders..." class="search-bar">
+        <a href="{{ url_for('home') }}" class="back-link">← Back to Home</a>
+      </div>
+    </div>
+
+    {% if folders %}
+    <div class="records-grid">
+      {% for f in folders %}
+      <div class="folder-card">
+        <div class="folder-content">
+          <a href="{{ url_for('records_folder', folder_name=f.folder_name) }}" class="folder-link">
+            {% if f.first_image %}
+            <img src="{{ f.first_image }}" alt="thumbnail" class="folder-thumb">
+            {% else %}
+            <div class="folder-icon">📁</div>
+            {% endif %}
+            <div class="folder-name">{{ f.display_title }}</div>
+            <div class="folder-count">{{ f.count }} snapshot{{ 's' if f.count|int != 1 else '' }}</div>
+          </a>
+          <form method="POST" action="{{ url_for('delete_record', folder_name=f.folder_name) }}" class="delete-form">
+            <button type="button" class="delete-btn">Delete</button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+      <div class="no-records">
+        <div class="no-records-icon">📂</div>
+        <p>No records yet.</p>
+        <small>Start detection to create folders with snapshots.</small>
+      </div>
+    {% endif %}
+  </main>
+
+<div id="deleteModal" class="modal">
+  <div class="modal-content">
+    <span class="close">&times;</span>
+    <p>Are you sure you want to delete this folder and all its snapshots?</p>
+    <button id="confirmDelete">Delete</button>
+    <button class="cancel">Cancel</button>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='records.js') }}"></script>
+
+<div class="loading-overlay">
+  <div class="spinner"></div>
+</div>
+</body>
+</html>
