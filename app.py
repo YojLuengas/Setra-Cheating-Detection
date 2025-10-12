@@ -1,4 +1,4 @@
-# app_fixed.py
+
 import os
 import io
 import base64
@@ -32,8 +32,6 @@ import bcrypt
 import logging
 
 # ---------- Config ----------
-UPLOAD_FOLDER = os.path.join("static", "uploads")
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 DB_CONFIG = {
     "host": "localhost",
@@ -66,7 +64,7 @@ yolo_model = YOLO("models/best.pt")
 mp_face_mesh = mp.solutions.face_mesh
 face_mesh = mp_face_mesh.FaceMesh(
     static_image_mode=False,
-    max_num_faces=1,
+    max_num_faces=100,
     refine_landmarks=True,
     min_detection_confidence=0.5,
     min_tracking_confidence=0.5,
@@ -76,6 +74,9 @@ face_mesh = mp_face_mesh.FaceMesh(
 all_snapshots = []
 notified_snapshots = []
 last_cheating_notification_time = 0
+consecutive_cheating_frames = 0
+consecutive_non_cheating_frames = 0
+stable_cheating = False
 frame_lock = Lock()
 
 # ---------- Helpers ----------
@@ -111,20 +112,24 @@ def save_image_to_disk(img_bgr, snap_id=None, jpeg_quality=85):
     return img_b64
 
 def estimate_head_rotation(image_rgb, face_landmarks):
-    """Simple yaw estimator using landmarks; returns yaw ratio (approx)."""
+    """Simple yaw and roll estimator using landmarks; returns yaw and roll ratios (approx)."""
     h, w, _ = image_rgb.shape
     try:
         lmk = face_landmarks.landmark
-        # This is approximate: uses outer eye landmarks as proxy for yaw
-        # Indices used by MediaPipe face mesh:
+        # Yaw: uses outer eye landmarks as proxy
         left = lmk[33]   # left eye outer
         right = lmk[263] # right eye outer
-        center = lmk[1]  # sometimes nose tip
-        # compute relative center offset
+        center = lmk[1]  # nose tip
         yaw = (center.x * w - (left.x * w + right.x * w) / 2) / w
-        return float(yaw)
+
+        # Roll: approximate using vertical offset of eyes
+        left_eye_y = lmk[33].y * h
+        right_eye_y = lmk[263].y * h
+        roll = (left_eye_y - right_eye_y) / w  # normalized by width for consistency
+
+        return float(yaw), float(roll)
     except Exception:
-        return 0.0
+        return 0.0, 0.0
 
 def login_required(f):
     @wraps(f)
@@ -302,11 +307,13 @@ def activate_user(user_id):
 @app.route("/assessment-session", methods=["POST"])
 @login_required
 def create_assessment_session():
+    # Ensure any previous assessment session is cleared
+    session.pop("assessment_session_id", None)
     data = request.get_json(silent=True) or {}
     try:
         cursor.execute(
             """
-            INSERT INTO assessment_sessions 
+            INSERT INTO assessment_sessions
                 (user_id, course, subject, exam_type, exam_datetime, camera, created_at)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
             """,
@@ -320,38 +327,39 @@ def create_assessment_session():
                 datetime.now(),
             ),
         )
+        assessment_session_id = cursor.lastrowid
+        folder_name = f"{data.get('course', '').replace(' ', '_')}_{data.get('subject', '').replace(' ', '_')}_{data.get('exam_type', '').replace(' ', '_')}_{str(uuid.uuid4())[:8]}"
+        cursor.execute(
+            "INSERT INTO records (assessment_session_id, user_id, folder_name, created_at) VALUES (%s, %s, %s, %s)",
+            (assessment_session_id, session["user_id"], folder_name, datetime.now())
+        )
         db.commit()
-
-        # ✅ Remember that assessment started
-        session["assessment_started"] = True
-
+        global all_snapshots, notified_snapshots, last_cheating_notification_time
+        all_snapshots = []
+        notified_snapshots = []
+        last_cheating_notification_time = 0
+        session["assessment_session_id"] = assessment_session_id
         return jsonify({"success": True, "message": "Assessment session created successfully!"})
     except Exception as e:
         db.rollback()
         logger.exception("create_assessment_session error: %s", e)
         return jsonify({"success": False, "error": str(e)}), 500
 
-
-# ---------- Camera page ----------
-@app.route("/camera")
+@app.route("/stop-assessment", methods=["POST"])
 @login_required
-def camera_page():
-    """Camera interface for active assessment."""
-    if session.get("assessment_started"):
-        return render_template("camera.html", username=session.get("username"))
-    else:
-        flash("Please start your assessment first.", "warning")
-        return redirect(url_for("home"))
-
-
-# ---------- Finish assessment ----------
-@app.route("/finish-assessment")
-@login_required
-def finish_assessment():
-    """End current assessment and return to setup."""
-    session.pop("assessment_started", None)
-    flash("Assessment finished successfully.", "success")
-    return redirect(url_for("home"))
+def stop_assessment_session():
+    try:
+        # Clear the assessment session ID from session
+        session.pop("assessment_session_id", None)
+        # Reset global variables
+        global all_snapshots, notified_snapshots, last_cheating_notification_time
+        all_snapshots = []
+        notified_snapshots = []
+        last_cheating_notification_time = 0
+        return jsonify({"success": True, "message": "Assessment session stopped successfully!"})
+    except Exception as e:
+        logger.exception("stop_assessment_session error: %s", e)
+        return jsonify({"success": False, "error": str(e)}), 500
 
 # ---------- SocketIO frame handler ----------
 @socketio.on("connect")
@@ -406,8 +414,9 @@ def handle_frame(message):
                         continue
 
         for label, conf, (x1, y1, x2, y2) in detections:
-            cv2.rectangle(original, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            cv2.putText(original, f"{label} {conf:.2f}", (x1, max(y1 - 8, 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+            color = (0, 0, 255) if label.lower() == "cheating" else (0, 255, 0)
+            cv2.rectangle(original, (x1, y1), (x2, y2), color, 2)
+            cv2.putText(original, f"{label} {conf:.2f}", (x1, max(y1 - 8, 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
             if label.lower() == "cheating":
                 cheating_in_frame = True
 
@@ -417,11 +426,12 @@ def handle_frame(message):
             saved_path = save_image_to_disk(original, snap_id=snap_id, jpeg_quality=85)
             timestamp = datetime.now()
             epoch_now = time.time()
+            assessment_session_id = session.get("assessment_session_id")
             snapshot = {"id": snap_id, "image_path": saved_path, "timestamp": timestamp.strftime("%Y-%m-%d %I:%M:%S %p"), "epoch": epoch_now}
             all_snapshots.append(snapshot)
             notified_snapshots.append(snapshot)
             try:
-                cursor.execute("INSERT INTO detections (id, timestamp, epoch, image_path) VALUES (%s, %s, %s, %s)", (snap_id, timestamp, epoch_now, saved_path))
+                cursor.execute("INSERT INTO detections (id, timestamp, epoch, image_path, assessment_session_id, user_id) VALUES (%s, %s, %s, %s, %s, %s)", (snap_id, timestamp, epoch_now, saved_path, assessment_session_id, session["user_id"]))
                 db.commit()
             except Exception as e:
                 db.rollback()
@@ -435,7 +445,8 @@ def handle_frame(message):
         alert_msgs = []
         if results_face and getattr(results_face, "multi_face_landmarks", None):
             try:
-                yaw_deg = estimate_head_rotation(frame, results_face.multi_face_landmarks[0]) * 90
+                yaw, roll = estimate_head_rotation(frame, results_face.multi_face_landmarks[0])
+                yaw_deg = yaw * 90
                 if abs(yaw_deg) > 25:
                     alert_msgs.append("Looking away")
                 cv2.putText(original, f"Yaw:{yaw_deg:.1f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 0), 2)
@@ -453,50 +464,217 @@ def handle_frame(message):
             frame_lock.release()
         except Exception:
             pass
-
+        
 # ---------- UI / Snapshot routes ----------
 @app.route("/")
 @login_required
 def home():
-    """
-    Main page — shows the setup screen or camera screen depending on session.
-    """
-    camera_active = session.get("assessment_started", False)
-    return render_template("index.html", username=session.get("username"), camera_active=camera_active)
+    return render_template("index.html", username=session.get("username"))
+
+@app.route("/cheating/<snap_id>")
+@login_required
+def cheating(snap_id):
+    try:
+        cursor.execute("SELECT id, timestamp, assessment_session_id FROM detections WHERE id = %s AND user_id = %s", (snap_id, session["user_id"]))
+        row = cursor.fetchone()
+        if not row:
+            return "Snapshot not found", 404
+
+        snap_id, ts, assessment_session_id = row
+
+        cursor.execute("SELECT id, timestamp, epoch FROM detections WHERE assessment_session_id = %s ORDER BY epoch DESC", (assessment_session_id,))
+        cheating_snapshots = [{"id": r[0], "timestamp": r[1], "epoch": r[2]} for r in cursor.fetchall()]
+
+        return render_template("cheating.html", snapshot_id=snap_id, timestamp=ts, cheating_snapshots=cheating_snapshots)
+    except Exception as e:
+        logger.exception("cheating page error: %s", e)
+        return "Internal server error", 500
 
 @app.route("/cheating_snapshot/<snap_id>")
 @login_required
 def cheating_snapshot(snap_id):
-    cursor.execute("SELECT image_path FROM detections WHERE id = %s", (snap_id,))
+    cursor.execute("SELECT image_path FROM detections WHERE id = %s AND user_id = %s", (snap_id, session["user_id"]))
     row = cursor.fetchone()
     if row and row[0]:
-        img_b64 = row[0]
-        # Return raw base64 image data
-        return f'data:image/jpeg;base64,{img_b64}'
+        image_path = row[0]
+        if not os.path.isabs(image_path):
+            image_path = os.path.join(os.getcwd(), image_path)
+        # Check if it's a file path (old snapshots) or base64 (new snapshots)
+        if os.path.isfile(image_path):
+            # Serve the file from disk
+            return send_file(image_path, mimetype='image/jpeg')
+        else:
+            # Treat as base64 data
+            return f'data:image/jpeg;base64,{row[0]}'
     return "Snapshot not found", 404
 
 @app.route("/records")
 @login_required
 def records():
+    """
+    Show folders with counts and first snapshot thumbnail.
+    """
     try:
-        cursor.execute("SELECT id, timestamp, epoch, image_path FROM detections ORDER BY timestamp DESC")
-        detections = cursor.fetchall()
+        cursor.execute("""
+            SELECT r.folder_name, as_.course, as_.subject, as_.exam_type, as_.exam_datetime, COUNT(d.id) as cnt,
+                   (SELECT d2.image_path FROM detections d2 WHERE d2.assessment_session_id = r.assessment_session_id ORDER BY d2.timestamp ASC LIMIT 1) as first_image
+            FROM records r
+            LEFT JOIN assessment_sessions as_ ON r.assessment_session_id = as_.id
+            LEFT JOIN detections d ON r.assessment_session_id = d.assessment_session_id
+            WHERE r.user_id = %s
+            GROUP BY r.assessment_session_id
+            ORDER BY r.created_at DESC
+        """, (session["user_id"],))
+        rows = cursor.fetchall()
+        folders = []
+        for r in rows:
+            course, subject, exam_type, exam_datetime = r[1], r[2], r[3], r[4]
+            if course and subject and exam_type and exam_datetime:
+                display_title = f"{course} - {subject} ({exam_type}) - {exam_datetime.strftime('%Y-%m-%d')}"
+            else:
+                display_title = r[0]
+            folders.append({
+                "folder_name": r[0],
+                "display_title": display_title,
+                "count": r[5],
+                "first_image": f"data:image/jpeg;base64,{r[6]}" if r[6] else None
+            })
     except Exception as e:
-        logger.exception("records fetch error: %s", e)
-        detections = []
+        logger.exception("records folders fetch error: %s", e)
+        folders = []
+    return render_template("records.html", folders=folders)
 
-    records = []
-    for det in detections:
-        snap_id, timestamp, epoch, image_path = det
+@app.route("/records/folder/<folder_name>")
+@login_required
+def records_folder(folder_name):
+    """
+    Show snapshots inside a folder.
+    """
+    try:
+        cursor.execute("SELECT assessment_session_id FROM records WHERE folder_name = %s AND user_id = %s", (folder_name, session["user_id"]))
+        row = cursor.fetchone()
+        if not row:
+            abort(404)
+        assessment_session_id = row[0]
+
+        cursor.execute("SELECT id, timestamp, image_path FROM detections WHERE assessment_session_id = %s ORDER BY timestamp DESC", (assessment_session_id,))
+        rows = cursor.fetchall()
+    except Exception as e:
+        logger.exception("records folder fetch error: %s", e)
+        rows = []
+
+    snapshots = []
+    for r in rows:
+        snap_id, ts, img_path = r
+        # image served by cheating_snapshot endpoint (returns data URI)
         img_url = url_for("cheating_snapshot", snap_id=snap_id)
-        records.append({"id": snap_id, "timestamp": timestamp, "epoch": epoch, "image_url": img_url})
-    return render_template("records.html", detections=records)
+        if isinstance(ts, datetime):
+            ts_str = ts.strftime("%Y-%m-%d %I:%M:%S %p")
+        else:
+            ts_str = str(ts)
+        snapshots.append({"id": snap_id, "timestamp": ts_str, "image_url": img_url})
+    return render_template("records_folder.html", folder_name=folder_name, snapshots=snapshots)
 
+
+@app.route("/delete_record/<folder_name>", methods=["POST"])
+@login_required
+def delete_record(folder_name):
+    """
+    Delete a record folder and all associated data.
+    """
+    try:
+        # Get assessment_session_id for the folder
+        cursor.execute("SELECT assessment_session_id FROM records WHERE folder_name = %s AND user_id = %s", (folder_name, session["user_id"]))
+        row = cursor.fetchone()
+        if not row:
+            flash("Folder not found.", "danger")
+            return redirect(url_for("records"))
+        assessment_session_id = row[0]
+
+        # Get all image paths for deletions
+        cursor.execute("SELECT image_path FROM detections WHERE assessment_session_id = %s", (assessment_session_id,))
+        image_paths = [r[0] for r in cursor.fetchall()]
+
+        # Delete detections
+        cursor.execute("DELETE FROM detections WHERE assessment_session_id = %s", (assessment_session_id,))
+
+        # Delete record
+        cursor.execute("DELETE FROM records WHERE folder_name = %s AND user_id = %s", (folder_name, session["user_id"]))
+
+        # Delete assessment session
+        cursor.execute("DELETE FROM assessment_sessions WHERE id = %s", (assessment_session_id,))
+
+        db.commit()
+
+        # Delete image files if they are file paths (for old snapshots)
+        for img_path in image_paths:
+            if img_path and not img_path.startswith("data:"):  # Not base64
+                full_path = os.path.join(os.getcwd(), img_path) if not os.path.isabs(img_path) else img_path
+                try:
+                    if os.path.exists(full_path):
+                        os.remove(full_path)
+                except Exception:
+                    logger.exception("Failed to delete image file: %s", full_path)
+
+        flash("Folder and all data deleted successfully.", "success")
+    except Exception as e:
+        db.rollback()
+        logger.exception("delete_record error: %s", e)
+        flash("Failed to delete folder.", "danger")
+    return redirect(url_for("records"))
+
+
+@app.route("/delete_snapshot/<snap_id>", methods=["POST"])
+@login_required
+def delete_snapshot(snap_id):
+    """
+    Delete a single snapshot and associated data.
+    """
+    try:
+        cursor.execute("SELECT image_path, assessment_session_id FROM detections WHERE id = %s AND user_id = %s", (snap_id, session["user_id"]))
+        row = cursor.fetchone()
+        if not row:
+            flash("Snapshot not found.", "danger")
+            return redirect(url_for("records"))
+        image_path, assessment_session_id = row
+
+        cursor.execute("DELETE FROM detections WHERE id = %s AND user_id = %s", (snap_id, session["user_id"]))
+        db.commit()
+
+        # Delete image file if it's a file path (not base64)
+        if image_path and not image_path.startswith("data:"):
+            full_path = os.path.join(os.getcwd(), image_path) if not os.path.isabs(image_path) else image_path
+            try:
+                if os.path.exists(full_path):
+                    os.remove(full_path)
+            except Exception:
+                logger.exception("Failed to delete image file: %s", full_path)
+
+        # Get folder_name to redirect back to the folder view
+        cursor.execute("SELECT folder_name FROM records WHERE assessment_session_id = %s AND user_id = %s", (assessment_session_id, session["user_id"]))
+        folder_row = cursor.fetchone()
+        if folder_row:
+            folder_name = folder_row[0]
+            flash("Snapshot deleted successfully.", "success")
+            return redirect(url_for("records_folder", folder_name=folder_name))
+        else:
+            flash("Snapshot deleted, but folder not found.", "warning")
+            return redirect(url_for("records"))
+    except Exception as e:
+        db.rollback()
+        logger.exception("delete_snapshot error: %s", e)
+        flash("Failed to delete snapshot.", "danger")
+        return redirect(url_for("records"))
+
+# ---------- API routes ----------
 @app.route("/api/notifications")
 @login_required
 def get_notifications():
     try:
-        cursor.execute("SELECT id, timestamp FROM detections ORDER BY epoch DESC")
+        assessment_session_id = session.get("assessment_session_id")
+        if not assessment_session_id:
+            return jsonify({"notifications": []})
+        cursor.execute("SELECT id, timestamp FROM detections WHERE assessment_session_id = %s ORDER BY epoch DESC", (assessment_session_id,))
         notifications = []
         for row in cursor.fetchall():
             snap_id, ts = row[0], row[1]
@@ -516,10 +694,10 @@ def get_notifications():
 @login_required
 def delete_notification(snap_id):
     try:
-        cursor.execute("SELECT image_path FROM detections WHERE id = %s", (snap_id,))
+        cursor.execute("SELECT image_path FROM detections WHERE id = %s AND user_id = %s", (snap_id, session["user_id"]))
         row = cursor.fetchone()
         image_path = row[0] if row else None
-        cursor.execute("DELETE FROM detections WHERE id = %s", (snap_id,))
+        cursor.execute("DELETE FROM detections WHERE id = %s AND user_id = %s", (snap_id, session["user_id"]))
         db.commit()
         global all_snapshots, notified_snapshots
         all_snapshots = [s for s in all_snapshots if s["id"] != snap_id]
@@ -544,3 +722,4 @@ if __name__ == "__main__":
     port = 5000
     logger.info("🚀 Server running at: http://127.0.0.1:%s", port)
     socketio.run(app, host=host, port=port, debug=True)
+    
