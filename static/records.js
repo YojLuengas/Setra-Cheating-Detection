@@ -62,6 +62,7 @@ document.addEventListener('DOMContentLoaded', function() {
         btn.style.opacity = '1';
         btn.style.pointerEvents = '';
       });
+      // Removed unconditional enabling of .delete-btn to allow toggle functions to handle state
       // Remove backdrop
       const backdrop = document.querySelector('.modal-backdrop');
       if (backdrop) {
@@ -111,6 +112,16 @@ document.addEventListener('DOMContentLoaded', function() {
         if (bulkDeleteBtn) {
           bulkDeleteBtn.style.display = checkedBoxes.length > 0 ? 'inline-block' : 'none';
         }
+        // Disable individual delete buttons when any checkbox is checked
+        document.querySelectorAll('.folder-card').forEach(card => {
+          const checkbox = card.querySelector('input[type="checkbox"]');
+          const deleteBtn = card.querySelector('.delete-btn');
+          if (checkbox && deleteBtn) {
+            deleteBtn.disabled = checkedBoxes.length > 0;
+            deleteBtn.style.opacity = checkedBoxes.length > 0 ? 0.5 : 1;
+            deleteBtn.style.pointerEvents = checkedBoxes.length > 0 ? 'none' : '';
+          }
+        });
       };
 
       // Add checkboxes to folder cards beside delete button
@@ -171,6 +182,16 @@ document.addEventListener('DOMContentLoaded', function() {
         if (bulkDeleteBtnSnapshots) {
           bulkDeleteBtnSnapshots.style.display = checkedBoxes.length > 0 ? 'inline-block' : 'none';
         }
+        // Disable individual delete buttons when any checkbox is checked
+        document.querySelectorAll('.snapshot-card').forEach(card => {
+          const checkbox = card.querySelector('input[type="checkbox"]');
+          const deleteBtn = card.querySelector('.delete-btn');
+          if (checkbox && deleteBtn) {
+            deleteBtn.disabled = checkedBoxes.length > 0;
+            deleteBtn.style.opacity = checkedBoxes.length > 0 ? 0.5 : 1;
+            deleteBtn.style.pointerEvents = checkedBoxes.length > 0 ? 'none' : '';
+          }
+        });
       };
 
       // Add checkboxes to snapshot cards beside delete button
@@ -257,6 +278,14 @@ document.addEventListener('DOMContentLoaded', function() {
               }
               deleteCount++;
               if (deleteCount === selectedForms.length) {
+                // Uncheck all checkboxes after bulk delete
+                document.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+                // Explicitly enable individual delete buttons after confirm
+                document.querySelectorAll('.delete-btn').forEach(btn => {
+                  btn.disabled = false;
+                  btn.style.opacity = '1';
+                  btn.style.pointerEvents = '';
+                });
                 modal.style.display = 'none';
                 enableCheckboxes();
                 enableDeleteElements();
@@ -270,6 +299,8 @@ document.addEventListener('DOMContentLoaded', function() {
               console.error('Error:', error);
               deleteCount++;
               if (deleteCount === selectedForms.length) {
+                // Uncheck all checkboxes after bulk delete
+                document.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
                 modal.style.display = 'none';
                 enableCheckboxes();
                 enableDeleteElements();
@@ -328,4 +359,28 @@ document.addEventListener('DOMContentLoaded', function() {
         img.src = src;
       });
   });
+
+  // Search functionality for folders
+  const folderSearch = document.getElementById('folder-search');
+  if (folderSearch) {
+    folderSearch.addEventListener('input', function() {
+      const query = this.value.toLowerCase();
+      document.querySelectorAll('.folder-card').forEach(card => {
+        const name = card.querySelector('.folder-name').textContent.toLowerCase();
+        card.style.display = name.includes(query) ? '' : 'none';
+      });
+    });
+  }
+
+  // Search functionality for snapshots
+  const snapshotSearch = document.getElementById('snapshot-search');
+  if (snapshotSearch) {
+    snapshotSearch.addEventListener('input', function() {
+      const query = this.value.toLowerCase();
+      document.querySelectorAll('.snapshot-card').forEach(card => {
+        const timestamp = card.querySelector('.timestamp').textContent.toLowerCase();
+        card.style.display = timestamp.includes(query) ? '' : 'none';
+      });
+    });
+  }
 });

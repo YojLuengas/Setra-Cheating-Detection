@@ -1,3 +1,18 @@
+/* CSS Variables for Professional Theme */
+:root {
+  --primary-color: #0b3d91;
+  --secondary-color: #6c757d;
+  --accent-color: #dc3545;
+  --bg-color: #f8fafc;
+  --card-bg: #ffffff;
+  --text-color: #333;
+  --text-muted: #6b7280;
+  --border-color: #e5e7eb;
+  --shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-hover: 0 8px 25px rgba(0, 0, 0, 0.12);
+  --transition: all 0.3s ease;
+}
+
 /* General Reset */
 * {
   margin: 0;
@@ -7,9 +22,9 @@
 
 /* Body */
 body {
-  font-family: Arial, sans-serif;
-  background: var(--bg-color, #f4f4f9);
-  color: #333;
+  font-family: 'Inter', sans-serif;
+  background: var(--bg-color);
+  color: var(--text-color);
   height: 100vh;
   display: flex;
   flex-direction: column;
@@ -1118,7 +1133,7 @@ body.dashboard-body {
 
 /* Records body background */
 .records-body {
-  background: #ffffff;
+  background: var(--bg-color);
 }
 
 /* Utility helpers */
@@ -1152,7 +1167,7 @@ body.dashboard-body {
   margin-bottom: 24px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 
 .records-header .back-link {
@@ -1161,30 +1176,71 @@ body.dashboard-body {
 
 .records-header h2 {
   margin: 0;
-  color: #0b3d91;
+  color: var(--primary-color);
   font-size: 28px;
   font-weight: 700;
 }
 
+/* Breadcrumbs */
+.breadcrumbs {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.breadcrumbs a {
+  color: var(--primary-color);
+  text-decoration: none;
+}
+
+.breadcrumbs a:hover {
+  text-decoration: underline;
+}
+
+.breadcrumbs span {
+  color: var(--text-color);
+}
+
+/* Header Content */
 .header-content {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
+}
+
+.header-description {
+  font-size: 16px;
+  color: var(--text-muted);
+  margin: 0;
+  font-weight: 400;
+}
+
+/* Header Actions */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.header-actions .search-bar {
+  flex: 1;
+  max-width: 300px;
 }
 
 /* Records Pages - Folder Cards */
 .folder-card {
-  background: #ffffff;
+  background: var(--card-bg);
   border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(16, 42, 67, 0.08);
-  transition: all 0.3s ease;
-  border: 1px solid #e5e7eb;
+  box-shadow: var(--shadow);
+  transition: var(--transition);
+  border: 1px solid var(--border-color);
   overflow: hidden;
   position: relative;
 }
 
 .folder-card:hover {
-  box-shadow: 0 8px 25px rgba(16, 42, 67, 0.12);
+  box-shadow: var(--shadow-hover);
   transform: translateY(-4px);
 }
 
@@ -1226,14 +1282,14 @@ body.dashboard-body {
 
 .folder-name {
   font-weight: 600;
-  color: #051f4b;
+  color: var(--text-color);
   font-size: 18px;
   line-height: 1.2;
   word-wrap: break-word;
 }
 
 .folder-count {
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 14px;
   font-weight: 400;
   margin-top: auto;
@@ -1251,11 +1307,11 @@ body.dashboard-body {
 
 /* Snapshot Cards */
 .snapshot-card {
-  background: #ffffff;
+  background: var(--card-bg);
   border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(16, 42, 67, 0.08);
-  transition: all 0.3s ease;
-  border: 1px solid #e5e7eb;
+  box-shadow: var(--shadow);
+  transition: var(--transition);
+  border: 1px solid var(--border-color);
   overflow: hidden;
   position: relative;
   display: flex;
@@ -1265,7 +1321,7 @@ body.dashboard-body {
 }
 
 .snapshot-card:hover {
-  box-shadow: 0 8px 25px rgba(16, 42, 67, 0.12);
+  box-shadow: var(--shadow-hover);
   transform: translateY(-4px);
 }
 
@@ -1311,12 +1367,12 @@ body.dashboard-body {
   padding: 28px;
   max-width: none;
   margin: 0;
-  background: #ffffff;
+  background: var(--bg-color);
   min-height: 100vh;
 }
 
 .records-main h2 {
-  color: #0b3d91; /* dark blue */
+  color: var(--primary-color);
   margin-bottom: 18px;
   font-size: 24px;
   font-weight: 600;
@@ -1328,7 +1384,7 @@ body.dashboard-body {
   gap: 8px;
   padding: 8px 14px;
   border-radius: 8px;
-  background: #051f4b;
+  background: var(--primary-color);
   color: #ffffff;
   font-weight: 600;
   text-decoration: none;
@@ -1338,13 +1394,13 @@ body.dashboard-body {
 }
 
 .back-link:hover {
-  background: #0b3d91;
+  background: #0a357f;
   text-decoration: none;
 }
 
 /* Delete Button - Keep red but theme-friendly */
 .delete-btn {
-  background: #a61919; /* red for delete */
+  background: var(--accent-color);
   color: #ffffff;
   border: none;
   padding: 8px 16px;
@@ -1356,13 +1412,13 @@ body.dashboard-body {
 }
 
 .delete-btn:hover {
-  background: #b02a37; /* darker red */
+  background: #b02a37;
 }
 
 /* Grid Layout for Records */
 .records-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+  grid-template-columns: repeat(3, 600px);
   gap: 16px;
   margin-bottom: 20px;
 }
@@ -1712,7 +1768,7 @@ body.dashboard-body {
 /* Responsive Grid Adjustments */
 @media (max-width: 768px) {
   .records-grid {
-    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    grid-template-columns: repeat(auto-fill, 400px);
   }
 
   .folder-card,

@@ -9,8 +9,14 @@
 <body class="records-body">
   <main class="records-main">
     <div class="records-header">
-      <h2>Detection Records</h2>
-      <a href="{{ url_for('home') }}" class="back-link">← Back to home</a>
+      <div class="header-content">
+        <h2>Detection Records</h2>
+        <p class="header-description">View and manage your detection folders</p>
+      </div>
+      <div class="header-actions">
+        <input type="text" id="folder-search" placeholder="Search folders..." class="search-bar">
+        <a href="{{ url_for('home') }}" class="back-link">← Back to Home</a>
+      </div>
     </div>
 
     {% if folders %}

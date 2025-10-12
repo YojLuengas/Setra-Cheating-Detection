@@ -11,7 +11,11 @@
     <div class="records-header">
       <div class="header-content">
         <h2>Snapshots for {{ folder_name }}</h2>
-        <a href="{{ url_for('records') }}" class="back-link">← Back to folders</a>
+        <p class="header-description">View and manage snapshots in this folder</p>
+      </div>
+      <div class="header-actions">
+        <input type="text" id="snapshot-search" placeholder="Search snapshots..." class="search-bar">
+        <a href="{{ url_for('records') }}" class="back-link">← Back to Folders</a>
       </div>
     </div>
 
