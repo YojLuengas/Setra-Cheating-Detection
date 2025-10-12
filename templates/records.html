@@ -2,7 +2,6 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-<<<<<<< HEAD
   <title>Detection Records - Folders</title>
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo/Lsentra2.png') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
@@ -64,64 +63,5 @@
 <div class="loading-overlay">
   <div class="spinner"></div>
 </div>
-=======
-  <title>Detection Records</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f7f7f7;
-    }
-    h2 {
-      text-align: center;
-      margin-top: 20px;
-    }
-    table {
-      border-collapse: collapse;
-      width: 95%;
-      margin: 20px auto;
-      background: white;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-    }
-    th, td {
-      border: 1px solid #ddd;
-      padding: 10px;
-      text-align: center;
-    }
-    th {
-      background: #f0f0f0;
-    }
-    img {
-      max-width: 180px;
-      border-radius: 8px;
-    }
-  </style>
-</head>
-<body>
-  <h2>Cheating Detection Records</h2>
-  <table>
-    <thead>
-      <tr>
-        <th>Timestamp</th>
-        <th>Screenshot</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for d in detections %}
-      <tr>
-        <td>{{ d[1] }}</td>
-        <td>
-          {% if d[3] and d[3] != "base64_inline" %}
-            <!-- Show file-based images -->
-            <img src="{{ url_for('static', filename='uploads/' ~ d[3].split('/')[-1]) }}" alt="detection">
-          {% else %}
-            <!-- Fallback: show via cheating_snapshot route -->
-            <img src="{{ url_for('cheating_snapshot', snap_id=d[0]) }}" alt="detection">
-          {% endif %}
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
->>>>>>> d1796a5fe1bd2ce1a2df9e4acb45d5ec23037226
 </body>
 </html>
