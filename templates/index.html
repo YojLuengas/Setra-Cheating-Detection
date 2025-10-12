@@ -98,7 +98,9 @@
             <div class="form-row">
               <div class="form-group">
                 <label>Select Camera</label>
-                <select id="camera-select" class="camera-select"></select>
+                <select id="camera-select" class="camera-select" required>
+                  <option value="" disabled selected>Select Camera</option>
+                </select>
               </div>
             </div>
 
@@ -204,11 +206,6 @@
           </div>
         </div>
       </div>
-      
-<div class="camera-container" style="display:none;">
-  <div class="video-wrapper">
-    <img id="video-frame" src="" alt="AI Detection Feed will appear here">
-  </div>
 
       <!-- Camera Container -->
       <div class="camera-container" style="display:none;">
@@ -248,8 +245,47 @@
     </div>
   </div>
 
-<div class="loading-overlay hidden">
-  <div class="spinner"></div>
-</div>
+  <div class="loading-overlay hidden">
+    <div class="spinner"></div>
+  </div>
+
+  <!-- ✅ Added script -->
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const nextBtn = document.getElementById("exam-next-btn");
+      const setupCard = document.querySelector("#exam-setup .setup-card");
+      const requiredFields = document.querySelectorAll("#setup-form [required]");
+      const examSetup = document.getElementById("exam-setup");
+      const systemCheck = document.getElementById("system-check");
+
+      nextBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        let isValid = true;
+
+        requiredFields.forEach((input) => {
+          input.classList.remove("input-error", "input-valid");
+          if (!input.value.trim()) {
+            input.classList.add("input-error");
+            isValid = false;
+          } else {
+            input.classList.add("input-valid");
+          }
+        });
+
+        setupCard.classList.remove("shake", "error-glow");
+        void setupCard.offsetWidth; // restart animation
+        setupCard.classList.add("shake");
+
+        if (!isValid) {
+          setupCard.classList.add("error-glow");
+          setTimeout(() => setupCard.classList.remove("shake"), 400);
+          return;
+        }
+
+        examSetup.style.display = "none";
+        systemCheck.style.display = "block";
+      });
+    });
+  </script>
 </body>
 </html>

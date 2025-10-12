@@ -21,29 +21,20 @@ const cameraSlash = cameraToggleBtn.querySelector(".camera-slash");
 let cameraStream = null;
 let cameraOn = false;
 
-
-
-// const ASSESSMENT_KEY = "assessmentActive";
 const ASSESSMENT_KEY = "sentra_assessment_active";
 
-/* storage helpers: prefer localStorage, fallback to sessionStorage */
+
+// ------------------ Storage Helpers ------------------
 function storeSet(value) {
-  try {
-    localStorage.setItem(ASSESSMENT_KEY, value);
-    return;
-  } catch (e) {}
-  try {
-    sessionStorage.setItem(ASSESSMENT_KEY, value);
-  } catch (e) {}
+  try { localStorage.setItem(ASSESSMENT_KEY, value); return; } catch (e) {}
+  try { sessionStorage.setItem(ASSESSMENT_KEY, value); } catch (e) {}
 }
 function storeGet() {
   try {
     const v = localStorage.getItem(ASSESSMENT_KEY);
     if (v !== null) return v;
   } catch (e) {}
-  try {
-    return sessionStorage.getItem(ASSESSMENT_KEY);
-  } catch (e) {}
+  try { return sessionStorage.getItem(ASSESSMENT_KEY); } catch (e) {}
   return null;
 }
 function storeRemove() {
@@ -57,12 +48,12 @@ function isAssessmentActive() {
   return storeGet() === "1";
 }
 
-// ------------------ Prevent Form Reload ------------------
-document.getElementById("setup-form").addEventListener("submit", e => {
-  e.preventDefault();
-});
 
-// ------------------ Utility: Update Camera Button ------------------
+// ------------------ Prevent Form Reload ------------------
+document.getElementById("setup-form").addEventListener("submit", e => e.preventDefault());
+
+
+// ------------------ Update Camera Button ------------------
 function updateCameraButton() {
   if (cameraOn) {
     cameraToggleBtn.classList.remove("off");
@@ -75,13 +66,47 @@ function updateCameraButton() {
   }
 }
 
-// ------------------ Navigation ------------------
-examNextBtn.addEventListener("click", () => {
-  examSetup.style.display = "none";
-  systemCheck.style.display = "flex";
-  checkInternetConnectivity();
+
+// ------------------ Input Validation ------------------
+examNextBtn.addEventListener("click", (e) => {
+  e.preventDefault();
+  const inputs = examSetup.querySelectorAll("input[required], select[required]");
+  let allFilled = true;
+
+  inputs.forEach((input) => {
+    const card = input.closest(".card");
+    const statusEl = card.querySelector(".field-status") || document.createElement("small");
+    statusEl.className = "field-status";
+
+    if (input.value.trim() === "") {
+      allFilled = false;
+      card.classList.add("error-glow", "shake");
+      input.style.border = "2px solid red";
+      statusEl.textContent = "❌ Not filled";
+      statusEl.style.color = "red";
+    } else {
+      card.classList.remove("error-glow");
+      input.style.border = "2px solid limegreen";
+      statusEl.textContent = "✅ Filled";
+      statusEl.style.color = "limegreen";
+    }
+
+    // Add status element if not present
+    if (!card.contains(statusEl)) card.appendChild(statusEl);
+
+    // Reset shake animation every click
+    setTimeout(() => card.classList.remove("shake"), 500);
+  });
+
+  if (allFilled) {
+    examSetup.style.display = "none";
+    systemCheck.style.display = "flex";
+    checkInternetConnectivity();
+  }
 });
 
+
+// ------------------ Navigation ------------------
 systemCheck.querySelector(".cancel-btn").addEventListener("click", () => {
   systemCheck.style.display = "none";
   examSetup.style.display = "flex";
@@ -90,7 +115,7 @@ systemCheck.querySelector(".cancel-btn").addEventListener("click", () => {
 });
 
 systemCheckNext.addEventListener("click", () => {
-  stopCamera(); // Stop preview camera before proceeding
+  stopCamera();
   systemCheck.style.display = "none";
   confirmScreen.style.display = "flex";
 
@@ -116,32 +141,22 @@ document.getElementById("modal-cancel").addEventListener("click", () => {
   document.getElementById("confirm-modal").style.display = "none";
 });
 
+
+// ------------------ Modal Yes (Submit Session) ------------------
 document.getElementById("modal-yes").addEventListener("click", async () => {
   document.getElementById("confirm-modal").style.display = "none";
   confirmScreen.style.display = "none";
   document.querySelector(".camera-container").style.display = "flex";
 
-  // Reset camera button states for new assessment
   const startBtn = document.getElementById("start-btn");
   const stopBtn = document.getElementById("stop-btn");
   if (startBtn) startBtn.disabled = false;
   if (stopBtn) stopBtn.disabled = false;
 
-  // Ensure any previous camera is stopped
-  try {
-    window.stopCamera();
-  } catch (e) {
-    console.warn("Error stopping previous camera:", e);
-  }
+  try { window.stopCamera(); } catch (e) {}
 
-  // Persist that an assessment is active so refresh keeps camera view
-  try {
-    setAssessmentActive(true);
-  } catch (e) {
-    console.warn("storage unavailable:", e);
-  }
+  setAssessmentActive(true);
 
-  // Collect payload
   const payload = {
     course: document.getElementById("course").value,
     subject: document.getElementById("subject").value,
@@ -156,40 +171,15 @@ document.getElementById("modal-yes").addEventListener("click", async () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     });
-
     const result = await res.json();
-    if (result.success) {
-      console.log("Session saved:", result.message);
-      // Clear notifications for new session
-      const notifications = document.getElementById('notifications');
-      if (notifications) {
-        notifications.innerHTML = '';
-        let noAlertsMsg = document.getElementById("no-alerts-msg");
-        if (!noAlertsMsg) {
-          noAlertsMsg = document.createElement("p");
-          noAlertsMsg.id = "no-alerts-msg";
-          noAlertsMsg.textContent = "No alerts yet";
-          notifications.appendChild(noAlertsMsg);
-        }
-      }
-      // Reset badge
-      const badge = document.getElementById("alert-badge");
-      if (badge) {
-        badge.style.display = "none";
-      }
-      // Clear sessionStorage for notifications
-      sessionStorage.removeItem("seenSnapshots");
-      sessionStorage.removeItem("notifications");
-      window.updateBadge();
-    } else {
-      alert("Error: " + result.error);
-    }
+    if (!result.success) alert("Error: " + result.error);
   } catch (err) {
     console.error("Failed to save session:", err);
   }
 });
 
-// ------------------ Camera ------------------
+
+// ------------------ Camera Controls ------------------
 cameraOverlay.style.opacity = 1;
 
 cameraToggleBtn.addEventListener("click", async () => {
@@ -203,7 +193,6 @@ cameraToggleBtn.addEventListener("click", async () => {
       cameraStatus.classList.remove("offline");
       cameraStatus.classList.add("online");
       cameraOverlay.style.opacity = 0;
-
       cameraOn = true;
       updateCameraButton();
     } catch (err) {
@@ -217,7 +206,6 @@ cameraToggleBtn.addEventListener("click", async () => {
   }
 });
 
-// Stop camera function
 function stopCamera() {
   if (cameraStream) {
     cameraStream.getTracks().forEach(track => track.stop());
@@ -227,12 +215,10 @@ function stopCamera() {
   cameraStatus.classList.remove("online");
   cameraStatus.classList.add("offline");
   cameraOverlay.style.opacity = 1;
-
   cameraOn = false;
   updateCameraButton();
 }
 
-// Load available cameras immediately
 async function loadCameras() {
   try {
     const devices = await navigator.mediaDevices.enumerateDevices();
@@ -246,7 +232,6 @@ async function loadCameras() {
         cameraSelect.appendChild(option);
       }
     });
-
     if (devices.length > 0 && !cameraSelect.value) {
       cameraSelect.value = devices[0].deviceId;
     }
@@ -256,151 +241,86 @@ async function loadCameras() {
 }
 loadCameras();
 
-// ------------------ Internet ------------------
-function checkInternetConnectivity() {
-  async function updateStatus() {
-    if (navigator.onLine) {
-      internetStatus.classList.remove("offline");
-      internetStatus.classList.add("online");
+
+// --- Check Internet Connectivity ---
+async function checkInternetStatus() {
+  const internetIcon = document.getElementById("internet-status");
+
+  try {
+    // Try fetching a small, lightweight file to confirm internet
+    const response = await fetch("https://www.google.com/favicon.ico", { mode: "no-cors" });
+    if (response || navigator.onLine) {
+      internetIcon.classList.remove("offline");
+      internetIcon.classList.add("online");
     } else {
-      internetStatus.classList.remove("online");
-      internetStatus.classList.add("offline");
+      internetIcon.classList.remove("online");
+      internetIcon.classList.add("offline");
     }
+  } catch (err) {
+    internetIcon.classList.remove("online");
+    internetIcon.classList.add("offline");
   }
-  updateStatus();
-  setInterval(updateStatus, 5000);
 }
+
+// Run once on load, and then check every few seconds
+checkInternetStatus();
+setInterval(checkInternetStatus, 5000);
 
 // ------------------ Modal Close on Esc ------------------
 document.addEventListener("keydown", e => {
-  if (e.key === "Escape") {
-    document.getElementById("confirm-modal").style.display = "none";
-  }
+  if (e.key === "Escape") document.getElementById("confirm-modal").style.display = "none";
 });
 
-// ------------------ Initialize Button ------------------
 updateCameraButton();
 
-// ------------------ New: Stop Assessment (stop camera + go back to setup) ------------------
+
+// ------------------ Stop Assessment ------------------
 async function stopAssessment() {
-  // stop camera stream if active
   try {
     if (cameraStream) {
-      cameraStream.getTracks().forEach((t) => {
-        try { t.stop(); } catch (e) {}
-      });
+      cameraStream.getTracks().forEach(t => t.stop());
       cameraStream = null;
     }
     cameraOn = false;
-  } catch (e) {
-    console.warn("Error stopping camera stream", e);
-  }
+    window.stopCamera?.();
+  } catch {}
 
-  // Stop assessment camera if running
-  try {
-    window.stopCamera();
-  } catch (e) {
-    console.warn("Error stopping assessment camera", e);
-  }
+  setAssessmentActive(false);
+  try { await fetch("/stop-assessment", { method: "POST" }); } catch {}
 
-
-
-  // Clear persisted assessment state so refresh returns to setup
-  try {
-    setAssessmentActive(false);
-  } catch (e) {
-    console.warn("storage unavailable:", e);
-  }
-
-  // Call backend to stop assessment session
-  try {
-    await fetch("/stop-assessment", { method: "POST" });
-  } catch (e) {
-    console.error("Failed to stop assessment session:", e);
-  }
-
-  // hide camera container and show initial setup screen
   const cameraContainer = document.querySelector(".camera-container");
-  const examSetupEl = document.getElementById("exam-setup");
-  const systemCheckEl = document.getElementById("system-check");
-  const confirmScreenEl = document.getElementById("confirm-screen");
-
   if (cameraContainer) cameraContainer.style.display = "none";
-  if (examSetupEl) examSetupEl.style.display = "flex";
-  if (systemCheckEl) systemCheckEl.style.display = "none";
-  if (confirmScreenEl) confirmScreenEl.style.display = "none";
+  examSetup.style.display = "flex";
+  systemCheck.style.display = "none";
+  confirmScreen.style.display = "none";
 
-  // Reset tabs back to Basic Info
-  const tabs = document.querySelectorAll(".setup-tabs .tab");
-  tabs.forEach((t, idx) => {
-    t.classList.toggle("active", idx === 0);
-    t.disabled = idx !== 0;
-  });
-
-  // Reset camera UI elements in system check
-  const camOverlay = document.getElementById("camera-overlay");
-  const camStatusText = document.getElementById("camera-status-text");
-  const camStatusDot = document.getElementById("camera-status");
-  const camToggle = document.getElementById("camera-toggle-btn");
-
-  if (camOverlay) camOverlay.style.opacity = 0;
-  if (camStatusText) camStatusText.textContent = "Camera is off";
-  if (camStatusDot) {
-    camStatusDot.classList.remove("online");
-    camStatusDot.classList.add("offline");
-  }
-  if (camToggle) camToggle.classList.add("off");
-
-  // If there is a start/stop button in camera area, ensure they reflect stopped state
   const startBtn = document.getElementById("start-btn");
   const stopBtn = document.getElementById("stop-btn");
   if (startBtn) startBtn.disabled = false;
   if (stopBtn) stopBtn.disabled = true;
 }
 
-// Attach stop assessment button handler and init view based on session
-document.addEventListener("DOMContentLoaded", () => {
-  // initialize UI according to persisted assessment state
-  const active = isAssessmentActive();
 
+// ------------------ Initialize on Page Load ------------------
+document.addEventListener("DOMContentLoaded", () => {
+  const active = isAssessmentActive();
   const cameraContainer = document.querySelector(".camera-container");
+
   if (active) {
-    // keep camera view visible after refresh
     if (cameraContainer) cameraContainer.style.display = "flex";
-    if (examSetup) examSetup.style.display = "none";
-    if (systemCheck) systemCheck.style.display = "none";
-    if (confirmScreen) confirmScreen.style.display = "none";
+    examSetup.style.display = "none";
+    systemCheck.style.display = "none";
+    confirmScreen.style.display = "none";
   } else {
-    // default to setup screens
     if (cameraContainer) cameraContainer.style.display = "none";
-    if (examSetup) examSetup.style.display = "flex";
+    examSetup.style.display = "flex";
   }
 
   const stopAssessmentBtn = document.getElementById("stop-assessment-btn");
   if (stopAssessmentBtn) {
-    stopAssessmentBtn.addEventListener("click", (e) => {
+    stopAssessmentBtn.addEventListener("click", e => {
       e.preventDefault();
       stopAssessment();
-    });
-  }
-
-  // ensure existing camera toggle button also updates cameraOn/stream state
-  const camToggle = document.getElementById("camera-toggle-btn");
-  if (camToggle) {
-    camToggle.addEventListener("click", () => {
-      // If camera was on, stop everything and return to system check state
-      if (cameraOn) {
-        try {
-          if (cameraStream) cameraStream.getTracks().forEach(t => t.stop());
-          cameraStream = null;
-          cameraOn = false;
-        } catch (e) {}
-        const camOverlay = document.getElementById("camera-overlay");
-        if (camOverlay) camOverlay.style.opacity = 1;
-        const camStatusText = document.getElementById("camera-status-text");
-        if (camStatusText) camStatusText.textContent = "Camera is off";
-        camToggle.classList.add("off");
-      }
     });
   }
 });
