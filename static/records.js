@@ -367,4 +367,10 @@ document.addEventListener('DOMContentLoaded', function () {
       c.style.display = ts.includes(q) ? '' : 'none';
     });
   });
+
+  // Hide loading overlay after page load
+  setTimeout(() => {
+    const overlay = document.querySelector('.loading-overlay');
+    if (overlay) overlay.classList.add('hidden');
+  }, 500);
 });
