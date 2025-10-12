@@ -21,28 +21,31 @@ const cameraSlash = cameraToggleBtn.querySelector(".camera-slash");
 let cameraStream = null;
 let cameraOn = false;
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
+
 
 
 // const ASSESSMENT_KEY = "assessmentActive";
-=======
->>>>>>> 94f20968f702589618b8d57e6fa7f204dfbb9099
 const ASSESSMENT_KEY = "sentra_assessment_active";
 
 
 // ------------------ Storage Helpers ------------------
 function storeSet(value) {
-  try { localStorage.setItem(ASSESSMENT_KEY, value); return; } catch (e) {}
-  try { sessionStorage.setItem(ASSESSMENT_KEY, value); } catch (e) {}
+  try { 
+    localStorage.setItem(ASSESSMENT_KEY, value);
+     return; 
+    } catch (e) {}
+  try {
+    sessionStorage.setItem(ASSESSMENT_KEY, value); 
+  } catch (e) {}
 }
 function storeGet() {
   try {
     const v = localStorage.getItem(ASSESSMENT_KEY);
     if (v !== null) return v;
   } catch (e) {}
-  try { return sessionStorage.getItem(ASSESSMENT_KEY); } catch (e) {}
+  try { 
+    return sessionStorage.getItem(ASSESSMENT_KEY); 
+  } catch (e) {}
   return null;
 }
 function storeRemove() {
@@ -56,14 +59,10 @@ function isAssessmentActive() {
   return storeGet() === "1";
 }
 
-<<<<<<< HEAD
->>>>>>> 2c2af40e06538af64789d73f2955ed9c90bc6305
 // ------------------ Prevent Form Reload ------------------
 document.getElementById("setup-form").addEventListener("submit", e => {
   e.preventDefault();
 });
-=======
->>>>>>> 94f20968f702589618b8d57e6fa7f204dfbb9099
 
 // ------------------ Prevent Form Reload ------------------
 document.getElementById("setup-form").addEventListener("submit", e => e.preventDefault());
@@ -164,12 +163,7 @@ document.getElementById("modal-yes").addEventListener("click", async () => {
   confirmScreen.style.display = "none";
   document.querySelector(".camera-container").style.display = "flex";
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-  // Reset camera button states for new assessment
-=======
->>>>>>> 94f20968f702589618b8d57e6fa7f204dfbb9099
+
   const startBtn = document.getElementById("start-btn");
   const stopBtn = document.getElementById("stop-btn");
   if (startBtn) startBtn.disabled = false;
@@ -179,11 +173,6 @@ document.getElementById("modal-yes").addEventListener("click", async () => {
 
   setAssessmentActive(true);
 
-<<<<<<< HEAD
->>>>>>> 2c2af40e06538af64789d73f2955ed9c90bc6305
-  // Collect payload
-=======
->>>>>>> 94f20968f702589618b8d57e6fa7f204dfbb9099
   const payload = {
     course: document.getElementById("course").value,
     subject: document.getElementById("subject").value,
@@ -199,11 +188,10 @@ document.getElementById("modal-yes").addEventListener("click", async () => {
       body: JSON.stringify(payload)
     });
     const result = await res.json();
-<<<<<<< HEAD
+
     if (result.success) {
       console.log("Session saved:", result.message);
-<<<<<<< HEAD
-=======
+
       // Clear notifications for new session
       const notifications = document.getElementById('notifications');
       if (notifications) {
@@ -225,13 +213,10 @@ document.getElementById("modal-yes").addEventListener("click", async () => {
       sessionStorage.removeItem("seenSnapshots");
       sessionStorage.removeItem("notifications");
       window.updateBadge();
->>>>>>> 2c2af40e06538af64789d73f2955ed9c90bc6305
     } else {
       alert("Error: " + result.error);
     }
-=======
     if (!result.success) alert("Error: " + result.error);
->>>>>>> 94f20968f702589618b8d57e6fa7f204dfbb9099
   } catch (err) {
     console.error("Failed to save session:", err);
   }
@@ -242,41 +227,64 @@ document.getElementById("modal-yes").addEventListener("click", async () => {
 cameraOverlay.style.opacity = 1;
 
 cameraToggleBtn.addEventListener("click", async () => {
-  if (!cameraOn) {
+  const isOff = cameraToggleBtn.classList.contains("off");
+
+  if (isOff) {
     try {
       const constraints = cameraSelect.value
         ? { video: { deviceId: { exact: cameraSelect.value } } }
         : { video: true };
+
       cameraStream = await navigator.mediaDevices.getUserMedia(constraints);
       video.srcObject = cameraStream;
+
       cameraStatus.classList.remove("offline");
       cameraStatus.classList.add("online");
       cameraOverlay.style.opacity = 0;
       cameraOn = true;
-      updateCameraButton();
+
+      cameraToggleBtn.classList.remove("off");
+      cameraSlash.style.display = "none";  // hide slash
+      cameraIcon.style.display = "block";  // show camera icon
+
+      console.log("Camera turned ON");
     } catch (err) {
-      console.error("Error accessing camera:", err);
-      cameraStatus.classList.remove("online");
-      cameraStatus.classList.add("offline");
-      cameraOverlay.style.opacity = 1;
+      console.error("Error turning on camera:", err);
     }
   } else {
-    stopCamera();
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(track => track.stop());
+      video.srcObject = null;
+    }
+
+    cameraStatus.classList.remove("online");
+    cameraStatus.classList.add("offline");
+    cameraOverlay.style.opacity = 1;
+    cameraOn = false;
+
+    cameraToggleBtn.classList.add("off");
+    cameraSlash.style.display = "block";  // show slash
+    cameraIcon.style.display = "none";    // hide camera icon
+
+    console.log("Camera turned OFF");
   }
 });
+
 
 function stopCamera() {
   if (cameraStream) {
     cameraStream.getTracks().forEach(track => track.stop());
-    video.srcObject = null;
     cameraStream = null;
   }
+
+  video.srcObject = null;
   cameraStatus.classList.remove("online");
   cameraStatus.classList.add("offline");
   cameraOverlay.style.opacity = 1;
-  cameraOn = false;
+  cameraOn = false; // ✅ make sure this flag is consistent
   updateCameraButton();
 }
+
 
 async function loadCameras() {
   try {
@@ -291,16 +299,10 @@ async function loadCameras() {
         cameraSelect.appendChild(option);
       }
     });
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
 
-=======
->>>>>>> 94f20968f702589618b8d57e6fa7f204dfbb9099
     if (devices.length > 0 && !cameraSelect.value) {
       cameraSelect.value = devices[0].deviceId;
     }
->>>>>>> 2c2af40e06538af64789d73f2955ed9c90bc6305
   } catch (err) {
     console.error("Error listing cameras:", err);
   }
@@ -338,8 +340,6 @@ document.addEventListener("keydown", e => {
 });
 
 updateCameraButton();
-<<<<<<< HEAD
-=======
 
 
 // ------------------ Stop Assessment ------------------
@@ -388,8 +388,19 @@ document.addEventListener("DOMContentLoaded", () => {
   if (stopAssessmentBtn) {
     stopAssessmentBtn.addEventListener("click", e => {
       e.preventDefault();
-      stopAssessment();
+      document.getElementById("stop-assessment-modal").style.display = "flex";
     });
   }
+
+  // --- Modal: Confirm Stop ---
+  document.getElementById("stop-assessment-cancel").addEventListener("click", () => {
+    document.getElementById("stop-assessment-modal").style.display = "none";
+  });
+
+  document.getElementById("stop-assessment-yes").addEventListener("click", async () => {
+    document.getElementById("stop-assessment-modal").style.display = "none";
+    await stopAssessment();
+  });
+
+
 });
->>>>>>> 2c2af40e06538af64789d73f2955ed9c90bc6305
