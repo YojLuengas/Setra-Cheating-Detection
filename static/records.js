@@ -810,38 +810,51 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // === Select folder on click & open on double click ===
 document.querySelectorAll('.folder-card').forEach(card => {
-
-  // Single click → select
+  // Single / Ctrl+Click selection
   card.addEventListener('click', (e) => {
     if (e.target.closest('.folder-menu-btn') || e.target.closest('.folder-menu-dropdown')) return;
 
-    // Remove 'selected' from all folders
+    const checkbox = card.querySelector('.select-indicator');
+    const isCtrl = e.ctrlKey; // Detect Ctrl key
+
+    // Ctrl+Click → toggle selection
+    if (isCtrl) {
+      card.classList.toggle('selected');
+      if (checkbox) checkbox.checked = card.classList.contains('selected');
+      return;
+    }
+
+    // Normal click → select only this
     document.querySelectorAll('.folder-card.selected').forEach(selectedCard => {
       selectedCard.classList.remove('selected');
       const cb = selectedCard.querySelector('.select-indicator');
       if (cb) cb.checked = false;
     });
 
-    // Select this folder
     card.classList.add('selected');
-    const checkbox = card.querySelector('.select-indicator');
     if (checkbox) checkbox.checked = true;
+  });
+
+  // Right-click → toggle (like Ctrl)
+  card.addEventListener('contextmenu', (e) => {
+    e.preventDefault(); // prevent context menu
+    const checkbox = card.querySelector('.select-indicator');
+    card.classList.toggle('selected');
+    if (checkbox) checkbox.checked = card.classList.contains('selected');
   });
 
   // Double click → open folder
   card.addEventListener('dblclick', (e) => {
     if (e.target.closest('.folder-menu-btn') || e.target.closest('.folder-menu-dropdown')) return;
 
-    // Find the actual link inside folder-link
     const folderAnchor = card.querySelector('.folder-menu-dropdown a[href], .folder-link a[href]');
     if (folderAnchor) {
-      window.location.href = folderAnchor.href; // navigate to the folder page
+      window.location.href = folderAnchor.href;
     }
   });
-
 });
 
-// === Deselect folder if clicking outside any folder ===
+// === Deselect folder if clicking outside ===
 document.addEventListener('click', (e) => {
   if (!e.target.closest('.folder-card') && !e.target.closest('.folder-menu-btn') && !e.target.closest('.folder-menu-dropdown')) {
     document.querySelectorAll('.folder-card.selected').forEach(selectedCard => {
@@ -852,49 +865,51 @@ document.addEventListener('click', (e) => {
   }
 });
 
-// === Snapshot selection / double click to open ===
-document.querySelectorAll('.snapshot-card').forEach(card => {
-  let clickTimer = null;
 
-  // Single click → select
+// === Snapshot selection & open on double click ===
+document.querySelectorAll('.snapshot-card').forEach(card => {
+  const checkbox = card.querySelector('input[type="checkbox"]');
+
+  // Left click (single or ctrl)
   card.addEventListener('click', e => {
-    // Ignore clicks on menu buttons
     if (e.target.closest('.snapshot-menu-btn') || e.target.closest('.snapshot-menu-dropdown')) return;
 
-    // Prevent link navigation on single click
-    if (e.target.closest('.snapshot-link')) e.preventDefault();
+    const isCtrl = e.ctrlKey;
 
-    if (clickTimer) clearTimeout(clickTimer);
-    clickTimer = setTimeout(() => {
-      // Deselect other snapshots
-      document.querySelectorAll('.snapshot-card.selected').forEach(s => {
-        s.classList.remove('selected');
-        const cb = s.querySelector('input[type="checkbox"]');
-        if (cb) cb.checked = false;
-      });
+    // Ctrl + Click → toggle selection
+    if (isCtrl) {
+      card.classList.toggle('selected');
+      if (checkbox) checkbox.checked = card.classList.contains('selected');
+      return;
+    }
 
-      // Select this snapshot
-      card.classList.add('selected');
-      const checkbox = card.querySelector('input[type="checkbox"]');
-      if (checkbox) checkbox.checked = true;
+    // Normal click → select only this one
+    document.querySelectorAll('.snapshot-card.selected').forEach(s => {
+      s.classList.remove('selected');
+      const cb = s.querySelector('input[type="checkbox"]');
+      if (cb) cb.checked = false;
+    });
 
-      clickTimer = null;
-    }, 200);
+    card.classList.add('selected');
+    if (checkbox) checkbox.checked = true;
   });
 
-  // Double click → open
+  // Right-click → toggle selection
+  card.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    card.classList.toggle('selected');
+    if (checkbox) checkbox.checked = card.classList.contains('selected');
+  });
+
+  // Double click → open snapshot
   card.addEventListener('dblclick', e => {
     if (e.target.closest('.snapshot-menu-btn') || e.target.closest('.snapshot-menu-dropdown')) return;
-    if (clickTimer) {
-      clearTimeout(clickTimer); // cancel single click
-      clickTimer = null;
-    }
     const snapAnchor = card.querySelector('.snapshot-link');
     if (snapAnchor) window.location.href = snapAnchor.href;
   });
 });
 
-// Deselect snapshot if clicking outside
+// === Deselect snapshots when clicking outside ===
 document.addEventListener('click', e => {
   if (!e.target.closest('.snapshot-card') && !e.target.closest('.snapshot-menu-btn') && !e.target.closest('.snapshot-menu-dropdown')) {
     document.querySelectorAll('.snapshot-card.selected').forEach(s => {
@@ -904,5 +919,3 @@ document.addEventListener('click', e => {
     });
   }
 });
-
-
