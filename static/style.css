@@ -1235,7 +1235,7 @@ body.dashboard-body {
   box-shadow: var(--shadow);
   transition: var(--transition);
   border: 1px solid var(--border-color);
-  overflow: hidden;
+  overflow: visible ;
   position: relative;
 }
 
@@ -1298,6 +1298,62 @@ body.dashboard-body {
   width: 100%;
 }
 
+/* === Folder 3-Dot Menu (Bottom-Left Corner) === */
+.folder-menu-container {
+  position: absolute;
+  bottom: 8px;   /* moved from top → bottom */
+  left: 8px;
+  z-index: 5;
+}
+
+.folder-menu-btn {
+  background: white;
+  border: none;
+  border-radius: 50%;
+  font-size: 22px;
+  color: var(--text-color);
+  cursor: pointer;
+  padding: 4px;
+  transition: background 0.2s;
+}
+
+.folder-menu-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* Dropdown styles */
+.folder-menu-dropdown {
+  display: none;
+  position: absolute;
+  bottom: 36px; /* appears just above the button */
+  left: 0;
+  background: var(--menu-bg, rgba(40, 40, 40, 0.95));
+  border-radius: 8px;
+  min-width: 120px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+  z-index: 20;
+}
+
+.folder-menu-item {
+  display: block;
+  padding: 8px 12px;
+  color: #fff;
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.folder-menu-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Show dropdown on click */
+.folder-menu-container.active .folder-menu-dropdown {
+  display: block;
+}
+
+
+
 .delete-form {
   position: absolute;
   top: 10px;
@@ -1307,17 +1363,8 @@ body.dashboard-body {
 
 /* Snapshot Cards */
 .snapshot-card {
-  background: var(--card-bg);
   border-radius: 12px;
-  box-shadow: var(--shadow);
-  transition: var(--transition);
   border: 1px solid var(--border-color);
-  overflow: hidden;
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 16px;
 }
 
 .snapshot-card:hover {
@@ -1337,7 +1384,7 @@ body.dashboard-body {
   height: 225px;
   object-fit: cover;
   border-radius: 8px;
-  background: #f3f6fb;
+  background: #184389;
   border: 2px solid #e5e7eb;
   transition: border-color 0.2s ease;
   display: block;
@@ -1424,11 +1471,31 @@ body.dashboard-body {
 }
 
 /* Modal Adjustments for Records */
+#deleteModal {
+  display: none; /* enables flex centering */
+  justify-content: center; /* horizontal center */
+  align-items: center; /* vertical center */
+  position: fixed; /* stays in place on scroll */
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5); /* semi-transparent background */
+  z-index: 1000; /* ensure it’s on top */
+  overflow: auto; /* scroll if content is tall */
+}
+
+
+/* Existing modal content styles */
 #deleteModal .modal-content {
   background: #ffffff;
   border-radius: 10px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  padding: 20px; /* optional padding */
+  max-width: 400px; /* optional width */
+  width: 90%; /* responsive width */
 }
+
 
 #deleteModal .modal-content p {
   color: #374151;
@@ -1877,3 +1944,99 @@ body.dashboard-body {
   color: red;
   text-shadow: 0 0 6px rgba(255, 0, 0, 0.6);
 }
+
+/* === Snapshot Grid (larger images) === */
+.records-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
+  padding: 24px;
+}
+
+.snapshot-card {
+  position: relative;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.snapshot-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.18);
+}
+
+.record-thumb {
+  width: 100%;
+  height: 240px; /* increased height */
+  object-fit: cover;
+  display: block;
+  border-bottom: 1px solid #eee;
+}
+
+/* === 3-Dot Menu (unchanged except spacing tweak) === */
+.snapshot-menu-container {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+}
+
+.snapshot-menu-btn {
+  background: none;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  font-size: 26px;
+  padding: 4px;
+  cursor: pointer;
+  transition: background 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.snapshot-menu-btn:hover {
+  background: none;
+}
+
+.material-symbols-outlined {
+  font-size: 22px;
+}
+
+
+.snapshot-menu-dropdown {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: 34px;
+  background-color: #fff;
+  min-width: 140px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+  border-radius: 8px;
+  z-index: 10;
+  flex-direction: column;
+  padding: 6px 0;
+}
+
+.snapshot-menu-item {
+  display: block;
+  padding: 10px 14px;
+  text-align: left;
+  text-decoration: none;
+  color: #333;
+  font-size: 15px;
+  border: none;
+  background: none;
+  width: 100%;
+  cursor: pointer;
+}
+
+.snapshot-menu-item:hover {
+  background-color: #f3f3f3;
+}
+
+.snapshot-menu-container.active .snapshot-menu-dropdown {
+  display: flex;
+}
+

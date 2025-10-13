@@ -57,21 +57,90 @@ document.addEventListener('DOMContentLoaded', function () {
     if (isSnapshotsPage) toggleDeleteButtonSnapshots();
   };
 
-  const handleDelete = async (forms) => {
-    const deletions = forms.map(async (form) => {
-      try {
-        const response = await fetch(form.action, { method: 'POST' });
-        if (response.ok) {
-          const card = form.closest('.folder-card, .snapshot-card');
-          if (card) card.remove();
-        } else console.error('Delete failed for', form.action);
-      } catch (e) {
-        console.error('Error deleting:', e);
-      }
-    });
-    await Promise.all(deletions);
+
+  let currentFolderDeleteBtn = null;
+
+// Handle delete button click
+document.querySelectorAll('.folder-delete-btn').forEach(btn => {
+  btn.addEventListener('click', e => {
+    e.preventDefault();
+
+    // Store the clicked button for later reference
+    currentFolderDeleteBtn = btn;
+
+    // Get folder name for modal message
+    const folderName = btn.dataset.folderName 
+      || btn.closest('.folder-card')?.querySelector('.folder-name')?.textContent 
+      || "this folder";
+
+    // Open modal with custom message
+    openModal(`Are you sure you want to delete "${folderName}" and all its snapshots?`);
+  });
+});
+
+// Confirm delete in modal
+confirmBtn.addEventListener('click', async () => {
+  if (!currentFolderDeleteBtn) return;
+
+  const url = currentFolderDeleteBtn.href;
+
+  try {
+    const response = await fetch(url, { method: 'POST' });
+    if (response.ok) {
+      // Remove folder card from DOM
+      const card = currentFolderDeleteBtn.closest('.folder-card');
+      if (card) card.remove();
+
+      // Optional: show success message in modal or toast
+      showToast("Folder deleted successfully!");
+    } else {
+      console.error("Delete failed:", response.status);
+    }
+  } catch (err) {
+    console.error("Error deleting folder:", err);
+  }
+
+  // Close the modal
+  closeModal();
+  currentFolderDeleteBtn = null;
+});
+
+// Cancel / close modal
+[cancelBtn, closeBtn].forEach(el => {
+  el.addEventListener('click', () => {
     closeModal();
-  };
+    currentFolderDeleteBtn = null;
+  });
+});
+
+
+  let currentDeleteUrl = null;
+  let currentCard = null;
+
+  document.querySelectorAll('.snapshot-delete-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.preventDefault();
+      currentDeleteUrl = btn.dataset.deleteUrl;
+      currentCard = btn.closest('.snapshot-card');
+      document.getElementById('deleteModal').style.display = 'block';
+    });
+  });
+
+  confirmBtn?.addEventListener('click', async () => {
+    if (!currentDeleteUrl) return;
+
+    try {
+      const response = await fetch(currentDeleteUrl, { method: 'POST' });
+      if (response.ok && currentCard) currentCard.remove();
+    } catch (e) {
+      console.error('Error deleting:', e);
+    }
+
+    document.getElementById('deleteModal').style.display = 'none';
+    currentDeleteUrl = null;
+    currentCard = null;
+  });
+
 
   // === Folder bulk + select-all ===
   const toggleDeleteButton = () => {
@@ -374,3 +443,36 @@ document.addEventListener('DOMContentLoaded', function () {
     if (overlay) overlay.classList.add('hidden');
   }, 500);
 });
+
+// === Toggle 3-dot dropdown ===
+document.querySelectorAll('.snapshot-menu-btn').forEach(btn => {
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    const container = btn.closest('.snapshot-menu-container');
+    document.querySelectorAll('.snapshot-menu-container').forEach(c => {
+      if (c !== container) c.classList.remove('active');
+    });
+    container.classList.toggle('active');
+  });
+});
+
+// Close dropdown when clicking outside
+document.addEventListener('click', () => {
+  document.querySelectorAll('.snapshot-menu-container').forEach(c => c.classList.remove('active'));
+});
+
+// === Folder menu dropdown toggle ===
+document.querySelectorAll('.folder-menu-btn').forEach(btn => {
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    const container = btn.closest('.folder-menu-container');
+    const isActive = container.classList.contains('active');
+
+    // Close any open menus
+    document.querySelectorAll('.folder-menu-container.active').forEach(c => c.classList.remove('active'));
+
+    // Toggle this one
+    if (!isActive) container.classList.add('active');
+  });
+});
+

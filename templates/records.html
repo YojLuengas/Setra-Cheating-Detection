@@ -5,6 +5,8 @@
   <title>Detection Records - Folders</title>
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo/Lsentra2.png') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet">
+
 </head>
 <body class="records-body">
   <main class="records-main">
@@ -23,21 +25,32 @@
     <div class="records-grid">
       {% for f in folders %}
       <div class="folder-card">
-        <div class="folder-content">
-          <a href="{{ url_for('records_folder', folder_name=f.folder_name) }}" class="folder-link">
-            {% if f.first_image %}
-            <img src="{{ f.first_image }}" alt="thumbnail" class="folder-thumb">
-            {% else %}
-            <div class="folder-icon">📁</div>
-            {% endif %}
-            <div class="folder-name">{{ f.display_title }}</div>
-            <div class="folder-count">{{ f.count }} snapshot{{ 's' if f.count|int != 1 else '' }}</div>
-          </a>
-          <form method="POST" action="{{ url_for('delete_record', folder_name=f.folder_name) }}" class="delete-form">
-            <button type="button" class="delete-btn">Delete</button>
-          </form>
-        </div>
-      </div>
+  <!-- === 3-Dot Menu (top-left corner) === -->
+  <div class="folder-menu-container">
+    <button class="folder-menu-btn">
+      <span class="material-symbols-outlined">more_vert</span>
+    </button>
+    <div class="folder-menu-dropdown">
+      <a href="{{ url_for('records_folder', folder_name=f.folder_name) }}" class="folder-menu-item">Open</a>
+<a href="{{ url_for('delete_record', folder_name=f.folder_name) }}" class="folder-menu-item folder-delete-btn">Delete</a>
+
+    </div>
+  </div>
+
+  <!-- === Folder content === -->
+  <div class="folder-content">
+    <a href="{{ url_for('records_folder', folder_name=f.folder_name) }}" class="folder-link">
+      {% if f.first_image %}
+      <img src="{{ f.first_image }}" alt="thumbnail" class="folder-thumb">
+      {% else %}
+      <div class="folder-icon">📁</div>
+      {% endif %}
+      <div class="folder-name">{{ f.display_title }}</div>
+      <div class="folder-count">{{ f.count }} snapshot{{ 's' if f.count|int != 1 else '' }}</div>
+    </a>
+  </div>
+</div>
+
       {% endfor %}
     </div>
     {% else %}
