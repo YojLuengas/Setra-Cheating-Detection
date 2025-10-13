@@ -1,4 +1,23 @@
 // path: static/js/delete-handler.js
+
+function handleCheckboxVisibility(cardSelector) {
+  const checkboxes = document.querySelectorAll(`${cardSelector} input[type="checkbox"]`);
+  const deleteBtns = document.querySelectorAll(`${cardSelector} .delete-btn`);
+  const checked = document.querySelectorAll(`${cardSelector} input[type="checkbox"]:checked`).length;
+
+  if (checked === 0) {
+    // Hide all checkboxes, restore delete buttons
+    checkboxes.forEach(cb => cb.style.display = 'none');
+    deleteBtns.forEach(btn => btn.style.display = '');
+    // Update button and link states after hiding
+    if (cardSelector === '.folder-card') {
+      toggleDeleteButton();
+    } else if (cardSelector === '.snapshot-card') {
+      toggleDeleteButtonSnapshots();
+    }
+  }
+}
+
 document.addEventListener('DOMContentLoaded', function () {
   const modal = document.getElementById('deleteModal');
   if (!modal) return;
@@ -145,22 +164,23 @@ document.addEventListener('DOMContentLoaded', function () {
   // === Folder bulk ===
   const toggleDeleteButton = () => {
     const checked = document.querySelectorAll('.folder-card input[type="checkbox"]:checked').length;
+    const checkboxesVisible = document.querySelectorAll('.folder-card input[type="checkbox"]:not([style*="display: none"])').length > 0;
     const btn = document.querySelector('.delete-selected-btn');
     if (btn) {
       btn.disabled = checked === 0;
       btn.style.opacity = checked === 0 ? '0.5' : '1';
       btn.style.pointerEvents = checked === 0 ? 'none' : '';
     }
-    document.querySelectorAll('.folder-card a').forEach(a => {
-      a.style.pointerEvents = checked ? 'none' : '';
-      a.style.opacity = checked ? '0.5' : '1';
+    document.querySelectorAll('.folder-card .folder-link').forEach(a => {
+      a.style.pointerEvents = (checked > 0) ? 'none' : '';
+      a.style.opacity = (checked > 0) ? '0.5' : '1';
     });
     document.querySelectorAll('.folder-card .delete-btn').forEach(btn => {
       btn.disabled = checked > 0;
       btn.style.opacity = checked > 0 ? '0.5' : '1';
       btn.style.pointerEvents = checked > 0 ? 'none' : '';
     });
-    if (checked === 0) {
+    if (checked === 0 && !checkboxesVisible) {
       document.querySelectorAll('.folder-card input[type="checkbox"]').forEach(cb => cb.style.display = 'none');
       document.querySelectorAll('.folder-card .delete-btn').forEach(btn => btn.style.display = '');
     }
@@ -169,6 +189,7 @@ document.addEventListener('DOMContentLoaded', function () {
   // === Snapshot bulk ===
   const toggleDeleteButtonSnapshots = () => {
     const checked = document.querySelectorAll('.snapshot-card input[type="checkbox"]:checked').length;
+    const checkboxesVisible = document.querySelectorAll('.snapshot-card input[type="checkbox"]:not([style*="display: none"])').length > 0;
     const btn = document.querySelector('.delete-selected-btn');
     if (btn) {
       btn.disabled = checked === 0;
@@ -176,15 +197,15 @@ document.addEventListener('DOMContentLoaded', function () {
       btn.style.pointerEvents = checked === 0 ? 'none' : '';
     }
     document.querySelectorAll('.snapshot-card a').forEach(a => {
-      a.style.pointerEvents = checked ? 'none' : '';
-      a.style.opacity = checked ? '0.5' : '1';
+      a.style.pointerEvents = (checked > 0 || checkboxesVisible) ? 'none' : '';
+      a.style.opacity = (checked > 0 || checkboxesVisible) ? '0.5' : '1';
     });
     document.querySelectorAll('.snapshot-card .delete-btn').forEach(btn => {
       btn.disabled = checked > 0;
       btn.style.opacity = checked > 0 ? '0.5' : '1';
       btn.style.pointerEvents = checked > 0 ? 'none' : '';
     });
-    if (checked === 0) {
+    if (checked === 0 && !checkboxesVisible) {
       document.querySelectorAll('.snapshot-card input[type="checkbox"]').forEach(cb => cb.style.display = 'none');
       document.querySelectorAll('.snapshot-card .delete-btn').forEach(btn => btn.style.display = '');
     }
@@ -268,6 +289,30 @@ document.addEventListener('DOMContentLoaded', function () {
       bulkContainer.appendChild(selectAllLabel);
       bulkContainer.appendChild(selectAllCheckbox);
 
+      // Bind select all checkbox
+      selectAllCheckbox.addEventListener('change', function() {
+        const allCbs = document.querySelectorAll('.folder-card input[type="checkbox"]');
+        allCbs.forEach(cb => cb.checked = this.checked);
+        if (this.checked) {
+          allCbs.forEach(cb => {
+            cb.closest('.folder-card').style.border = '2px solid red';
+            cb.style.accentColor = 'red';
+            cb.style.filter = 'hue-rotate(120deg)';
+          });
+        } else {
+          allCbs.forEach(cb => {
+            cb.closest('.folder-card').style.border = '';
+            cb.style.accentColor = '';
+            cb.style.filter = '';
+          });
+        }
+        document.querySelectorAll('.folder-card .folder-link').forEach(a => {
+          a.style.pointerEvents = this.checked ? 'none' : '';
+          a.style.opacity = this.checked ? '0.5' : '1';
+        });
+        toggleDeleteButton();
+      });
+
       rightContainer.appendChild(bulkContainer);
       headerActions.appendChild(rightContainer);
     }
@@ -293,11 +338,16 @@ document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('.folder-card input[type="checkbox"]').forEach(cb => {
       cb.addEventListener('change', function() {
         if (this.checked) {
-          this.closest('.folder-card').style.border = '2px solid #007bff';
+          this.closest('.folder-card').style.border = '2px solid red';
+          this.style.accentColor = 'red';
+          this.style.filter = 'hue-rotate(120deg)';
         } else {
           this.closest('.folder-card').style.border = '';
+          this.style.accentColor = '';
+          this.style.filter = '';
         }
         toggleDeleteButton();
+        handleCheckboxVisibility('.folder-card');
       });
     });
 
@@ -367,6 +417,26 @@ document.addEventListener('DOMContentLoaded', function () {
       bulkContainer.appendChild(selectAllLabel);
       bulkContainer.appendChild(selectAllCheckbox);
 
+      // Bind select all checkbox
+      selectAllCheckbox.addEventListener('change', function() {
+        const allCbs = document.querySelectorAll('.snapshot-card input[type="checkbox"]');
+        allCbs.forEach(cb => cb.checked = this.checked);
+        if (this.checked) {
+          allCbs.forEach(cb => {
+            cb.closest('.snapshot-card').style.border = '2px solid red';
+            cb.style.accentColor = 'red';
+            cb.style.filter = 'hue-rotate(120deg)';
+          });
+        } else {
+          allCbs.forEach(cb => {
+            cb.closest('.snapshot-card').style.border = '';
+            cb.style.accentColor = '';
+            cb.style.filter = '';
+          });
+        }
+        toggleDeleteButtonSnapshots();
+      });
+
       rightContainer.appendChild(bulkContainer);
       headerActions.appendChild(rightContainer);
     }
@@ -391,11 +461,16 @@ document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('.snapshot-card input[type="checkbox"]').forEach(cb => {
       cb.addEventListener('change', function() {
         if (this.checked) {
-          this.closest('.snapshot-card').style.border = '2px solid #007bff';
+          this.closest('.snapshot-card').style.border = '2px solid red';
+          this.style.accentColor = 'red';
+          this.style.filter = 'hue-rotate(120deg)';
         } else {
           this.closest('.snapshot-card').style.border = '';
+          this.style.accentColor = '';
+          this.style.filter = '';
         }
         toggleDeleteButtonSnapshots();
+        handleCheckboxVisibility('.snapshot-card');
       });
     });
 
@@ -504,7 +579,136 @@ document.addEventListener('click', function(e) {
       cb.style.display = 'inline';
     });
     // Do not show select all or select indicator
-    // Do not close the dropdown
+    // Close the dropdown
+    const container = e.target.closest('.folder-menu-container');
+    if (container) container.classList.remove('active');
+  } else if (e.target.classList.contains('folder-menu-item') && e.target.textContent.trim().toLowerCase() === 'select all') {
+    e.stopPropagation();
+    // Hide delete buttons
+    document.querySelectorAll('.folder-card .delete-btn').forEach(btn => btn.style.display = 'none');
+    // Do not hide folder menu buttons
+    // Show checkboxes
+    document.querySelectorAll('.folder-card input[type="checkbox"]').forEach(cb => {
+      cb.style.display = 'inline';
+    });
+    // Check if all are checked
+    const allChecked = document.querySelectorAll('.folder-card input[type="checkbox"]:checked').length === document.querySelectorAll('.folder-card input[type="checkbox"]').length;
+    if (allChecked) {
+      // Uncheck all
+      document.querySelectorAll('.folder-card input[type="checkbox"]').forEach(cb => {
+        cb.checked = false;
+        cb.closest('.folder-card').style.border = '';
+        cb.style.accentColor = '';
+        cb.style.filter = '';
+      });
+      // Hide checkboxes and show delete buttons
+      document.querySelectorAll('.folder-card input[type="checkbox"]').forEach(cb => cb.style.display = 'none');
+      document.querySelectorAll('.folder-card .delete-btn').forEach(btn => btn.style.display = '');
+      // Disable delete selected button
+      const btn = document.querySelector('.delete-selected-btn');
+      if (btn) {
+        btn.disabled = true;
+        btn.style.opacity = '0.5';
+        btn.style.pointerEvents = 'none';
+      }
+      // Enable folder links
+      document.querySelectorAll('.folder-card .folder-link').forEach(a => {
+        a.style.pointerEvents = '';
+        a.style.opacity = '1';
+      });
+      // Update button and link states
+      toggleDeleteButton();
+    } else {
+      // Check all
+      document.querySelectorAll('.folder-card input[type="checkbox"]').forEach(cb => {
+        cb.checked = true;
+        cb.closest('.folder-card').style.border = '2px solid red';
+        cb.style.accentColor = 'red';
+        cb.style.filter = 'hue-rotate(120deg)';
+      });
+      // Enable delete selected button
+      const btn = document.querySelector('.delete-selected-btn');
+      if (btn) {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        btn.style.pointerEvents = '';
+      }
+      // Disable folder links
+      document.querySelectorAll('.folder-card .folder-link').forEach(a => {
+        a.style.pointerEvents = 'none';
+        a.style.opacity = '0.5';
+      });
+    }
+    // Close the dropdown
+    const container = e.target.closest('.folder-menu-container');
+    if (container) container.classList.remove('active');
+  }
+});
+
+// === Handle Select mode for snapshots ===
+document.addEventListener('click', function(e) {
+  if (e.target.classList.contains('snapshot-menu-item') && e.target.textContent.trim().toLowerCase() === 'select') {
+    e.stopPropagation();
+    // Hide delete buttons
+    document.querySelectorAll('.snapshot-card .delete-btn').forEach(btn => btn.style.display = 'none');
+    // Do not hide snapshot menu buttons
+    // Show checkboxes
+    document.querySelectorAll('.snapshot-card input[type="checkbox"]').forEach(cb => {
+      cb.style.display = 'inline';
+    });
+    // Close the dropdown
+    const container = e.target.closest('.snapshot-menu-container');
+    if (container) container.classList.remove('active');
+  } else if (e.target.classList.contains('snapshot-menu-item') && e.target.textContent.trim().toLowerCase() === 'select all') {
+    e.stopPropagation();
+    // Hide delete buttons
+    document.querySelectorAll('.snapshot-card .delete-btn').forEach(btn => btn.style.display = 'none');
+    // Do not hide snapshot menu buttons
+    // Show checkboxes
+    document.querySelectorAll('.snapshot-card input[type="checkbox"]').forEach(cb => {
+      cb.style.display = 'inline';
+    });
+    // Check if all are checked
+    const allChecked = document.querySelectorAll('.snapshot-card input[type="checkbox"]:checked').length === document.querySelectorAll('.snapshot-card input[type="checkbox"]').length;
+    if (allChecked) {
+      // Uncheck all
+      document.querySelectorAll('.snapshot-card input[type="checkbox"]').forEach(cb => {
+        cb.checked = false;
+        cb.closest('.snapshot-card').style.border = '';
+        cb.style.accentColor = '';
+        cb.style.filter = '';
+      });
+      // Hide checkboxes and show delete buttons
+      document.querySelectorAll('.snapshot-card input[type="checkbox"]').forEach(cb => cb.style.display = 'none');
+      document.querySelectorAll('.snapshot-card .delete-btn').forEach(btn => btn.style.display = '');
+      // Disable delete selected button
+      const btn = document.querySelector('.delete-selected-btn');
+      if (btn) {
+        btn.disabled = true;
+        btn.style.opacity = '0.5';
+        btn.style.pointerEvents = 'none';
+      }
+      // Update button and link states
+      toggleDeleteButtonSnapshots();
+    } else {
+      // Check all
+      document.querySelectorAll('.snapshot-card input[type="checkbox"]').forEach(cb => {
+        cb.checked = true;
+        cb.closest('.snapshot-card').style.border = '2px solid red';
+        cb.style.accentColor = 'red';
+        cb.style.filter = 'hue-rotate(120deg)';
+      });
+      // Enable delete selected button
+      const btn = document.querySelector('.delete-selected-btn');
+      if (btn) {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        btn.style.pointerEvents = '';
+      }
+    }
+    // Close the dropdown
+    const container = e.target.closest('.snapshot-menu-container');
+    if (container) container.classList.remove('active');
   }
 });
 
