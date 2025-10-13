@@ -281,21 +281,21 @@ document.addEventListener('DOMContentLoaded', function () {
       bulkContainer.style.alignItems = 'flex-end';
       bulkContainer.style.marginTop = '5px';
 
-      const bulkDeleteBtn = document.createElement('button');
-      bulkDeleteBtn.textContent = 'Delete Selected';
-      bulkDeleteBtn.className = 'delete-selected-btn';
-      bulkDeleteBtn.style.padding = '8px 14px';
-      bulkDeleteBtn.style.backgroundColor = '#dc3545';
-      bulkDeleteBtn.style.color = 'white';
-      bulkDeleteBtn.style.border = 'none';
-      bulkDeleteBtn.style.borderRadius = '8px';
-      bulkDeleteBtn.style.cursor = 'pointer';
-      bulkDeleteBtn.style.fontWeight = '600';
-      bulkDeleteBtn.style.display = 'inline-flex'; // Always visible
-      bulkDeleteBtn.disabled = true;
-      bulkDeleteBtn.style.opacity = '0.5';
-      bulkDeleteBtn.style.pointerEvents = 'none';
-      bulkContainer.appendChild(bulkDeleteBtn);
+      // const bulkDeleteBtn = document.createElement('button');
+      // bulkDeleteBtn.textContent = 'Delete Selected';
+      // bulkDeleteBtn.className = 'delete-selected-btn';
+      // bulkDeleteBtn.style.padding = '8px 14px';
+      // bulkDeleteBtn.style.backgroundColor = '#dc3545';
+      // bulkDeleteBtn.style.color = 'white';
+      // bulkDeleteBtn.style.border = 'none';
+      // bulkDeleteBtn.style.borderRadius = '8px';
+      // bulkDeleteBtn.style.cursor = 'pointer';
+      // bulkDeleteBtn.style.fontWeight = '600';
+      // bulkDeleteBtn.style.display = 'inline-flex'; // Always visible
+      // bulkDeleteBtn.disabled = true;
+      // bulkDeleteBtn.style.opacity = '0.5';
+      // bulkDeleteBtn.style.pointerEvents = 'none';
+      // bulkContainer.appendChild(bulkDeleteBtn);
 
       const selectAllCheckbox = document.createElement('input');
       selectAllCheckbox.type = 'checkbox';
@@ -397,21 +397,21 @@ document.addEventListener('DOMContentLoaded', function () {
       bulkContainer.style.alignItems = 'flex-end';
       bulkContainer.style.marginTop = '5px';
 
-      const bulkDeleteBtnSnapshots = document.createElement('button');
-      bulkDeleteBtnSnapshots.textContent = 'Delete Selected';
-      bulkDeleteBtnSnapshots.className = 'delete-selected-btn';
-      bulkDeleteBtnSnapshots.style.padding = '8px 14px';
-      bulkDeleteBtnSnapshots.style.backgroundColor = '#dc3545';
-      bulkDeleteBtnSnapshots.style.color = 'white';
-      bulkDeleteBtnSnapshots.style.border = 'none';
-      bulkDeleteBtnSnapshots.style.borderRadius = '8px';
-      bulkDeleteBtnSnapshots.style.cursor = 'pointer';
-      bulkDeleteBtnSnapshots.style.fontWeight = '600';
-      bulkDeleteBtnSnapshots.style.display = 'inline-block'; // Always visible
-      bulkDeleteBtnSnapshots.disabled = true;
-      bulkDeleteBtnSnapshots.style.opacity = '0.5';
-      bulkDeleteBtnSnapshots.style.pointerEvents = 'none';
-      bulkContainer.appendChild(bulkDeleteBtnSnapshots);
+      // const bulkDeleteBtnSnapshots = document.createElement('button');
+      // bulkDeleteBtnSnapshots.textContent = 'Delete Selected';
+      // bulkDeleteBtnSnapshots.className = 'delete-selected-btn';
+      // bulkDeleteBtnSnapshots.style.padding = '8px 14px';
+      // bulkDeleteBtnSnapshots.style.backgroundColor = '#dc3545';
+      // bulkDeleteBtnSnapshots.style.color = 'white';
+      // bulkDeleteBtnSnapshots.style.border = 'none';
+      // bulkDeleteBtnSnapshots.style.borderRadius = '8px';
+      // bulkDeleteBtnSnapshots.style.cursor = 'pointer';
+      // bulkDeleteBtnSnapshots.style.fontWeight = '600';
+      // bulkDeleteBtnSnapshots.style.display = 'inline-block'; // Always visible
+      // bulkDeleteBtnSnapshots.disabled = true;
+      // bulkDeleteBtnSnapshots.style.opacity = '0.5';
+      // bulkDeleteBtnSnapshots.style.pointerEvents = 'none';
+      // bulkContainer.appendChild(bulkDeleteBtnSnapshots);
 
       const selectAllCheckbox = document.createElement('input');
       selectAllCheckbox.type = 'checkbox';
@@ -564,19 +564,31 @@ document.addEventListener('click', () => {
   document.querySelectorAll('.snapshot-menu-container').forEach(c => c.classList.remove('active'));
 });
 
-// === Folder menu dropdown toggle ===
+// === Folder menu toggle ===
 document.querySelectorAll('.folder-menu-btn').forEach(btn => {
+  // Prevent blue outline/focus flash
+  btn.addEventListener('mousedown', e => e.preventDefault());
+
   btn.addEventListener('click', e => {
     e.stopPropagation();
     const container = btn.closest('.folder-menu-container');
     const isActive = container.classList.contains('active');
 
-    // Close any open menus
+    // Close all other open menus first
     document.querySelectorAll('.folder-menu-container.active').forEach(c => c.classList.remove('active'));
 
-    // Toggle this one
-    if (!isActive) container.classList.add('active');
+    // Toggle current menu
+    if (!isActive) {
+      container.classList.add('active');
+    }
   });
+});
+
+// Close menu if clicking outside
+document.addEventListener('click', e => {
+  if (!e.target.closest('.folder-menu-container')) {
+    document.querySelectorAll('.folder-menu-container.active').forEach(c => c.classList.remove('active'));
+  }
 });
 
 // === Handle Select mode for folders ===
@@ -723,3 +735,174 @@ document.addEventListener('click', function(e) {
     if (container) container.classList.remove('active');
   }
 });
+
+document.addEventListener('DOMContentLoaded', () => {
+      const sortDropdown = document.querySelector('.sort-dropdown');
+      const sortBtn = document.querySelector('.sort-btn');
+      const headerMenuContainer = document.querySelector('.header-menu-container');
+      const headerMenuBtn = document.querySelector('.header-menu-btn');
+
+      sortBtn.addEventListener('click', () => {
+        sortDropdown.classList.toggle('active');
+      });
+
+      headerMenuBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        headerMenuContainer.classList.toggle('active');
+      });
+
+      document.addEventListener('click', (e) => {
+        if (!sortDropdown.contains(e.target)) sortDropdown.classList.remove('active');
+        if (!headerMenuContainer.contains(e.target)) headerMenuContainer.classList.remove('active');
+      });
+    });
+
+    document.addEventListener("DOMContentLoaded", () => {
+  const folderCards = document.querySelectorAll(".folder-card");
+  const checkboxes = document.querySelectorAll(".select-indicator");
+
+  // --- Header menu functionality ---
+  const openBtn = document.querySelector(".header-open-btn");
+  const selectBtn = document.querySelector(".header-select-btn");
+  const selectAllBtn = document.querySelector(".header-select-all-btn");
+  const deleteBtn = document.querySelector(".header-delete-btn");
+
+  // 1️⃣ Open → Go to the first folder (if any)
+  openBtn?.addEventListener("click", (e) => {
+    e.preventDefault();
+    const firstLink = document.querySelector(".folder-link");
+    if (firstLink) {
+      window.location.href = firstLink.href;
+    } else {
+      alert("No folders to open.");
+    }
+  });
+
+  // 2️⃣ Select → Show all checkboxes
+  selectBtn?.addEventListener("click", () => {
+    checkboxes.forEach(cb => cb.style.display = "inline-block");
+  });
+
+  // 3️⃣ Select All → Check all boxes
+  selectAllBtn?.addEventListener("click", () => {
+    checkboxes.forEach(cb => {
+      cb.style.display = "inline-block";
+      cb.checked = true;
+    });
+  });
+
+  // 4️⃣ Delete → Remove all selected (with confirmation)
+  deleteBtn?.addEventListener("click", () => {
+    const selected = Array.from(checkboxes).filter(cb => cb.checked);
+    if (selected.length === 0) {
+      alert("No folders selected.");
+      return;
+    }
+
+    if (confirm(`Delete ${selected.length} selected folder(s)?`)) {
+      selected.forEach(cb => {
+        const form = cb.closest(".folder-card").querySelector(".delete-form");
+        if (form) form.submit();
+      });
+    }
+  });
+});
+
+// === Select folder on click & open on double click ===
+document.querySelectorAll('.folder-card').forEach(card => {
+
+  // Single click → select
+  card.addEventListener('click', (e) => {
+    if (e.target.closest('.folder-menu-btn') || e.target.closest('.folder-menu-dropdown')) return;
+
+    // Remove 'selected' from all folders
+    document.querySelectorAll('.folder-card.selected').forEach(selectedCard => {
+      selectedCard.classList.remove('selected');
+      const cb = selectedCard.querySelector('.select-indicator');
+      if (cb) cb.checked = false;
+    });
+
+    // Select this folder
+    card.classList.add('selected');
+    const checkbox = card.querySelector('.select-indicator');
+    if (checkbox) checkbox.checked = true;
+  });
+
+  // Double click → open folder
+  card.addEventListener('dblclick', (e) => {
+    if (e.target.closest('.folder-menu-btn') || e.target.closest('.folder-menu-dropdown')) return;
+
+    // Find the actual link inside folder-link
+    const folderAnchor = card.querySelector('.folder-menu-dropdown a[href], .folder-link a[href]');
+    if (folderAnchor) {
+      window.location.href = folderAnchor.href; // navigate to the folder page
+    }
+  });
+
+});
+
+// === Deselect folder if clicking outside any folder ===
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.folder-card') && !e.target.closest('.folder-menu-btn') && !e.target.closest('.folder-menu-dropdown')) {
+    document.querySelectorAll('.folder-card.selected').forEach(selectedCard => {
+      selectedCard.classList.remove('selected');
+      const cb = selectedCard.querySelector('.select-indicator');
+      if (cb) cb.checked = false;
+    });
+  }
+});
+
+// === Snapshot selection / double click to open ===
+document.querySelectorAll('.snapshot-card').forEach(card => {
+  let clickTimer = null;
+
+  // Single click → select
+  card.addEventListener('click', e => {
+    // Ignore clicks on menu buttons
+    if (e.target.closest('.snapshot-menu-btn') || e.target.closest('.snapshot-menu-dropdown')) return;
+
+    // Prevent link navigation on single click
+    if (e.target.closest('.snapshot-link')) e.preventDefault();
+
+    if (clickTimer) clearTimeout(clickTimer);
+    clickTimer = setTimeout(() => {
+      // Deselect other snapshots
+      document.querySelectorAll('.snapshot-card.selected').forEach(s => {
+        s.classList.remove('selected');
+        const cb = s.querySelector('input[type="checkbox"]');
+        if (cb) cb.checked = false;
+      });
+
+      // Select this snapshot
+      card.classList.add('selected');
+      const checkbox = card.querySelector('input[type="checkbox"]');
+      if (checkbox) checkbox.checked = true;
+
+      clickTimer = null;
+    }, 200);
+  });
+
+  // Double click → open
+  card.addEventListener('dblclick', e => {
+    if (e.target.closest('.snapshot-menu-btn') || e.target.closest('.snapshot-menu-dropdown')) return;
+    if (clickTimer) {
+      clearTimeout(clickTimer); // cancel single click
+      clickTimer = null;
+    }
+    const snapAnchor = card.querySelector('.snapshot-link');
+    if (snapAnchor) window.location.href = snapAnchor.href;
+  });
+});
+
+// Deselect snapshot if clicking outside
+document.addEventListener('click', e => {
+  if (!e.target.closest('.snapshot-card') && !e.target.closest('.snapshot-menu-btn') && !e.target.closest('.snapshot-menu-dropdown')) {
+    document.querySelectorAll('.snapshot-card.selected').forEach(s => {
+      s.classList.remove('selected');
+      const cb = s.querySelector('input[type="checkbox"]');
+      if (cb) cb.checked = false;
+    });
+  }
+});
+
+
