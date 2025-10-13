@@ -1,23 +1,3 @@
-// path: static/js/delete-handler.js
-
-function handleCheckboxVisibility(cardSelector) {
-  const checkboxes = document.querySelectorAll(`${cardSelector} input[type="checkbox"]`);
-  const deleteBtns = document.querySelectorAll(`${cardSelector} .delete-btn`);
-  const checked = document.querySelectorAll(`${cardSelector} input[type="checkbox"]:checked`).length;
-
-  if (checked === 0) {
-    // Hide all checkboxes, restore delete buttons
-    checkboxes.forEach(cb => cb.style.display = 'none');
-    deleteBtns.forEach(btn => btn.style.display = '');
-    // Update button and link states after hiding
-    if (cardSelector === '.folder-card') {
-      toggleDeleteButton();
-    } else if (cardSelector === '.snapshot-card') {
-      toggleDeleteButtonSnapshots();
-    }
-  }
-}
-
 document.addEventListener('DOMContentLoaded', function () {
   const modal = document.getElementById('deleteModal');
   if (!modal) return;
@@ -72,8 +52,8 @@ document.addEventListener('DOMContentLoaded', function () {
     setElementsState(false);
     currentForm = null;
     selectedForms = [];
-    if (isFoldersPage) toggleDeleteButton();
-    if (isSnapshotsPage) toggleDeleteButtonSnapshots();
+    if (isFoldersPage) updateFolderState();
+    if (isSnapshotsPage) updateSnapshotState();
   };
 
 
@@ -161,55 +141,99 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
 
-  // === Folder bulk ===
-  const toggleDeleteButton = () => {
+  // === Folder state update ===
+  function updateFolderState() {
+    const cards = document.querySelectorAll('.folder-card');
+    const checkboxes = document.querySelectorAll('.folder-card input[type="checkbox"]');
     const checked = document.querySelectorAll('.folder-card input[type="checkbox"]:checked').length;
-    const checkboxesVisible = document.querySelectorAll('.folder-card input[type="checkbox"]:not([style*="display: none"])').length > 0;
-    const btn = document.querySelector('.delete-selected-btn');
-    if (btn) {
-      btn.disabled = checked === 0;
-      btn.style.opacity = checked === 0 ? '0.5' : '1';
-      btn.style.pointerEvents = checked === 0 ? 'none' : '';
-    }
-    document.querySelectorAll('.folder-card .folder-link').forEach(a => {
-      a.style.pointerEvents = (checked > 0) ? 'none' : '';
-      a.style.opacity = (checked > 0) ? '0.5' : '1';
-    });
-    document.querySelectorAll('.folder-card .delete-btn').forEach(btn => {
-      btn.disabled = checked > 0;
-      btn.style.opacity = checked > 0 ? '0.5' : '1';
-      btn.style.pointerEvents = checked > 0 ? 'none' : '';
-    });
-    if (checked === 0 && !checkboxesVisible) {
-      document.querySelectorAll('.folder-card input[type="checkbox"]').forEach(cb => cb.style.display = 'none');
-      document.querySelectorAll('.folder-card .delete-btn').forEach(btn => btn.style.display = '');
-    }
-  };
+    const anyVisible = Array.from(checkboxes).some(cb => cb.style.display !== 'none');
 
-  // === Snapshot bulk ===
-  const toggleDeleteButtonSnapshots = () => {
+    // Show/hide delete buttons
+    cards.forEach(card => {
+      const deleteBtn = card.querySelector('.delete-btn');
+      if (!deleteBtn) return;
+      deleteBtn.style.display = (checked === 0 && !anyVisible) ? '' : 'none';
+    });
+
+    // Enable/disable folder links
+    cards.forEach(card => {
+      const link = card.querySelector('.folder-link');
+      if (!link) return;
+      link.style.pointerEvents = (checked > 0 || anyVisible) ? 'none' : '';
+      link.style.opacity = (checked > 0 || anyVisible) ? '0.5' : '1';
+    });
+
+    // Show/hide checkboxes
+    checkboxes.forEach(cb => cb.style.display = anyVisible ? 'inline' : 'none');
+
+    // Enable/disable bulk delete button
+    const bulkBtn = document.querySelector('.delete-selected-btn');
+    if (bulkBtn) {
+      bulkBtn.disabled = checked === 0;
+      bulkBtn.style.opacity = checked === 0 ? '0.5' : '1';
+      bulkBtn.style.pointerEvents = checked === 0 ? 'none' : '';
+    }
+
+    // Update border & styles
+    checkboxes.forEach(cb => {
+      if (cb.checked) {
+        cb.closest('.folder-card').style.border = '2px solid red';
+        cb.style.accentColor = 'red';
+        cb.style.filter = 'hue-rotate(120deg)';
+      } else {
+        cb.closest('.folder-card').style.border = '';
+        cb.style.accentColor = '';
+        cb.style.filter = '';
+      }
+    });
+  }
+
+  // === Snapshot state update ===
+  function updateSnapshotState() {
+    const cards = document.querySelectorAll('.snapshot-card');
+    const checkboxes = document.querySelectorAll('.snapshot-card input[type="checkbox"]');
     const checked = document.querySelectorAll('.snapshot-card input[type="checkbox"]:checked').length;
-    const checkboxesVisible = document.querySelectorAll('.snapshot-card input[type="checkbox"]:not([style*="display: none"])').length > 0;
-    const btn = document.querySelector('.delete-selected-btn');
-    if (btn) {
-      btn.disabled = checked === 0;
-      btn.style.opacity = checked === 0 ? '0.5' : '1';
-      btn.style.pointerEvents = checked === 0 ? 'none' : '';
-    }
-    document.querySelectorAll('.snapshot-card a').forEach(a => {
-      a.style.pointerEvents = (checked > 0 || checkboxesVisible) ? 'none' : '';
-      a.style.opacity = (checked > 0 || checkboxesVisible) ? '0.5' : '1';
+    const anyVisible = Array.from(checkboxes).some(cb => cb.style.display !== 'none');
+
+    // Show/hide delete buttons
+    cards.forEach(card => {
+      const deleteBtn = card.querySelector('.delete-btn');
+      if (!deleteBtn) return;
+      deleteBtn.style.display = (checked === 0 && !anyVisible) ? '' : 'none';
     });
-    document.querySelectorAll('.snapshot-card .delete-btn').forEach(btn => {
-      btn.disabled = checked > 0;
-      btn.style.opacity = checked > 0 ? '0.5' : '1';
-      btn.style.pointerEvents = checked > 0 ? 'none' : '';
+
+    // Enable/disable links
+    cards.forEach(card => {
+      const link = card.querySelector('a'); // snapshot links
+      if (!link) return;
+      link.style.pointerEvents = (checked > 0 || anyVisible) ? 'none' : '';
+      link.style.opacity = (checked > 0 || anyVisible) ? '0.5' : '1';
     });
-    if (checked === 0 && !checkboxesVisible) {
-      document.querySelectorAll('.snapshot-card input[type="checkbox"]').forEach(cb => cb.style.display = 'none');
-      document.querySelectorAll('.snapshot-card .delete-btn').forEach(btn => btn.style.display = '');
+
+    // Show/hide checkboxes
+    checkboxes.forEach(cb => cb.style.display = anyVisible ? 'inline' : 'none');
+
+    // Enable/disable bulk delete button
+    const bulkBtn = document.querySelector('.delete-selected-btn');
+    if (bulkBtn) {
+      bulkBtn.disabled = checked === 0;
+      bulkBtn.style.opacity = checked === 0 ? '0.5' : '1';
+      bulkBtn.style.pointerEvents = checked === 0 ? 'none' : '';
     }
-  };
+
+    // Update border & styles
+    checkboxes.forEach(cb => {
+      if (cb.checked) {
+        cb.closest('.snapshot-card').style.border = '2px solid red';
+        cb.style.accentColor = 'red';
+        cb.style.filter = 'hue-rotate(120deg)';
+      } else {
+        cb.closest('.snapshot-card').style.border = '';
+        cb.style.accentColor = '';
+        cb.style.filter = '';
+      }
+    });
+  }
 
   // === Bind single delete ===
   document.querySelectorAll('.delete-btn').forEach(btn => {
@@ -310,7 +334,7 @@ document.addEventListener('DOMContentLoaded', function () {
           a.style.pointerEvents = this.checked ? 'none' : '';
           a.style.opacity = this.checked ? '0.5' : '1';
         });
-        toggleDeleteButton();
+        updateFolderState();
       });
 
       rightContainer.appendChild(bulkContainer);
@@ -333,22 +357,10 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     // Initial toggle to set button state
-    toggleDeleteButton();
+    updateFolderState();
 
     document.querySelectorAll('.folder-card input[type="checkbox"]').forEach(cb => {
-      cb.addEventListener('change', function() {
-        if (this.checked) {
-          this.closest('.folder-card').style.border = '2px solid red';
-          this.style.accentColor = 'red';
-          this.style.filter = 'hue-rotate(120deg)';
-        } else {
-          this.closest('.folder-card').style.border = '';
-          this.style.accentColor = '';
-          this.style.filter = '';
-        }
-        toggleDeleteButton();
-        handleCheckboxVisibility('.folder-card');
-      });
+      cb.addEventListener('change', updateFolderState);
     });
 
     document.querySelector('.delete-selected-btn')?.addEventListener('click', () => {
@@ -434,7 +446,7 @@ document.addEventListener('DOMContentLoaded', function () {
             cb.style.filter = '';
           });
         }
-        toggleDeleteButtonSnapshots();
+        updateSnapshotState();
       });
 
       rightContainer.appendChild(bulkContainer);
@@ -456,7 +468,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     // Initial toggle to set button state
-    toggleDeleteButtonSnapshots();
+    updateSnapshotState();
 
     document.querySelectorAll('.snapshot-card input[type="checkbox"]').forEach(cb => {
       cb.addEventListener('change', function() {
@@ -469,7 +481,7 @@ document.addEventListener('DOMContentLoaded', function () {
           this.style.accentColor = '';
           this.style.filter = '';
         }
-        toggleDeleteButtonSnapshots();
+        updateSnapshotState();
         handleCheckboxVisibility('.snapshot-card');
       });
     });
@@ -689,7 +701,7 @@ document.addEventListener('click', function(e) {
         btn.style.pointerEvents = 'none';
       }
       // Update button and link states
-      toggleDeleteButtonSnapshots();
+      updateSnapshotState();
     } else {
       // Check all
       document.querySelectorAll('.snapshot-card input[type="checkbox"]').forEach(cb => {
@@ -711,4 +723,3 @@ document.addEventListener('click', function(e) {
     if (container) container.classList.remove('active');
   }
 });
-
