@@ -711,4 +711,3 @@ document.addEventListener('click', function(e) {
     if (container) container.classList.remove('active');
   }
 });
-
