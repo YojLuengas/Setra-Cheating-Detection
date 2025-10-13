@@ -142,20 +142,14 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
 
-  // === Folder bulk + select-all ===
+  // === Folder bulk ===
   const toggleDeleteButton = () => {
     const checked = document.querySelectorAll('.folder-card input[type="checkbox"]:checked').length;
     const btn = document.querySelector('.delete-selected-btn');
-    const allBox = document.getElementById('select-all-folders');
-    const allLabel = document.querySelector('label[for="select-all-folders"]');
     if (btn) {
       btn.disabled = checked === 0;
       btn.style.opacity = checked === 0 ? '0.5' : '1';
       btn.style.pointerEvents = checked === 0 ? 'none' : '';
-    }
-    if (allBox && allLabel) {
-      allBox.style.display = 'inline';
-      allLabel.style.display = 'inline';
     }
     document.querySelectorAll('.folder-card a').forEach(a => {
       a.style.pointerEvents = checked ? 'none' : '';
@@ -166,22 +160,20 @@ document.addEventListener('DOMContentLoaded', function () {
       btn.style.opacity = checked > 0 ? '0.5' : '1';
       btn.style.pointerEvents = checked > 0 ? 'none' : '';
     });
+    if (checked === 0) {
+      document.querySelectorAll('.folder-card input[type="checkbox"]').forEach(cb => cb.style.display = 'none');
+      document.querySelectorAll('.folder-card .delete-btn').forEach(btn => btn.style.display = '');
+    }
   };
 
-  // === Snapshot bulk + select-all ===
+  // === Snapshot bulk ===
   const toggleDeleteButtonSnapshots = () => {
     const checked = document.querySelectorAll('.snapshot-card input[type="checkbox"]:checked').length;
     const btn = document.querySelector('.delete-selected-btn');
-    const allBox = document.getElementById('select-all-snapshots');
-    const allLabel = document.querySelector('label[for="select-all-snapshots"]');
     if (btn) {
       btn.disabled = checked === 0;
       btn.style.opacity = checked === 0 ? '0.5' : '1';
       btn.style.pointerEvents = checked === 0 ? 'none' : '';
-    }
-    if (allBox && allLabel) {
-      allBox.style.display = 'inline';
-      allLabel.style.display = 'inline';
     }
     document.querySelectorAll('.snapshot-card a').forEach(a => {
       a.style.pointerEvents = checked ? 'none' : '';
@@ -192,6 +184,10 @@ document.addEventListener('DOMContentLoaded', function () {
       btn.style.opacity = checked > 0 ? '0.5' : '1';
       btn.style.pointerEvents = checked > 0 ? 'none' : '';
     });
+    if (checked === 0) {
+      document.querySelectorAll('.snapshot-card input[type="checkbox"]').forEach(cb => cb.style.display = 'none');
+      document.querySelectorAll('.snapshot-card .delete-btn').forEach(btn => btn.style.display = '');
+    }
   };
 
   // === Bind single delete ===
@@ -294,14 +290,15 @@ document.addEventListener('DOMContentLoaded', function () {
     // Initial toggle to set button state
     toggleDeleteButton();
 
-    const selectAll = document.getElementById('select-all-folders');
-    selectAll?.addEventListener('change', () => {
-      document.querySelectorAll('.folder-card input[type="checkbox"]').forEach(cb => (cb.checked = selectAll.checked));
-      toggleDeleteButton();
-    });
-
     document.querySelectorAll('.folder-card input[type="checkbox"]').forEach(cb => {
-      cb.addEventListener('change', toggleDeleteButton);
+      cb.addEventListener('change', function() {
+        if (this.checked) {
+          this.closest('.folder-card').style.border = '2px solid #007bff';
+        } else {
+          this.closest('.folder-card').style.border = '';
+        }
+        toggleDeleteButton();
+      });
     });
 
     document.querySelector('.delete-selected-btn')?.addEventListener('click', () => {
@@ -391,14 +388,15 @@ document.addEventListener('DOMContentLoaded', function () {
     // Initial toggle to set button state
     toggleDeleteButtonSnapshots();
 
-    const selectAll = document.getElementById('select-all-snapshots');
-    selectAll?.addEventListener('change', () => {
-      document.querySelectorAll('.snapshot-card input[type="checkbox"]').forEach(cb => (cb.checked = selectAll.checked));
-      toggleDeleteButtonSnapshots();
-    });
-
     document.querySelectorAll('.snapshot-card input[type="checkbox"]').forEach(cb => {
-      cb.addEventListener('change', toggleDeleteButtonSnapshots);
+      cb.addEventListener('change', function() {
+        if (this.checked) {
+          this.closest('.snapshot-card').style.border = '2px solid #007bff';
+        } else {
+          this.closest('.snapshot-card').style.border = '';
+        }
+        toggleDeleteButtonSnapshots();
+      });
     });
 
     document.querySelector('.delete-selected-btn')?.addEventListener('click', () => {
@@ -505,38 +503,8 @@ document.addEventListener('click', function(e) {
     document.querySelectorAll('.folder-card input[type="checkbox"]').forEach(cb => {
       cb.style.display = 'inline';
     });
-    // Show select all
-    const selectAll = document.getElementById('select-all-folders');
-    const selectAllLabel = document.querySelector('label[for="select-all-folders"]');
-    if (selectAll) selectAll.style.display = 'inline';
-    if (selectAllLabel) selectAllLabel.style.display = 'inline';
-    // Show select indicator
-    document.querySelectorAll('.folder-card .select-indicator').forEach(indicator => {
-      indicator.style.display = 'inline';
-    });
+    // Do not show select all or select indicator
     // Do not close the dropdown
-  } else if (e.target.classList.contains('select-indicator') || e.target.closest('.select-indicator')) {
-    e.stopPropagation();
-    // Show delete buttons
-    document.querySelectorAll('.folder-card .delete-btn').forEach(btn => btn.style.display = 'inline');
-    // Do not show folder menu buttons again, keep them visible
-    // Hide checkboxes
-    document.querySelectorAll('.folder-card input[type="checkbox"]').forEach(cb => {
-      cb.style.display = 'none';
-    });
-    // Hide select all
-    const selectAll = document.getElementById('select-all-folders');
-    const selectAllLabel = document.querySelector('label[for="select-all-folders"]');
-    if (selectAll) selectAll.style.display = 'none';
-    if (selectAllLabel) selectAllLabel.style.display = 'none';
-    // Hide select indicator
-    document.querySelectorAll('.folder-card .select-indicator').forEach(indicator => {
-      indicator.style.display = 'none';
-    });
-    // Reset checkboxes
-    document.querySelectorAll('.folder-card input[type="checkbox"]').forEach(cb => cb.checked = false);
-    // Update button state
-    if (isFoldersPage) toggleDeleteButton();
   }
 });
 
