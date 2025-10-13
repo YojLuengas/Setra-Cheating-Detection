@@ -32,6 +32,8 @@
       </button>
       <div class="snapshot-menu-dropdown">
         <a href="{{ url_for('cheating', snap_id=s.id) }}" class="snapshot-menu-item">Open</a>
+        <span class="snapshot-menu-item select-mode-btn">Select</span>
+        <span class="snapshot-menu-item select-mode-btn">Select All</span>
         <a href="{{ url_for('delete_snapshot', snap_id=s.id) }}"
           class="snapshot-menu-item snapshot-delete-btn"
           data-delete-url="{{ url_for('delete_snapshot', snap_id=s.id) }}">

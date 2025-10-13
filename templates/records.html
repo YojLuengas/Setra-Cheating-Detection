@@ -34,6 +34,7 @@
     <div class="folder-menu-dropdown">
       <a href="{{ url_for('records_folder', folder_name=f.folder_name) }}" class="folder-menu-item">Open</a>
       <span class="folder-menu-item select-mode-btn">Select</span>
+      <span class="folder-menu-item select-mode-btn">Select All</span>
       <a href="{{ url_for('delete_record', folder_name=f.folder_name) }}"
         class="folder-menu-item folder-delete-btn"
         data-delete-url="{{ url_for('delete_record', folder_name=f.folder_name) }}">
