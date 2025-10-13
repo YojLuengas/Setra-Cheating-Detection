@@ -1168,6 +1168,7 @@ body.dashboard-body {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  position: relative;
 }
 
 .records-header .back-link {
@@ -1298,11 +1299,25 @@ body.dashboard-body {
   width: 100%;
 }
 
-/* === Folder 3-Dot Menu (Bottom-Left Corner) === */
+/* Row Number */
+.row-number {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: bold;
+  z-index: 10;
+}
+
+/* === Folder 3-Dot Menu (Upper-Right Corner) === */
 .folder-menu-container {
   position: absolute;
-  bottom: 8px;   /* moved from top → bottom */
-  left: 8px;
+  top: 10px;
+  right: 10px;
   z-index: 5;
 }
 
@@ -1321,12 +1336,22 @@ body.dashboard-body {
   background: rgba(255, 255, 255, 0.15);
 }
 
+/* Header folder menu button (darker for visibility on light background) */
+.folder-menu-btn.header-menu-btn {
+  background: rgba(0, 0, 0, 0.1);
+  color: #333;
+}
+
+.folder-menu-btn.header-menu-btn:hover {
+  background: rgba(0, 0, 0, 0.2);
+}
+
 /* Dropdown styles */
 .folder-menu-dropdown {
   display: none;
   position: absolute;
-  bottom: 36px; /* appears just above the button */
-  left: 0;
+  top: 36px; /* appears just below the button */
+  right: 0;
   background: var(--menu-bg, rgba(40, 40, 40, 0.95));
   border-radius: 8px;
   min-width: 120px;
@@ -1465,7 +1490,7 @@ body.dashboard-body {
 /* Grid Layout for Records */
 .records-grid {
   display: grid;
-  grid-template-columns: repeat(3, 600px);
+  grid-template-columns: repeat(3, 1fr);
   gap: 16px;
   margin-bottom: 20px;
 }
@@ -1867,39 +1892,13 @@ body.dashboard-body {
 }
 
 /* Responsive Grid Adjustments */
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   .records-grid {
-    grid-template-columns: repeat(auto-fill, 400px);
-  }
-
-  .folder-card,
-  .snapshot-card {
-    border-radius: 8px;
-  }
-
-  .folder-content,
-  .snapshot-info {
-    padding: 12px;
-  }
-
-  .folder-name {
-    font-size: 16px;
-  }
-
-  .timestamp {
-    font-size: 12px;
-  }
-
-  .folder-thumb {
-    width: 180px;
-    height: 135px;
-  }
-
-  .record-thumb {
-    width: 225px;
-    height: 168px;
+    grid-template-columns: repeat(2, 1fr);
   }
 }
+
+
 /* === Validation Effects === */
 @keyframes shake {
   0% { transform: translateX(0); }
@@ -1948,31 +1947,62 @@ body.dashboard-body {
 /* === Snapshot Grid (larger images) === */
 .records-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(3, 1fr);
   gap: 20px;
   padding: 24px;
 }
 
 .snapshot-card {
+  background: var(--card-bg);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  transition: var(--transition);
+  border: 1px solid var(--border-color);
+  overflow: visible;
   position: relative;
-  background: #fff;
-  border-radius: 14px;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
-  overflow: hidden;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  padding: 20px;
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
 }
 
 .snapshot-card:hover {
+  box-shadow: var(--shadow-hover);
   transform: translateY(-4px);
-  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.18);
+}
+
+.snapshot-link {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  text-decoration: none;
+  color: inherit;
+  flex: 1;
+  position: relative;
 }
 
 .record-thumb {
-  width: 100%;
-  height: 240px; /* increased height */
+  width: 200px;
+  height: 150px;
   object-fit: cover;
-  display: block;
-  border-bottom: 1px solid #eee;
+  border-radius: 8px;
+  background: #f3f6fb;
+  border: 2px solid #e5e7eb;
+  flex-shrink: 0;
+}
+
+.snapshot-info {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  flex: 1;
+}
+
+.timestamp {
+  font-size: 14px;
+  color: var(--text-muted);
+  font-weight: 500;
 }
 
 /* === 3-Dot Menu (unchanged except spacing tweak) === */
@@ -1980,16 +2010,17 @@ body.dashboard-body {
   position: absolute;
   top: 10px;
   right: 10px;
+  z-index: 10;
 }
 
 .snapshot-menu-btn {
-  background: none;
-  color: white;
+  background: rgba(255, 255, 255, 0);
   border: none;
   border-radius: 50%;
   font-size: 26px;
-  padding: 4px;
+  color: var(--text-color);
   cursor: pointer;
+  padding: 4px;
   transition: background 0.2s;
   display: flex;
   align-items: center;
@@ -1997,7 +2028,7 @@ body.dashboard-body {
 }
 
 .snapshot-menu-btn:hover {
-  background: none;
+  background: rgba(0, 0, 0, 0.2);
 }
 
 .material-symbols-outlined {
@@ -2030,6 +2061,7 @@ body.dashboard-body {
   background: none;
   width: 100%;
   cursor: pointer;
+  transition: background-color 0.2s ease;
 }
 
 .snapshot-menu-item:hover {
@@ -2039,4 +2071,3 @@ body.dashboard-body {
 .snapshot-menu-container.active .snapshot-menu-dropdown {
   display: flex;
 }
-
