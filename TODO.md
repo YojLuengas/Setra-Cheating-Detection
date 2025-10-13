@@ -1,0 +1,3 @@
+- [ ] Update static/records.js to modify select-mode-btn click handler: remove hiding of folder-menu-btn, remove closing dropdown, keep showing select-indicator beside menu.
+- [ ] Update static/style.css to style .folder-menu-container as flex and .select-indicator as circular checkbox.
+- [ ] Test the changes on the records page to ensure dropdown stays open, circle checkbox appears beside menu without replacing it.

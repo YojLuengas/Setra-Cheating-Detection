@@ -1319,6 +1319,9 @@ body.dashboard-body {
   top: 10px;
   right: 10px;
   z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .folder-menu-btn {
@@ -1896,6 +1899,79 @@ body.dashboard-body {
   .records-grid {
     grid-template-columns: repeat(2, 1fr);
   }
+}
+
+/* Custom Circular Checkboxes */
+input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  width: 25px;
+  height: 25px;
+  border: 2px solid #ccc;
+  border-radius: 50%;
+  background: #fff;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+input[type="checkbox"]:checked {
+  background: #007bff;
+  border-color: #007bff;
+}
+
+input[type="checkbox"]:checked::after {
+  content: '✓';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: #fff;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+input[type="checkbox"]:hover {
+  border-color: #0b3d91;
+}
+
+/* Select Indicator (Circular Checkbox beside menu) */
+.select-indicator {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: #dc3545;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 18px;
+  transition: background 0.2s ease;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  outline: none;
+}
+
+.select-indicator:hover {
+  background: #b02a37;
+}
+
+.select-indicator:checked {
+  background-color: #28a745;
+}
+
+.select-indicator:checked::before {
+  content: '✓';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  font-size: 16px;
+  font-weight: bold;
 }
 
 

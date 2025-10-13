@@ -25,14 +25,17 @@
     <div class="records-grid">
       {% for f in folders %}
       <div class="folder-card">
-  <div class="snapshot-menu-container">
-    <button class="snapshot-menu-btn">
+  <form class="delete-form" method="post" action="{{ url_for('delete_record', folder_name=f.folder_name) }}" style="display: none;"></form>
+  <div class="folder-menu-container">
+    <input type="checkbox" class="select-indicator" style="display: none;">
+    <button class="folder-menu-btn">
       <span class="material-symbols-outlined">more_vert</span>
     </button>
-    <div class="snapshot-menu-dropdown">
-      <a href="{{ url_for('records_folder', folder_name=f.folder_name) }}" class="snapshot-menu-item">Open</a>
+    <div class="folder-menu-dropdown">
+      <a href="{{ url_for('records_folder', folder_name=f.folder_name) }}" class="folder-menu-item">Open</a>
+      <span class="folder-menu-item select-mode-btn">Select</span>
       <a href="{{ url_for('delete_record', folder_name=f.folder_name) }}"
-        class="snapshot-menu-item folder-delete-btn"
+        class="folder-menu-item folder-delete-btn"
         data-delete-url="{{ url_for('delete_record', folder_name=f.folder_name) }}">
         Delete
       </a>

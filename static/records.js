@@ -60,58 +60,58 @@ document.addEventListener('DOMContentLoaded', function () {
 
   let currentFolderDeleteBtn = null;
 
-// Handle delete button click
-document.querySelectorAll('.folder-delete-btn').forEach(btn => {
-  btn.addEventListener('click', e => {
-    e.preventDefault();
+  // Handle delete button click
+  document.querySelectorAll('.folder-delete-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.preventDefault();
 
-    // Store the clicked button for later reference
-    currentFolderDeleteBtn = btn;
+      // Store the clicked button for later reference
+      currentFolderDeleteBtn = btn;
 
-    // Get folder name for modal message
-    const folderName = btn.dataset.folderName 
-      || btn.closest('.folder-card')?.querySelector('.folder-name')?.textContent 
-      || "this folder";
+      // Get folder name for modal message
+      const folderName = btn.dataset.folderName
+        || btn.closest('.folder-card')?.querySelector('.folder-name')?.textContent
+        || "this folder";
 
-    // Open modal with custom message
-    openModal(`Are you sure you want to delete "${folderName}" and all its snapshots?`);
+      // Open modal with custom message
+      openModal(`Are you sure you want to delete "${folderName}" and all its snapshots?`);
+    });
   });
-});
 
-// Confirm delete in modal
-confirmBtn.addEventListener('click', async () => {
-  if (!currentFolderDeleteBtn) return;
+  // Confirm delete in modal
+  confirmBtn.addEventListener('click', async () => {
+    if (!currentFolderDeleteBtn) return;
 
-  const url = currentFolderDeleteBtn.href;
+    const url = currentFolderDeleteBtn.href;
 
-  try {
-    const response = await fetch(url, { method: 'POST' });
-    if (response.ok) {
-      // Remove folder card from DOM
-      const card = currentFolderDeleteBtn.closest('.folder-card');
-      if (card) card.remove();
+    try {
+      const response = await fetch(url, { method: 'POST' });
+      if (response.ok) {
+        // Remove folder card from DOM
+        const card = currentFolderDeleteBtn.closest('.folder-card');
+        if (card) card.remove();
 
-      // Optional: show success message in modal or toast
-      showToast("Folder deleted successfully!");
-    } else {
-      console.error("Delete failed:", response.status);
+        // Optional: show success message in modal or toast
+        showToast("Folder deleted successfully!");
+      } else {
+        console.error("Delete failed:", response.status);
+      }
+    } catch (err) {
+      console.error("Error deleting folder:", err);
     }
-  } catch (err) {
-    console.error("Error deleting folder:", err);
-  }
 
-  // Close the modal
-  closeModal();
-  currentFolderDeleteBtn = null;
-});
-
-// Cancel / close modal
-[cancelBtn, closeBtn].forEach(el => {
-  el.addEventListener('click', () => {
+    // Close the modal
     closeModal();
     currentFolderDeleteBtn = null;
   });
-});
+
+  // Cancel / close modal
+  [cancelBtn, closeBtn].forEach(el => {
+    el.addEventListener('click', () => {
+      closeModal();
+      currentFolderDeleteBtn = null;
+    });
+  });
 
 
   let currentDeleteUrl = null;
@@ -276,7 +276,7 @@ confirmBtn.addEventListener('click', async () => {
       headerActions.appendChild(rightContainer);
     }
 
-    // Add checkboxes to folder cards beside delete button
+    // Add checkboxes to folder cards beside delete button, initially hidden
     document.querySelectorAll('.folder-card').forEach(card => {
       const checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
@@ -284,6 +284,7 @@ confirmBtn.addEventListener('click', async () => {
       checkbox.style.height = '25px'; // Match delete button height
       checkbox.style.marginRight = '1px';
       checkbox.style.verticalAlign = 'middle'; // Align with delete button
+      checkbox.style.display = 'none'; // Hide initially
       const deleteForm = card.querySelector('.delete-form');
       if (deleteForm) {
         deleteForm.insertBefore(checkbox, deleteForm.firstChild);
@@ -491,5 +492,51 @@ document.querySelectorAll('.folder-menu-btn').forEach(btn => {
     // Toggle this one
     if (!isActive) container.classList.add('active');
   });
+});
+
+// === Handle Select mode for folders ===
+document.addEventListener('click', function(e) {
+  if (e.target.classList.contains('folder-menu-item') && e.target.textContent.trim().toLowerCase() === 'select') {
+    e.stopPropagation();
+    // Hide delete buttons
+    document.querySelectorAll('.folder-card .delete-btn').forEach(btn => btn.style.display = 'none');
+    // Do not hide folder menu buttons
+    // Show checkboxes
+    document.querySelectorAll('.folder-card input[type="checkbox"]').forEach(cb => {
+      cb.style.display = 'inline';
+    });
+    // Show select all
+    const selectAll = document.getElementById('select-all-folders');
+    const selectAllLabel = document.querySelector('label[for="select-all-folders"]');
+    if (selectAll) selectAll.style.display = 'inline';
+    if (selectAllLabel) selectAllLabel.style.display = 'inline';
+    // Show select indicator
+    document.querySelectorAll('.folder-card .select-indicator').forEach(indicator => {
+      indicator.style.display = 'inline';
+    });
+    // Do not close the dropdown
+  } else if (e.target.classList.contains('select-indicator') || e.target.closest('.select-indicator')) {
+    e.stopPropagation();
+    // Show delete buttons
+    document.querySelectorAll('.folder-card .delete-btn').forEach(btn => btn.style.display = 'inline');
+    // Do not show folder menu buttons again, keep them visible
+    // Hide checkboxes
+    document.querySelectorAll('.folder-card input[type="checkbox"]').forEach(cb => {
+      cb.style.display = 'none';
+    });
+    // Hide select all
+    const selectAll = document.getElementById('select-all-folders');
+    const selectAllLabel = document.querySelector('label[for="select-all-folders"]');
+    if (selectAll) selectAll.style.display = 'none';
+    if (selectAllLabel) selectAllLabel.style.display = 'none';
+    // Hide select indicator
+    document.querySelectorAll('.folder-card .select-indicator').forEach(indicator => {
+      indicator.style.display = 'none';
+    });
+    // Reset checkboxes
+    document.querySelectorAll('.folder-card input[type="checkbox"]').forEach(cb => cb.checked = false);
+    // Update button state
+    if (isFoldersPage) toggleDeleteButton();
+  }
 });
 

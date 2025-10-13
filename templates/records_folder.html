@@ -25,6 +25,7 @@
     <div class="records-grid">
   {% for s in snapshots %}
   <div class="snapshot-card">
+    <form class="delete-form" method="post" action="{{ url_for('delete_snapshot', snap_id=s.id) }}" style="display: none;"></form>
     <div class="snapshot-menu-container">
       <button class="snapshot-menu-btn">
         <span class="material-symbols-outlined">more_vert</span>
