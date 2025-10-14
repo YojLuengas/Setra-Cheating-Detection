@@ -579,26 +579,25 @@ document.querySelectorAll('.folder-menu-btn').forEach(btn => {
   });
 });
 
-// === Handle Select mode for folders ===
+// === Header dropdown toggle ===
+document.querySelectorAll('.header-dropdown-btn').forEach(btn => {
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    const container = btn.closest('.header-dropdown-container');
+    const isActive = container.classList.contains('active');
+    // Close any open menus
+    document.querySelectorAll('.header-dropdown-container.active').forEach(c => c.classList.remove('active'));
+    // Toggle this one
+    if (!isActive) container.classList.add('active');
+  });
+});
+
+// === Handle header menu items ===
 document.addEventListener('click', function(e) {
-  if (e.target.classList.contains('folder-menu-item') && e.target.textContent.trim().toLowerCase() === 'select') {
+  if (e.target.classList.contains('header-menu-item') && e.target.classList.contains('select-all-btn')) {
     e.stopPropagation();
     // Hide delete buttons
     document.querySelectorAll('.folder-card .delete-btn').forEach(btn => btn.style.display = 'none');
-    // Do not hide folder menu buttons
-    // Show checkboxes
-    document.querySelectorAll('.folder-card input[type="checkbox"]').forEach(cb => {
-      cb.style.display = 'inline';
-    });
-    // Do not show select all or select indicator
-    // Close the dropdown
-    const container = e.target.closest('.folder-menu-container');
-    if (container) container.classList.remove('active');
-  } else if (e.target.classList.contains('folder-menu-item') && e.target.textContent.trim().toLowerCase() === 'select all') {
-    e.stopPropagation();
-    // Hide delete buttons
-    document.querySelectorAll('.folder-card .delete-btn').forEach(btn => btn.style.display = 'none');
-    // Do not hide folder menu buttons
     // Show checkboxes
     document.querySelectorAll('.folder-card input[type="checkbox"]').forEach(cb => {
       cb.style.display = 'inline';
@@ -628,8 +627,6 @@ document.addEventListener('click', function(e) {
         a.style.pointerEvents = '';
         a.style.opacity = '1';
       });
-      // Update button and link states
-      toggleDeleteButton();
     } else {
       // Check all
       document.querySelectorAll('.folder-card input[type="checkbox"]').forEach(cb => {
@@ -652,9 +649,24 @@ document.addEventListener('click', function(e) {
       });
     }
     // Close the dropdown
-    const container = e.target.closest('.folder-menu-container');
+    const container = e.target.closest('.header-dropdown-container');
+    if (container) container.classList.remove('active');
+  } else if (e.target.classList.contains('header-menu-item') && e.target.classList.contains('delete-selected-btn')) {
+    e.stopPropagation();
+    selectedForms = Array.from(document.querySelectorAll('.folder-card input[type="checkbox"]:checked'))
+      .map(cb => cb.closest('.folder-card').querySelector('.delete-form'))
+      .filter(Boolean);
+    if (selectedForms.length === 0) return alert('No folders selected.');
+    openModal(`Are you sure you want to delete ${selectedForms.length} selected folder${selectedForms.length > 1 ? 's' : ''}?`);
+    // Close the dropdown
+    const container = e.target.closest('.header-dropdown-container');
     if (container) container.classList.remove('active');
   }
+});
+
+// Close header dropdown when clicking outside
+document.addEventListener('click', () => {
+  document.querySelectorAll('.header-dropdown-container').forEach(c => c.classList.remove('active'));
 });
 
 // === Handle Select mode for snapshots ===

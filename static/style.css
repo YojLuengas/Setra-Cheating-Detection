@@ -360,6 +360,64 @@ button:hover {
   background: #f8f9fa;
 }
 
+/* Header dropdown container */
+.header-dropdown-container {
+  position: relative;
+  margin-left: auto;
+}
+
+/* Header dropdown button */
+.header-dropdown-btn {
+  background: transparent;
+  color: #333;
+  border: none;
+  padding: 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease;
+}
+
+.header-dropdown-btn:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+/* Header dropdown menu */
+.header-dropdown-menu {
+  display: none;
+  position: fixed;
+  top: 32px;
+  right: 240px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  min-width: 140px;
+  overflow: hidden;
+  z-index: 1000;
+}
+
+.header-dropdown-container.active .header-dropdown-menu {
+  display: block;
+}
+
+/* Header menu items */
+.header-menu-item {
+  display: block;
+  padding: 10px 14px;
+  font-size: 14px;
+  color: #333;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  text-decoration: none;
+}
+
+.header-menu-item:hover {
+  background: #f8f9fa;
+}
+
 /* Sidebar Layout */
 .sidebar {
   width: 80px;
@@ -1168,7 +1226,6 @@ body.dashboard-body {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  position: relative;
 }
 
 .records-header .back-link {
@@ -1220,8 +1277,12 @@ body.dashboard-body {
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
-  justify-content: space-between;
+  gap: 0px;
+  justify-content: flex-start;
+}
+
+.back-link {
+  margin-left: auto;
 }
 
 .header-actions .search-bar {
@@ -1236,9 +1297,12 @@ body.dashboard-body {
   box-shadow: var(--shadow);
   transition: var(--transition);
   border: 1px solid var(--border-color);
-  overflow: visible ;
+  overflow: hidden;
   position: relative;
+  display: flex;
+  flex-direction: column;
 }
+
 
 .folder-card:hover {
   box-shadow: var(--shadow-hover);
@@ -1266,8 +1330,9 @@ body.dashboard-body {
 }
 
 .folder-thumb {
-  width: 300px;
-  height: 225px;
+  width: 100%;
+  height: auto;
+  max-height: 225px;
   object-fit: cover;
   border-radius: 8px;
   background: #f3f6fb;
@@ -1299,29 +1364,12 @@ body.dashboard-body {
   width: 100%;
 }
 
-/* Row Number */
-.row-number {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  background: rgba(0, 0, 0, 0.7);
-  color: white;
-  padding: 4px 8px;
-  border-radius: 12px;
-  font-size: 14px;
-  font-weight: bold;
-  z-index: 10;
-}
-
-/* === Folder 3-Dot Menu (Upper-Right Corner) === */
+/* === Folder 3-Dot Menu (Bottom-Left Corner) === */
 .folder-menu-container {
   position: absolute;
-  top: 10px;
-  right: 10px;
+  bottom: 8px;   /* moved from top → bottom */
+  left: 8px;
   z-index: 5;
-  display: flex;
-  align-items: center;
-  gap: 8px;
 }
 
 .folder-menu-btn {
@@ -1339,22 +1387,12 @@ body.dashboard-body {
   background: rgba(255, 255, 255, 0.15);
 }
 
-/* Header folder menu button (darker for visibility on light background) */
-.folder-menu-btn.header-menu-btn {
-  background: rgba(0, 0, 0, 0.1);
-  color: #333;
-}
-
-.folder-menu-btn.header-menu-btn:hover {
-  background: rgba(0, 0, 0, 0.2);
-}
-
 /* Dropdown styles */
 .folder-menu-dropdown {
   display: none;
   position: absolute;
-  top: 36px; /* appears just below the button */
-  right: 0;
+  bottom: 36px; /* appears just above the button */
+  left: 0;
   background: var(--menu-bg, rgba(40, 40, 40, 0.95));
   border-radius: 8px;
   min-width: 120px;
@@ -1493,7 +1531,7 @@ body.dashboard-body {
 /* Grid Layout for Records */
 .records-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, 600px);
   gap: 16px;
   margin-bottom: 20px;
 }
@@ -1895,86 +1933,39 @@ body.dashboard-body {
 }
 
 /* Responsive Grid Adjustments */
-@media (max-width: 1024px) {
+@media (max-width: 768px) {
   .records-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(auto-fill, 400px);
+  }
+
+  .folder-card,
+  .snapshot-card {
+    border-radius: 8px;
+  }
+
+  .folder-content,
+  .snapshot-info {
+    padding: 12px;
+  }
+
+  .folder-name {
+    font-size: 16px;
+  }
+
+  .timestamp {
+    font-size: 12px;
+  }
+
+  .folder-thumb {
+    width: 180px;
+    height: 135px;
+  }
+
+  .record-thumb {
+    width: 225px;
+    height: 168px;
   }
 }
-
-/* Custom Circular Checkboxes */
-input[type="checkbox"] {
-  appearance: none;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  width: 25px;
-  height: 25px;
-  border: 2px solid #ccc;
-  border-radius: 50%;
-  background: #fff;
-  cursor: pointer;
-  position: relative;
-  transition: all 0.2s ease;
-}
-
-input[type="checkbox"]:checked {
-  background: #007bff;
-  border-color: #007bff;
-}
-
-input[type="checkbox"]:checked::after {
-  content: '✓';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  color: #fff;
-  font-size: 14px;
-  font-weight: bold;
-}
-
-input[type="checkbox"]:hover {
-  border-color: #0b3d91;
-}
-
-/* Select Indicator (Circular Checkbox beside menu) */
-.select-indicator {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  background: #dc3545;
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  font-size: 18px;
-  transition: background 0.2s ease;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  appearance: none;
-  outline: none;
-}
-
-.select-indicator:hover {
-  background: #b02a37;
-}
-
-.select-indicator:checked {
-  background-color: #28a745;
-}
-
-.select-indicator:checked::before {
-  content: '✓';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  color: white;
-  font-size: 16px;
-  font-weight: bold;
-}
-
-
 /* === Validation Effects === */
 @keyframes shake {
   0% { transform: translateX(0); }
@@ -2023,62 +2014,31 @@ input[type="checkbox"]:hover {
 /* === Snapshot Grid (larger images) === */
 .records-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 20px;
   padding: 24px;
 }
 
 .snapshot-card {
-  background: var(--card-bg);
-  border-radius: 12px;
-  box-shadow: var(--shadow);
-  transition: var(--transition);
-  border: 1px solid var(--border-color);
-  overflow: visible;
   position: relative;
-  padding: 20px;
-  display: flex;
-  justify-content: flex-start;
-  align-items: center;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .snapshot-card:hover {
-  box-shadow: var(--shadow-hover);
   transform: translateY(-4px);
-}
-
-.snapshot-link {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  text-decoration: none;
-  color: inherit;
-  flex: 1;
-  position: relative;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.18);
 }
 
 .record-thumb {
-  width: 200px;
-  height: 150px;
+  width: 100%;
+  height: 240px; /* increased height */
   object-fit: cover;
-  border-radius: 8px;
-  background: #f3f6fb;
-  border: 2px solid #e5e7eb;
-  flex-shrink: 0;
-}
-
-.snapshot-info {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: flex-start;
-  flex: 1;
-}
-
-.timestamp {
-  font-size: 14px;
-  color: var(--text-muted);
-  font-weight: 500;
+  display: block;
+  border-bottom: 1px solid #eee;
 }
 
 /* === 3-Dot Menu (unchanged except spacing tweak) === */
@@ -2086,17 +2046,16 @@ input[type="checkbox"]:hover {
   position: absolute;
   top: 10px;
   right: 10px;
-  z-index: 10;
 }
 
 .snapshot-menu-btn {
-  background: rgba(255, 255, 255, 0);
+  background: none;
+  color: white;
   border: none;
   border-radius: 50%;
   font-size: 26px;
-  color: var(--text-color);
-  cursor: pointer;
   padding: 4px;
+  cursor: pointer;
   transition: background 0.2s;
   display: flex;
   align-items: center;
@@ -2104,7 +2063,7 @@ input[type="checkbox"]:hover {
 }
 
 .snapshot-menu-btn:hover {
-  background: rgba(0, 0, 0, 0.2);
+  background: none;
 }
 
 .material-symbols-outlined {
@@ -2137,7 +2096,6 @@ input[type="checkbox"]:hover {
   background: none;
   width: 100%;
   cursor: pointer;
-  transition: background-color 0.2s ease;
 }
 
 .snapshot-menu-item:hover {

@@ -17,6 +17,13 @@
       </div>
       <div class="header-actions">
         <input type="text" id="folder-search" placeholder="Search folders..." class="search-bar">
+        <div class="header-dropdown-container">
+          <button class="header-dropdown-btn"><span class="material-symbols-outlined">more_vert</span></button>
+          <div class="header-dropdown-menu">
+            <span class="header-menu-item select-all-btn">Select All</span>
+            <span class="header-menu-item delete-selected-btn">Delete Selected</span>
+          </div>
+        </div>
         <a href="{{ url_for('home') }}" class="back-link">← Back to Home</a>
       </div>
     </div>
@@ -33,8 +40,6 @@
     </button>
     <div class="folder-menu-dropdown">
       <a href="{{ url_for('records_folder', folder_name=f.folder_name) }}" class="folder-menu-item">Open</a>
-      <span class="folder-menu-item select-mode-btn">Select</span>
-      <span class="folder-menu-item select-mode-btn">Select All</span>
       <a href="{{ url_for('delete_record', folder_name=f.folder_name) }}"
         class="folder-menu-item folder-delete-btn"
         data-delete-url="{{ url_for('delete_record', folder_name=f.folder_name) }}">
