@@ -1416,6 +1416,8 @@ body.dashboard-body {
   margin-right: 12px;
   position: relative;
   height: 100%;
+  pointer-events: auto;
+  cursor: pointer;
 }
 
 .folder-thumb {
@@ -1530,6 +1532,7 @@ body.dashboard-body {
   opacity: 1;
   transition: opacity 0.2s ease;
   z-index: 1;
+  pointer-events: none;
 }
 
 
@@ -2091,13 +2094,6 @@ body.dashboard-body {
   justify-content: space-between;
   font-size: 0.85rem;
   color: #475569;
-}
-
-.no-snapshots {
-  color: #64748b;
-  font-size: 0.95rem;
-  text-align: center;
-  padding: 10px 0;
 }
 
 /* Responsive behavior */

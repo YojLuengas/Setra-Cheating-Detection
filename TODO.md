@@ -1,3 +1,7 @@
-- [ ] Update static/records.js to modify select-mode-btn click handler: remove hiding of folder-menu-btn, remove closing dropdown, keep showing select-indicator beside menu.
-- [ ] Update static/style.css to style .folder-menu-container as flex and .select-indicator as circular checkbox.
-- [ ] Test the changes on the records page to ensure dropdown stays open, circle checkbox appears beside menu without replacing it.
+# TODO: Add Dropdown Menu to Records Header
+
+## Tasks
+- [x] Add dropdown menu HTML to templates/records.html in the header-actions div beside the search bar
+- [x] Add event listeners in static/records.js for "Select All" and "Delete Selected" options to trigger existing bulk actions
+- [ ] Test the dropdown functionality using browser_action to ensure it integrates with existing JS logic
+- [x] Add any necessary CSS styles in static/style.css if the dropdown appearance needs adjustment

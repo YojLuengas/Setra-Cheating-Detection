@@ -327,7 +327,7 @@ def create_assessment_session():
             ),
         )
         assessment_session_id = cursor.lastrowid
-        folder_name = f"{data.get('course', '').replace(' ', '_')}_{data.get('subject', '').replace(' ', '_')}_{data.get('exam_type', '').replace(' ', '_')}_{str(uuid.uuid4())[:8]}"
+        folder_name = f"{data.get('course', '').replace(' ', '_').replace('/', '_')}_{data.get('subject', '').replace(' ', '_').replace('/', '_')}_{data.get('exam_type', '').replace(' ', '_').replace('/', '_')}_{str(uuid.uuid4())[:8]}"
         cursor.execute(
             "INSERT INTO records (assessment_session_id, user_id, folder_name, created_at) VALUES (%s, %s, %s, %s)",
             (assessment_session_id, session["user_id"], folder_name, datetime.now())
@@ -481,10 +481,20 @@ def cheating(snap_id):
 
         snap_id, ts, assessment_session_id = row
 
-        cursor.execute("SELECT id, timestamp, epoch FROM detections WHERE assessment_session_id = %s ORDER BY epoch DESC", (assessment_session_id,))
+        if assessment_session_id is not None:
+            cursor.execute("SELECT id, timestamp, epoch FROM detections WHERE assessment_session_id = %s AND user_id = %s ORDER BY epoch ASC", (assessment_session_id, session["user_id"]))
+        else:
+            cursor.execute("SELECT id, timestamp, epoch FROM detections WHERE assessment_session_id IS NULL AND user_id = %s ORDER BY epoch ASC", (session["user_id"],))
         cheating_snapshots = [{"id": r[0], "timestamp": r[1], "epoch": r[2]} for r in cursor.fetchall()]
 
-        return render_template("cheating.html", snapshot_id=snap_id, timestamp=ts, cheating_snapshots=cheating_snapshots)
+        # Calculate min and max epoch for timeline positioning
+        if cheating_snapshots:
+            min_epoch = min(s["epoch"] for s in cheating_snapshots)
+            max_epoch = max(s["epoch"] for s in cheating_snapshots)
+        else:
+            min_epoch = max_epoch = 0
+
+        return render_template("cheating.html", snapshot_id=snap_id, timestamp=ts, cheating_snapshots=cheating_snapshots, min_epoch=min_epoch, max_epoch=max_epoch)
     except Exception as e:
         logger.exception("cheating page error: %s", e)
         return "Internal server error", 500
@@ -543,7 +553,7 @@ def records():
         folders = []
     return render_template("records.html", folders=folders)
 
-@app.route("/records/folder/<folder_name>")
+@app.route("/records/folder/<path:folder_name>")
 @login_required
 def records_folder(folder_name):
     """
@@ -565,8 +575,8 @@ def records_folder(folder_name):
     snapshots = []
     for r in rows:
         snap_id, ts, img_path = r
-        # image served by cheating_snapshot endpoint (returns data URI)
-        img_url = url_for("cheating_snapshot", snap_id=snap_id)
+        # Use base64 data directly
+        img_url = f"data:image/jpeg;base64,{img_path}" if img_path else None
         if isinstance(ts, datetime):
             ts_str = ts.strftime("%Y-%m-%d %I:%M:%S %p")
         else:
@@ -622,6 +632,43 @@ def delete_record(folder_name):
         flash("Failed to delete folder.", "danger")
     return redirect(url_for("records"))
 
+
+@app.route("/copy_snapshot/<snap_id>")
+@login_required
+def copy_snapshot(snap_id):
+    """
+    Copy a single snapshot by creating a duplicate detection record.
+    """
+    try:
+        cursor.execute("SELECT image_path, assessment_session_id FROM detections WHERE id = %s AND user_id = %s", (snap_id, session["user_id"]))
+        row = cursor.fetchone()
+        if not row:
+            flash("Snapshot not found.", "danger")
+            return redirect(url_for("records"))
+        image_path, assessment_session_id = row
+
+        # Create new snapshot with new UUID, current timestamp and epoch
+        new_snap_id = str(uuid.uuid4())
+        new_timestamp = datetime.now()
+        new_epoch = time.time()
+        cursor.execute("INSERT INTO detections (id, timestamp, epoch, image_path, assessment_session_id, user_id) VALUES (%s, %s, %s, %s, %s, %s)", (new_snap_id, new_timestamp, new_epoch, image_path, assessment_session_id, session["user_id"]))
+        db.commit()
+
+        # Get folder_name to redirect back to the folder view
+        cursor.execute("SELECT folder_name FROM records WHERE assessment_session_id = %s AND user_id = %s", (assessment_session_id, session["user_id"]))
+        folder_row = cursor.fetchone()
+        if folder_row:
+            folder_name = folder_row[0]
+            flash("Snapshot copied successfully.", "success")
+            return redirect(url_for("records_folder", folder_name=folder_name))
+        else:
+            flash("Snapshot copied, but folder not found.", "warning")
+            return redirect(url_for("records"))
+    except Exception as e:
+        db.rollback()
+        logger.exception("copy_snapshot error: %s", e)
+        flash("Failed to copy snapshot.", "danger")
+        return redirect(url_for("records"))
 
 @app.route("/delete_snapshot/<snap_id>", methods=["POST"])
 @login_required
@@ -721,4 +768,5 @@ if __name__ == "__main__":
     port = 5000
     logger.info("🚀 Server running at: http://127.0.0.1:%s", port)
     socketio.run(app, host=host, port=port, debug=True)
+    
     

@@ -10,39 +10,48 @@
 <body class="records-body">
   <main class="records-main">
 
-    {% set header_title = "Snapshots for " ~ folder_name %}
-    {% set search_input_id = "snapshot-search" %}
-    {% set search_placeholder = "Search snapshots..." %}
-    {% include 'records_header.html' %}
+    <div class="records-header">
+      <div class="header-content">
+        <h2>Snapshots for {{ folder_name }}</h2>
+      </div>
+
+      <div class="header-actions">
+        <div class="sort-dropdown">
+          <button class="sort-btn">
+            <span class="material-symbols-outlined">sort</span>
+            Sort
+          </button>
+          <div class="sort-menu">
+            <span class="sort-option" data-sort="name">Name (A–Z)</span>
+            <span class="sort-option" data-sort="date">Date Created</span>
+            <span class="sort-option" data-sort="count">Snapshot Count</span>
+          </div>
+        </div>
+
+        <div class="header-menu-container">
+          <button class="header-menu-btn">
+            <span class="material-symbols-outlined">more_horiz</span>
+          </button>
+          <div class="header-menu-dropdown">
+            <a href="#" class="header-menu-item">Open</a>
+            <span class="header-menu-item select-mode-btn">Select</span>
+            <span class="header-menu-item select-mode-btn">Select All</span>
+            <span class="header-menu-item folder-delete-btn">Delete</span>
+          </div>
+        </div>
+
+        <input type="text" id="snapshot-search" placeholder="Search snapshots..." class="search-bar">
+      </div>
+    </div>
 
     {% if snapshots %}
     <div class="records-grid">
       {% for s in snapshots %}
       <div class="snapshot-card">
-        <form class="delete-form" method="post"
-          action="{{ url_for('delete_snapshot', snap_id=s.id) }}"
-          style="display: none;">
-        </form>
-
-        <div class="snapshot-menu-container">
-          <button class="snapshot-menu-btn">
-            <span class="material-symbols-outlined">more_vert</span>
-          </button>
-          <div class="snapshot-menu-dropdown">
-            <a href="{{ url_for('cheating', snap_id=s.id) }}" class="snapshot-menu-item">Open</a>
-            <span class="snapshot-menu-item select-mode-btn">Select</span>
-            <span class="snapshot-menu-item select-mode-btn">Select All</span>
-            <a href="{{ url_for('delete_snapshot', snap_id=s.id) }}"
-               class="snapshot-menu-item snapshot-delete-btn"
-               data-delete-url="{{ url_for('delete_snapshot', snap_id=s.id) }}">
-               Delete
-            </a>
-          </div>
-        </div>
-
         <a href="{{ url_for('cheating', snap_id=s.id) }}" class="snapshot-link">
-          <img data-src="{{ s.image_url }}" alt="snapshot" class="record-thumb">
+          <img src="{{ s.image_url }}" alt="snapshot" class="record-thumb">
         </a>
+
       </div>
       {% endfor %}
     </div>
