@@ -327,7 +327,7 @@ def create_assessment_session():
             ),
         )
         assessment_session_id = cursor.lastrowid
-        folder_name = f"{data.get('course', '').replace(' ', '_')}_{data.get('subject', '').replace(' ', '_')}_{data.get('exam_type', '').replace(' ', '_')}_{str(uuid.uuid4())[:8]}"
+        folder_name = f"{data.get('course', '').replace(' ', '_').replace('/', '_')}_{data.get('subject', '').replace(' ', '_').replace('/', '_')}_{data.get('exam_type', '').replace(' ', '_').replace('/', '_')}_{str(uuid.uuid4())[:8]}"
         cursor.execute(
             "INSERT INTO records (assessment_session_id, user_id, folder_name, created_at) VALUES (%s, %s, %s, %s)",
             (assessment_session_id, session["user_id"], folder_name, datetime.now())
@@ -543,7 +543,7 @@ def records():
         folders = []
     return render_template("records.html", folders=folders)
 
-@app.route("/records/folder/<folder_name>")
+@app.route("/records/folder/<path:folder_name>")
 @login_required
 def records_folder(folder_name):
     """
@@ -565,8 +565,8 @@ def records_folder(folder_name):
     snapshots = []
     for r in rows:
         snap_id, ts, img_path = r
-        # image served by cheating_snapshot endpoint (returns data URI)
-        img_url = url_for("cheating_snapshot", snap_id=snap_id)
+        # Use base64 data directly
+        img_url = f"data:image/jpeg;base64,{img_path}" if img_path else None
         if isinstance(ts, datetime):
             ts_str = ts.strftime("%Y-%m-%d %I:%M:%S %p")
         else:
@@ -721,4 +721,5 @@ if __name__ == "__main__":
     port = 5000
     logger.info("🚀 Server running at: http://127.0.0.1:%s", port)
     socketio.run(app, host=host, port=port, debug=True)
+    
     

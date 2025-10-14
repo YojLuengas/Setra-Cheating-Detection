@@ -139,17 +139,7 @@ button:hover {
   background: #0a357f;
 }
 
-/* -------------------
-   Cheating Snapshot
-------------------- */
-.snapshot-img {
-  max-width: 90%;
-  max-height: 60vh;
-  margin: 0 auto 20px auto;
-  display: block;
-  border: 3px solid #ff4444;
-  border-radius: 10px;
-}
+
 
 /* -------------------
    Timeline Styles (YouTube style)
@@ -357,64 +347,6 @@ button:hover {
   transition: background 0.15s ease;
 }
 .menu-item:hover {
-  background: #f8f9fa;
-}
-
-/* Header dropdown container */
-.header-dropdown-container {
-  position: relative;
-  margin-left: auto;
-}
-
-/* Header dropdown button */
-.header-dropdown-btn {
-  background: transparent;
-  color: #333;
-  border: none;
-  padding: 8px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.2s ease;
-}
-
-.header-dropdown-btn:hover {
-  background: rgba(0, 0, 0, 0.1);
-}
-
-/* Header dropdown menu */
-.header-dropdown-menu {
-  display: none;
-  position: fixed;
-  top: 32px;
-  right: 240px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
-  min-width: 140px;
-  overflow: hidden;
-  z-index: 1000;
-}
-
-.header-dropdown-container.active .header-dropdown-menu {
-  display: block;
-}
-
-/* Header menu items */
-.header-menu-item {
-  display: block;
-  padding: 10px 14px;
-  font-size: 14px;
-  color: #333;
-  cursor: pointer;
-  transition: background 0.15s ease;
-  text-decoration: none;
-}
-
-.header-menu-item:hover {
   background: #f8f9fa;
 }
 
@@ -1065,7 +997,7 @@ body.dashboard-body {
   border-radius: 12px;
   border: 1px solid #ddd;
   padding: 6px 12px;
-  width: 220px;
+  width: 300px;
   height: 40px;
 }
 
@@ -1189,10 +1121,7 @@ body.dashboard-body {
   box-shadow: 0 6px 12px rgba(0,0,0,0.3);
 }
 
-/* Records body background */
-.records-body {
-  background: var(--bg-color);
-}
+
 
 /* Utility helpers */
 .hidden { display: none !important; }
@@ -1220,24 +1149,207 @@ body.dashboard-body {
   border-radius: 8px;
 }
 
-/* Records Pages - Header */
+/* ============================
+   Modern Explorer-style Header
+   ============================ */
+.records-body {
+  background-color: #1e1e1e;
+  color: #e0e0e0;
+  font-family: "Segoe UI", sans-serif;
+}
+
+/* === Records Header === */
 .records-header {
-  margin-bottom: 24px;
   display: flex;
-  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 14px 20px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  margin-bottom: 24px;
   gap: 16px;
+  flex-wrap: wrap;
 }
 
-.records-header .back-link {
-  align-self: flex-start;
-}
-
-.records-header h2 {
+/* --- Header Left Section --- */
+.header-content h2 {
   margin: 0;
-  color: var(--primary-color);
-  font-size: 28px;
-  font-weight: 700;
+  font-size: 22px;
+  font-weight: 600;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
+
+.header-content h2::before {
+  content: "📁";
+  font-size: 22px;
+}
+
+.header-content .header-description {
+  margin: 2px 0 0 2px;
+  font-size: 14px;
+  color: #64748b;
+}
+
+/* --- Header Right Actions --- */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  position: relative;
+}
+
+/* --- Search Bar --- */
+.search-bar {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background-color: #f8fafc;
+  color: #1e293b;
+  font-size: 14px;
+  outline: none;
+  transition: all 0.2s ease;
+  min-width: 240px;
+  margin-top: 6px;
+}
+
+.search-bar::placeholder {
+  color: #94a3b8;
+}
+
+.search-bar:focus {
+  border-color: #4b8ef7;
+  background-color: #ffffff;
+  box-shadow: 0 0 0 2px rgba(75, 142, 247, 0.2);
+}
+
+/* --- Sort Dropdown --- */
+.sort-dropdown {
+  position: relative;
+}
+
+.sort-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background-color: #f8fafc;
+  color: #1e293b;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.sort-btn:hover {
+  background-color: #f1f5f9;
+  border-color: #4b8ef7;
+}
+
+/* --- Sort Menu --- */
+.sort-menu {
+  position: absolute;
+  top: 110%;
+  right: 0;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.1);
+  display: none;
+  flex-direction: column;
+  min-width: 160px;
+  z-index: 10;
+}
+
+.sort-option {
+  padding: 10px 14px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #1e293b;
+  transition: background-color 0.15s ease;
+}
+
+.sort-option:hover {
+  background-color: #f1f5f9;
+  color: #4b8ef7;
+}
+
+.sort-dropdown.active .sort-menu {
+  display: flex;
+}
+
+/* --- Header 3-Dot Menu --- */
+.header-menu-container {
+  position: relative;
+}
+
+.header-menu-btn {
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  font-size: 22px;
+  color: #1e293b;
+  cursor: pointer;
+  padding: 6px;
+  transition: background 0.2s, color 0.2s;
+}
+
+.header-menu-btn:hover {
+  background: #f1f5f9;
+  color: #2563eb;
+}
+
+/* Prevent blue focus ring */
+.header-menu-btn:focus {
+  outline: none;
+}
+
+/* --- Header Menu Dropdown --- */
+.header-menu-dropdown {
+  display: none;
+  position: absolute;
+  top: 120%;
+  right: 0;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.1);
+  overflow: hidden;
+  z-index: 20;
+  min-width: 140px;
+}
+
+.header-menu-item {
+  display: block;
+  padding: 10px 14px;
+  color: #1e293b;
+  text-decoration: none;
+  font-size: 14px;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.header-menu-item:hover {
+  background-color: #f1f5f9;
+  color: #2563eb;
+}
+
+.header-menu-container.active .header-menu-dropdown {
+  display: block;
+}
+
+/* --- Tighten spacing between sort + 3-dot menu --- */
+.header-actions .sort-dropdown,
+.header-actions .header-menu-container {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 
 /* Breadcrumbs */
 .breadcrumbs {
@@ -1277,36 +1389,13 @@ body.dashboard-body {
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 0px;
-  justify-content: flex-start;
-}
-
-.back-link {
-  margin-left: auto;
+  gap: 12px;
+  justify-content: space-between;
 }
 
 .header-actions .search-bar {
   flex: 1;
   max-width: 300px;
-}
-
-/* Records Pages - Folder Cards */
-.folder-card {
-  background: var(--card-bg);
-  border-radius: 12px;
-  box-shadow: var(--shadow);
-  transition: var(--transition);
-  border: 1px solid var(--border-color);
-  overflow: hidden;
-  position: relative;
-  display: flex;
-  flex-direction: column;
-}
-
-
-.folder-card:hover {
-  box-shadow: var(--shadow-hover);
-  transform: translateY(-4px);
 }
 
 .folder-content {
@@ -1327,6 +1416,8 @@ body.dashboard-body {
   margin-right: 12px;
   position: relative;
   height: 100%;
+  pointer-events: auto;
+  cursor: pointer;
 }
 
 .folder-thumb {
@@ -1339,6 +1430,7 @@ body.dashboard-body {
   border: 2px solid #e5e7eb;
   flex-shrink: 0;
 }
+
 
 .folder-icon {
   font-size: 32px;
@@ -1373,7 +1465,7 @@ body.dashboard-body {
 }
 
 .folder-menu-btn {
-  background: white;
+  background: none;
   border: none;
   border-radius: 50%;
   font-size: 22px;
@@ -1418,31 +1510,52 @@ body.dashboard-body {
   display: block;
 }
 
+/* Records Pages - Folder Cards */
+.folder-card {
+  background: var(--card-bg);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  transition: var(--transition);
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
 
+/* Hover overlay */
+.folder-card:hover::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.25);
+  opacity: 1;
+  transition: opacity 0.2s ease;
+  z-index: 1;
+  pointer-events: none;
+}
+
+
+
+/* Hover scale & shadow */
+.folder-card:hover {
+  box-shadow: var(--shadow-hover);
+}
+
+.folder-card.selected::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.30);
+  opacity: 1;
+  z-index: 1;
+}
 
 .delete-form {
   position: absolute;
   top: 10px;
   right: 10px;
   z-index: 10;
-}
-
-/* Snapshot Cards */
-.snapshot-card {
-  border-radius: 12px;
-  border: 1px solid var(--border-color);
-}
-
-.snapshot-card:hover {
-  box-shadow: var(--shadow-hover);
-  transform: translateY(-4px);
-}
-
-.snapshot-link {
-  text-decoration: none;
-  color: inherit;
-  flex: 0 0 300px;
-  margin-bottom: 0;
 }
 
 .record-thumb {
@@ -1458,15 +1571,6 @@ body.dashboard-body {
 
 .record-thumb:hover {
   border-color: #0b3d91;
-}
-
-.snapshot-info {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0;
-  flex: 1;
-  margin-left: 8px;
 }
 
 .timestamp {
@@ -1751,6 +1855,32 @@ body.dashboard-body {
   margin-top: 5px;
   margin-bottom: 8px;
 }
+
+.snapshot-img {
+  max-width: 90%;
+  max-height: 60vh;
+  margin: 0 auto 20px auto;
+  display: block;
+  border: 3px solid #ff4444;
+  border-radius: 10px;
+}
+
+.snapshot-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0;
+  flex: 1;
+  margin-left: 8px;
+}
+
+.snapshot-link {
+  text-decoration: none;
+  color: inherit;
+  flex: 0 0 300px;
+  margin-bottom: 0;
+}
+
 #snapshot-timestamp {
   color: #475569;
   font-size: 0.95rem;
@@ -1783,9 +1913,6 @@ body.dashboard-body {
   box-shadow: 0 18px 36px rgba(2, 6, 23, 0.08);
 }
 
-/* ===========================
-   Controls under Snapshot
-=========================== */
 .snapshot-controls {
   display: flex;
   justify-content: center;
@@ -1810,6 +1937,122 @@ body.dashboard-body {
   background: #f1f5f9;
 }
 
+
+/* Remove borders on hover/selection, use overlay effect instead */
+.snapshot-card {
+  position: relative;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  cursor: pointer;
+}
+
+/* On hover: soft lift + subtle overlay */
+.snapshot-card:hover::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.25); /* overlay */
+  opacity: 1;
+  transition: opacity 0.2s ease;
+  z-index: 1;
+}
+
+/* Slight scale and deeper shadow */
+.snapshot-card:hover {
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.2);
+}
+
+/* When selected: same overlay but with highlight tint */
+.snapshot-card.selected::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.30); /* same as hover */
+  opacity: 1;
+  z-index: 1;
+}
+
+/* Keep the menu button above overlay */
+.snapshot-menu-container {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+}
+
+/* Image styling stays simple */
+.record-thumb {
+  width: 100%;
+  height: 240px;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.2s ease;
+}
+
+
+.snapshot-menu-btn {
+  background: none;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  font-size: 26px;
+  padding: 4px;
+  cursor: pointer;
+  transition: background 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.snapshot-menu-btn:hover {
+  background: none;
+}
+
+.material-symbols-outlined {
+  font-size: 22px;
+}
+
+
+.snapshot-menu-dropdown {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: 34px;
+  background-color: #fff;
+  min-width: 140px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+  border-radius: 8px;
+  z-index: 10;
+  flex-direction: column;
+  padding: 6px 0;
+}
+
+.snapshot-menu-item {
+  display: block;
+  padding: 10px 14px;
+  text-align: left;
+  text-decoration: none;
+  color: #333;
+  font-size: 15px;
+  border: none;
+  background: none;
+  width: 100%;
+  cursor: pointer;
+}
+
+.snapshot-menu-item:hover {
+  background-color: #f3f3f3;
+}
+
+.snapshot-menu-container.active .snapshot-menu-dropdown {
+  display: flex;
+}
+
+
+
 .timeline {
   position: relative;
   width: 90%;
@@ -1817,7 +2060,7 @@ body.dashboard-body {
   background: linear-gradient(90deg, #e2e8f0, #cbd5e1);
   border-radius: 10px;
   margin: 0 auto;
-  z-index: 1;  /* same as container */
+  z-index: 1;
 }
 
 .timeline-point {
@@ -1851,14 +2094,6 @@ body.dashboard-body {
   justify-content: space-between;
   font-size: 0.85rem;
   color: #475569;
-}
-
-/* Empty state */
-.no-snapshots {
-  color: #64748b;
-  font-size: 0.95rem;
-  text-align: center;
-  padding: 10px 0;
 }
 
 /* Responsive behavior */
@@ -2011,97 +2246,9 @@ body.dashboard-body {
   text-shadow: 0 0 6px rgba(255, 0, 0, 0.6);
 }
 
-/* === Snapshot Grid (larger images) === */
 .records-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 20px;
   padding: 24px;
-}
-
-.snapshot-card {
-  position: relative;
-  background: #fff;
-  border-radius: 14px;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
-  overflow: hidden;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.snapshot-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.18);
-}
-
-.record-thumb {
-  width: 100%;
-  height: 240px; /* increased height */
-  object-fit: cover;
-  display: block;
-  border-bottom: 1px solid #eee;
-}
-
-/* === 3-Dot Menu (unchanged except spacing tweak) === */
-.snapshot-menu-container {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-}
-
-.snapshot-menu-btn {
-  background: none;
-  color: white;
-  border: none;
-  border-radius: 50%;
-  font-size: 26px;
-  padding: 4px;
-  cursor: pointer;
-  transition: background 0.2s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.snapshot-menu-btn:hover {
-  background: none;
-}
-
-.material-symbols-outlined {
-  font-size: 22px;
-}
-
-
-.snapshot-menu-dropdown {
-  display: none;
-  position: absolute;
-  right: 0;
-  top: 34px;
-  background-color: #fff;
-  min-width: 140px;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
-  border-radius: 8px;
-  z-index: 10;
-  flex-direction: column;
-  padding: 6px 0;
-}
-
-.snapshot-menu-item {
-  display: block;
-  padding: 10px 14px;
-  text-align: left;
-  text-decoration: none;
-  color: #333;
-  font-size: 15px;
-  border: none;
-  background: none;
-  width: 100%;
-  cursor: pointer;
-}
-
-.snapshot-menu-item:hover {
-  background-color: #f3f3f3;
-}
-
-.snapshot-menu-container.active .snapshot-menu-dropdown {
-  display: flex;
 }

@@ -1,3 +1,98 @@
+let selectModeActive = false;
+let snapshotSelectModeActive = false;
+
+// === Folder state update ===
+function updateFolderState() {
+  const cards = document.querySelectorAll('.folder-card');
+  const checkboxes = document.querySelectorAll('.folder-card input[type="checkbox"]');
+  const checked = document.querySelectorAll('.folder-card input[type="checkbox"]:checked').length;
+
+  // Show/hide delete buttons
+  cards.forEach(card => {
+    const deleteBtn = card.querySelector('.delete-btn');
+    if (!deleteBtn) return;
+    deleteBtn.style.display = (checked === 0 && !selectModeActive) ? '' : 'none';
+  });
+
+  // Enable/disable folder links
+  cards.forEach(card => {
+    const link = card.querySelector('.folder-link');
+    if (!link) return;
+    link.style.pointerEvents = (checked > 0 || selectModeActive) ? 'none' : '';
+    link.style.opacity = (checked > 0 || selectModeActive) ? '0.5' : '1';
+  });
+
+  // Show/hide checkboxes
+  checkboxes.forEach(cb => cb.style.display = (selectModeActive || checked > 0) ? 'inline' : 'none');
+
+  // Enable/disable bulk delete button
+  const bulkBtn = document.querySelector('.delete-selected-btn');
+  if (bulkBtn) {
+    bulkBtn.disabled = checked === 0;
+    bulkBtn.style.opacity = checked === 0 ? '0.5' : '1';
+    bulkBtn.style.pointerEvents = checked === 0 ? 'none' : '';
+  }
+
+  // Update border & styles
+  checkboxes.forEach(cb => {
+    if (cb.checked) {
+      cb.closest('.folder-card').style.border = '2px solid red';
+      cb.style.accentColor = 'red';
+      cb.style.filter = 'hue-rotate(120deg)';
+    } else {
+      cb.closest('.folder-card').style.border = '';
+      cb.style.accentColor = '';
+      cb.style.filter = '';
+    }
+  });
+}
+
+// === Snapshot state update ===
+function updateSnapshotState() {
+  const cards = document.querySelectorAll('.snapshot-card');
+  const checkboxes = document.querySelectorAll('.snapshot-card input[type="checkbox"]');
+  const checked = document.querySelectorAll('.snapshot-card input[type="checkbox"]:checked').length;
+
+  // Show/hide delete buttons
+  cards.forEach(card => {
+    const deleteBtn = card.querySelector('.delete-btn');
+    if (!deleteBtn) return;
+    deleteBtn.style.display = (checked === 0 && !snapshotSelectModeActive) ? '' : 'none';
+  });
+
+  // Enable/disable links
+  cards.forEach(card => {
+    const link = card.querySelector('a'); // snapshot links
+    if (!link) return;
+    link.style.pointerEvents = (checked > 0 || snapshotSelectModeActive) ? 'none' : '';
+    link.style.opacity = (checked > 0 || snapshotSelectModeActive) ? '0.5' : '1';
+  });
+
+  // Show/hide checkboxes
+  checkboxes.forEach(cb => cb.style.display = (snapshotSelectModeActive || checked > 0) ? 'inline' : 'none');
+
+  // Enable/disable bulk delete button
+  const bulkBtn = document.querySelector('.delete-selected-btn');
+  if (bulkBtn) {
+    bulkBtn.disabled = checked === 0;
+    bulkBtn.style.opacity = checked === 0 ? '0.5' : '1';
+    bulkBtn.style.pointerEvents = checked === 0 ? 'none' : '';
+  }
+
+  // Update border & styles
+  checkboxes.forEach(cb => {
+    if (cb.checked) {
+      cb.closest('.snapshot-card').style.border = '2px solid red';
+      cb.style.accentColor = 'red';
+      cb.style.filter = 'hue-rotate(120deg)';
+    } else {
+      cb.closest('.snapshot-card').style.border = '';
+      cb.style.accentColor = '';
+      cb.style.filter = '';
+    }
+  });
+}
+
 document.addEventListener('DOMContentLoaded', function () {
   const modal = document.getElementById('deleteModal');
   if (!modal) return;
@@ -140,101 +235,6 @@ document.addEventListener('DOMContentLoaded', function () {
     currentCard = null;
   });
 
-
-  // === Folder state update ===
-  function updateFolderState() {
-    const cards = document.querySelectorAll('.folder-card');
-    const checkboxes = document.querySelectorAll('.folder-card input[type="checkbox"]');
-    const checked = document.querySelectorAll('.folder-card input[type="checkbox"]:checked').length;
-    const anyVisible = Array.from(checkboxes).some(cb => cb.style.display !== 'none');
-
-    // Show/hide delete buttons
-    cards.forEach(card => {
-      const deleteBtn = card.querySelector('.delete-btn');
-      if (!deleteBtn) return;
-      deleteBtn.style.display = (checked === 0 && !anyVisible) ? '' : 'none';
-    });
-
-    // Enable/disable folder links
-    cards.forEach(card => {
-      const link = card.querySelector('.folder-link');
-      if (!link) return;
-      link.style.pointerEvents = (checked > 0 || anyVisible) ? 'none' : '';
-      link.style.opacity = (checked > 0 || anyVisible) ? '0.5' : '1';
-    });
-
-    // Show/hide checkboxes
-    checkboxes.forEach(cb => cb.style.display = anyVisible ? 'inline' : 'none');
-
-    // Enable/disable bulk delete button
-    const bulkBtn = document.querySelector('.delete-selected-btn');
-    if (bulkBtn) {
-      bulkBtn.disabled = checked === 0;
-      bulkBtn.style.opacity = checked === 0 ? '0.5' : '1';
-      bulkBtn.style.pointerEvents = checked === 0 ? 'none' : '';
-    }
-
-    // Update border & styles
-    checkboxes.forEach(cb => {
-      if (cb.checked) {
-        cb.closest('.folder-card').style.border = '2px solid red';
-        cb.style.accentColor = 'red';
-        cb.style.filter = 'hue-rotate(120deg)';
-      } else {
-        cb.closest('.folder-card').style.border = '';
-        cb.style.accentColor = '';
-        cb.style.filter = '';
-      }
-    });
-  }
-
-  // === Snapshot state update ===
-  function updateSnapshotState() {
-    const cards = document.querySelectorAll('.snapshot-card');
-    const checkboxes = document.querySelectorAll('.snapshot-card input[type="checkbox"]');
-    const checked = document.querySelectorAll('.snapshot-card input[type="checkbox"]:checked').length;
-    const anyVisible = Array.from(checkboxes).some(cb => cb.style.display !== 'none');
-
-    // Show/hide delete buttons
-    cards.forEach(card => {
-      const deleteBtn = card.querySelector('.delete-btn');
-      if (!deleteBtn) return;
-      deleteBtn.style.display = (checked === 0 && !anyVisible) ? '' : 'none';
-    });
-
-    // Enable/disable links
-    cards.forEach(card => {
-      const link = card.querySelector('a'); // snapshot links
-      if (!link) return;
-      link.style.pointerEvents = (checked > 0 || anyVisible) ? 'none' : '';
-      link.style.opacity = (checked > 0 || anyVisible) ? '0.5' : '1';
-    });
-
-    // Show/hide checkboxes
-    checkboxes.forEach(cb => cb.style.display = anyVisible ? 'inline' : 'none');
-
-    // Enable/disable bulk delete button
-    const bulkBtn = document.querySelector('.delete-selected-btn');
-    if (bulkBtn) {
-      bulkBtn.disabled = checked === 0;
-      bulkBtn.style.opacity = checked === 0 ? '0.5' : '1';
-      bulkBtn.style.pointerEvents = checked === 0 ? 'none' : '';
-    }
-
-    // Update border & styles
-    checkboxes.forEach(cb => {
-      if (cb.checked) {
-        cb.closest('.snapshot-card').style.border = '2px solid red';
-        cb.style.accentColor = 'red';
-        cb.style.filter = 'hue-rotate(120deg)';
-      } else {
-        cb.closest('.snapshot-card').style.border = '';
-        cb.style.accentColor = '';
-        cb.style.filter = '';
-      }
-    });
-  }
-
   // === Bind single delete ===
   document.querySelectorAll('.delete-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -281,22 +281,6 @@ document.addEventListener('DOMContentLoaded', function () {
       bulkContainer.style.alignItems = 'flex-end';
       bulkContainer.style.marginTop = '5px';
 
-      const bulkDeleteBtn = document.createElement('button');
-      bulkDeleteBtn.textContent = 'Delete Selected';
-      bulkDeleteBtn.className = 'delete-selected-btn';
-      bulkDeleteBtn.style.padding = '8px 14px';
-      bulkDeleteBtn.style.backgroundColor = '#dc3545';
-      bulkDeleteBtn.style.color = 'white';
-      bulkDeleteBtn.style.border = 'none';
-      bulkDeleteBtn.style.borderRadius = '8px';
-      bulkDeleteBtn.style.cursor = 'pointer';
-      bulkDeleteBtn.style.fontWeight = '600';
-      bulkDeleteBtn.style.display = 'inline-flex'; // Always visible
-      bulkDeleteBtn.disabled = true;
-      bulkDeleteBtn.style.opacity = '0.5';
-      bulkDeleteBtn.style.pointerEvents = 'none';
-      bulkContainer.appendChild(bulkDeleteBtn);
-
       const selectAllCheckbox = document.createElement('input');
       selectAllCheckbox.type = 'checkbox';
       selectAllCheckbox.id = 'select-all-folders';
@@ -341,19 +325,18 @@ document.addEventListener('DOMContentLoaded', function () {
       headerActions.appendChild(rightContainer);
     }
 
-    // Add checkboxes to folder cards beside delete button, initially hidden
+    // Add checkboxes to folder cards, initially hidden
     document.querySelectorAll('.folder-card').forEach(card => {
       const checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
       checkbox.style.width = '25px';
-      checkbox.style.height = '25px'; // Match delete button height
-      checkbox.style.marginRight = '1px';
-      checkbox.style.verticalAlign = 'middle'; // Align with delete button
+      checkbox.style.height = '25px';
       checkbox.style.display = 'none'; // Hide initially
-      const deleteForm = card.querySelector('.delete-form');
-      if (deleteForm) {
-        deleteForm.insertBefore(checkbox, deleteForm.firstChild);
-      }
+      checkbox.style.position = 'absolute';
+      checkbox.style.bottom = '10px';
+      checkbox.style.left = '10px';
+      checkbox.style.zIndex = '10';
+      card.appendChild(checkbox);
     });
 
     // Initial toggle to set button state
@@ -397,22 +380,6 @@ document.addEventListener('DOMContentLoaded', function () {
       bulkContainer.style.alignItems = 'flex-end';
       bulkContainer.style.marginTop = '5px';
 
-      const bulkDeleteBtnSnapshots = document.createElement('button');
-      bulkDeleteBtnSnapshots.textContent = 'Delete Selected';
-      bulkDeleteBtnSnapshots.className = 'delete-selected-btn';
-      bulkDeleteBtnSnapshots.style.padding = '8px 14px';
-      bulkDeleteBtnSnapshots.style.backgroundColor = '#dc3545';
-      bulkDeleteBtnSnapshots.style.color = 'white';
-      bulkDeleteBtnSnapshots.style.border = 'none';
-      bulkDeleteBtnSnapshots.style.borderRadius = '8px';
-      bulkDeleteBtnSnapshots.style.cursor = 'pointer';
-      bulkDeleteBtnSnapshots.style.fontWeight = '600';
-      bulkDeleteBtnSnapshots.style.display = 'inline-block'; // Always visible
-      bulkDeleteBtnSnapshots.disabled = true;
-      bulkDeleteBtnSnapshots.style.opacity = '0.5';
-      bulkDeleteBtnSnapshots.style.pointerEvents = 'none';
-      bulkContainer.appendChild(bulkDeleteBtnSnapshots);
-
       const selectAllCheckbox = document.createElement('input');
       selectAllCheckbox.type = 'checkbox';
       selectAllCheckbox.id = 'select-all-snapshots';
@@ -453,18 +420,16 @@ document.addEventListener('DOMContentLoaded', function () {
       headerActions.appendChild(rightContainer);
     }
 
-    // Add checkboxes to snapshot cards beside delete button
+    // Add checkboxes to snapshot cards
     document.querySelectorAll('.snapshot-card').forEach(card => {
       const checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
       checkbox.style.width = '25px';
-      checkbox.style.height = '25px'; // Match delete button height
+      checkbox.style.height = '25px';
       checkbox.style.marginRight = '1px';
-      checkbox.style.verticalAlign = 'middle'; // Align with delete button
-      const deleteForm = card.querySelector('.delete-form');
-      if (deleteForm) {
-        deleteForm.insertBefore(checkbox, deleteForm.firstChild);
-      }
+      checkbox.style.verticalAlign = 'middle';
+      checkbox.style.display = 'none'; // Hide initially
+      card.insertBefore(checkbox, card.firstChild);
     });
 
     // Initial toggle to set button state
@@ -482,7 +447,6 @@ document.addEventListener('DOMContentLoaded', function () {
           this.style.filter = '';
         }
         updateSnapshotState();
-        handleCheckboxVisibility('.snapshot-card');
       });
     });
 
@@ -497,14 +461,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // === Search + thumbnails ===
   document.querySelectorAll(".record-thumb").forEach(img => {
-    const src = img.getAttribute("data-src");
-    if (!src) return;
-    fetch(src)
-      .then(r => r.text())
-      .then(t => {
-        if (t) img.src = t.startsWith("data:") ? t : "data:image/jpeg;base64," + t;
-      })
-      .catch(() => { img.src = src; });
+    const dataSrc = img.getAttribute("data-src");
+    if (dataSrc) {
+      img.src = dataSrc;
+    }
   });
 
   document.getElementById('folder-search')?.addEventListener('input', function () {
@@ -528,6 +488,108 @@ document.addEventListener('DOMContentLoaded', function () {
     const overlay = document.querySelector('.loading-overlay');
     if (overlay) overlay.classList.add('hidden');
   }, 500);
+
+  // Handle folder clicks
+  document.querySelectorAll('.folder-link').forEach(link => {
+    link.addEventListener('click', function() {
+      const folderName = this.dataset.folder;
+      if (folderName) {
+        window.location.href = `/records/folder/${encodeURIComponent(folderName)}`;
+      }
+    });
+  });
+
+  // Sort and header menu toggle
+  const sortDropdown = document.querySelector('.sort-dropdown');
+  const sortBtn = document.querySelector('.sort-btn');
+  const headerMenuContainer = document.querySelector('.header-menu-container');
+  const headerMenuBtn = document.querySelector('.header-menu-btn');
+
+  sortBtn?.addEventListener('click', () => {
+    sortDropdown.classList.toggle('active');
+  });
+
+  headerMenuBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    headerMenuContainer.classList.toggle('active');
+  });
+
+  document.addEventListener('click', (e) => {
+    if (sortDropdown && !sortDropdown.contains(e.target)) sortDropdown.classList.remove('active');
+    if (headerMenuContainer && !headerMenuContainer.contains(e.target)) headerMenuContainer.classList.remove('active');
+  });
+
+  // Handle header menu item clicks
+  document.querySelectorAll('.header-menu-item').forEach(item => {
+    item.addEventListener('click', function(e) {
+      e.stopPropagation();
+      const text = this.textContent.trim().toLowerCase();
+      if (text === 'select') {
+        // Show checkboxes for all cards and activate select mode
+        if (isFoldersPage) {
+          selectModeActive = true;
+          document.querySelectorAll('.folder-card input[type="checkbox"]').forEach(cb => cb.style.display = 'inline');
+          updateFolderState();
+        } else if (isSnapshotsPage) {
+          snapshotSelectModeActive = true;
+          document.querySelectorAll('.snapshot-card input[type="checkbox"]').forEach(cb => cb.style.display = 'inline');
+          updateSnapshotState();
+        }
+        // Close dropdown
+        headerMenuContainer.classList.remove('active');
+      } else if (text === 'select all') {
+        if (isFoldersPage) {
+          const checkboxes = document.querySelectorAll('.folder-card input[type="checkbox"]');
+          const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+          if (allChecked) {
+            // Uncheck all, keep checkboxes visible
+            checkboxes.forEach(cb => {
+              cb.checked = false;
+              cb.style.display = 'inline';
+              cb.closest('.folder-card').style.border = '';
+              cb.style.accentColor = '';
+              cb.style.filter = '';
+            });
+          } else {
+            // Check all, show checkboxes, apply styles
+            checkboxes.forEach(cb => {
+              cb.checked = true;
+              cb.style.display = 'inline';
+              cb.closest('.folder-card').style.border = '2px solid red';
+              cb.style.accentColor = 'red';
+              cb.style.filter = 'hue-rotate(120deg)';
+            });
+          }
+          updateFolderState();
+        } else if (isSnapshotsPage) {
+          const checkboxes = document.querySelectorAll('.snapshot-card input[type="checkbox"]');
+          const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+          if (allChecked) {
+            // Uncheck all, keep checkboxes visible
+            checkboxes.forEach(cb => {
+              cb.checked = false;
+              cb.style.display = 'inline';
+              cb.closest('.snapshot-card').style.border = '';
+              cb.style.accentColor = '';
+              cb.style.filter = '';
+            });
+          } else {
+            // Check all, show checkboxes, apply styles
+            checkboxes.forEach(cb => {
+              cb.checked = true;
+              cb.style.display = 'inline';
+              cb.closest('.snapshot-card').style.border = '2px solid red';
+              cb.style.accentColor = 'red';
+              cb.style.filter = 'hue-rotate(120deg)';
+            });
+          }
+          updateSnapshotState();
+        }
+        // Close dropdown
+        headerMenuContainer.classList.remove('active');
+      }
+    });
+  });
 });
 
 // === Toggle 3-dot dropdown ===
@@ -564,174 +626,44 @@ document.addEventListener('click', () => {
   document.querySelectorAll('.snapshot-menu-container').forEach(c => c.classList.remove('active'));
 });
 
-// === Folder menu dropdown toggle ===
-document.querySelectorAll('.folder-menu-btn').forEach(btn => {
-  btn.addEventListener('click', e => {
-    e.stopPropagation();
-    const container = btn.closest('.folder-menu-container');
-    const isActive = container.classList.contains('active');
-
-    // Close any open menus
-    document.querySelectorAll('.folder-menu-container.active').forEach(c => c.classList.remove('active'));
-
-    // Toggle this one
-    if (!isActive) container.classList.add('active');
-  });
-});
-
-// === Header dropdown toggle ===
-document.querySelectorAll('.header-dropdown-btn').forEach(btn => {
-  btn.addEventListener('click', e => {
-    e.stopPropagation();
-    const container = btn.closest('.header-dropdown-container');
-    const isActive = container.classList.contains('active');
-    // Close any open menus
-    document.querySelectorAll('.header-dropdown-container.active').forEach(c => c.classList.remove('active'));
-    // Toggle this one
-    if (!isActive) container.classList.add('active');
-  });
-});
-
-// === Handle header menu items ===
+// Handle snapshot menu item clicks
 document.addEventListener('click', function(e) {
-  if (e.target.classList.contains('header-menu-item') && e.target.classList.contains('select-all-btn')) {
-    e.stopPropagation();
-    // Hide delete buttons
-    document.querySelectorAll('.folder-card .delete-btn').forEach(btn => btn.style.display = 'none');
-    // Show checkboxes
-    document.querySelectorAll('.folder-card input[type="checkbox"]').forEach(cb => {
-      cb.style.display = 'inline';
-    });
-    // Check if all are checked
-    const allChecked = document.querySelectorAll('.folder-card input[type="checkbox"]:checked').length === document.querySelectorAll('.folder-card input[type="checkbox"]').length;
-    if (allChecked) {
-      // Uncheck all
-      document.querySelectorAll('.folder-card input[type="checkbox"]').forEach(cb => {
-        cb.checked = false;
-        cb.closest('.folder-card').style.border = '';
-        cb.style.accentColor = '';
-        cb.style.filter = '';
-      });
-      // Hide checkboxes and show delete buttons
-      document.querySelectorAll('.folder-card input[type="checkbox"]').forEach(cb => cb.style.display = 'none');
-      document.querySelectorAll('.folder-card .delete-btn').forEach(btn => btn.style.display = '');
-      // Disable delete selected button
-      const btn = document.querySelector('.delete-selected-btn');
-      if (btn) {
-        btn.disabled = true;
-        btn.style.opacity = '0.5';
-        btn.style.pointerEvents = 'none';
-      }
-      // Enable folder links
-      document.querySelectorAll('.folder-card .folder-link').forEach(a => {
-        a.style.pointerEvents = '';
-        a.style.opacity = '1';
-      });
-    } else {
-      // Check all
-      document.querySelectorAll('.folder-card input[type="checkbox"]').forEach(cb => {
-        cb.checked = true;
-        cb.closest('.folder-card').style.border = '2px solid red';
-        cb.style.accentColor = 'red';
-        cb.style.filter = 'hue-rotate(120deg)';
-      });
-      // Enable delete selected button
-      const btn = document.querySelector('.delete-selected-btn');
-      if (btn) {
-        btn.disabled = false;
-        btn.style.opacity = '1';
-        btn.style.pointerEvents = '';
-      }
-      // Disable folder links
-      document.querySelectorAll('.folder-card .folder-link').forEach(a => {
-        a.style.pointerEvents = 'none';
-        a.style.opacity = '0.5';
-      });
-    }
-    // Close the dropdown
-    const container = e.target.closest('.header-dropdown-container');
-    if (container) container.classList.remove('active');
-  } else if (e.target.classList.contains('header-menu-item') && e.target.classList.contains('delete-selected-btn')) {
-    e.stopPropagation();
-    selectedForms = Array.from(document.querySelectorAll('.folder-card input[type="checkbox"]:checked'))
-      .map(cb => cb.closest('.folder-card').querySelector('.delete-form'))
-      .filter(Boolean);
-    if (selectedForms.length === 0) return alert('No folders selected.');
-    openModal(`Are you sure you want to delete ${selectedForms.length} selected folder${selectedForms.length > 1 ? 's' : ''}?`);
-    // Close the dropdown
-    const container = e.target.closest('.header-dropdown-container');
-    if (container) container.classList.remove('active');
-  }
-});
-
-// Close header dropdown when clicking outside
-document.addEventListener('click', () => {
-  document.querySelectorAll('.header-dropdown-container').forEach(c => c.classList.remove('active'));
-});
-
-// === Handle Select mode for snapshots ===
-document.addEventListener('click', function(e) {
-  if (e.target.classList.contains('snapshot-menu-item') && e.target.textContent.trim().toLowerCase() === 'select') {
-    e.stopPropagation();
-    // Hide delete buttons
-    document.querySelectorAll('.snapshot-card .delete-btn').forEach(btn => btn.style.display = 'none');
-    // Do not hide snapshot menu buttons
-    // Show checkboxes
-    document.querySelectorAll('.snapshot-card input[type="checkbox"]').forEach(cb => {
-      cb.style.display = 'inline';
-    });
-    // Close the dropdown
-    const container = e.target.closest('.snapshot-menu-container');
-    if (container) container.classList.remove('active');
-  } else if (e.target.classList.contains('snapshot-menu-item') && e.target.textContent.trim().toLowerCase() === 'select all') {
-    e.stopPropagation();
-    // Hide delete buttons
-    document.querySelectorAll('.snapshot-card .delete-btn').forEach(btn => btn.style.display = 'none');
-    // Do not hide snapshot menu buttons
-    // Show checkboxes
-    document.querySelectorAll('.snapshot-card input[type="checkbox"]').forEach(cb => {
-      cb.style.display = 'inline';
-    });
-    // Check if all are checked
-    const allChecked = document.querySelectorAll('.snapshot-card input[type="checkbox"]:checked').length === document.querySelectorAll('.snapshot-card input[type="checkbox"]').length;
-    if (allChecked) {
-      // Uncheck all
-      document.querySelectorAll('.snapshot-card input[type="checkbox"]').forEach(cb => {
-        cb.checked = false;
-        cb.closest('.snapshot-card').style.border = '';
-        cb.style.accentColor = '';
-        cb.style.filter = '';
-      });
-      // Hide checkboxes and show delete buttons
-      document.querySelectorAll('.snapshot-card input[type="checkbox"]').forEach(cb => cb.style.display = 'none');
-      document.querySelectorAll('.snapshot-card .delete-btn').forEach(btn => btn.style.display = '');
-      // Disable delete selected button
-      const btn = document.querySelector('.delete-selected-btn');
-      if (btn) {
-        btn.disabled = true;
-        btn.style.opacity = '0.5';
-        btn.style.pointerEvents = 'none';
-      }
-      // Update button and link states
+  if (e.target.classList.contains('snapshot-menu-item')) {
+    const text = e.target.textContent.trim().toLowerCase();
+    if (text === 'select') {
+      // Show checkboxes for snapshots
+      snapshotSelectModeActive = true;
+      document.querySelectorAll('.snapshot-card input[type="checkbox"]').forEach(cb => cb.style.display = 'inline');
       updateSnapshotState();
-    } else {
-      // Check all
-      document.querySelectorAll('.snapshot-card input[type="checkbox"]').forEach(cb => {
-        cb.checked = true;
-        cb.closest('.snapshot-card').style.border = '2px solid red';
-        cb.style.accentColor = 'red';
-        cb.style.filter = 'hue-rotate(120deg)';
-      });
-      // Enable delete selected button
-      const btn = document.querySelector('.delete-selected-btn');
-      if (btn) {
-        btn.disabled = false;
-        btn.style.opacity = '1';
-        btn.style.pointerEvents = '';
+    } else if (text === 'select all') {
+      // Handle select all for snapshots
+      const checkboxes = document.querySelectorAll('.snapshot-card input[type="checkbox"]');
+      const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+      if (allChecked) {
+        checkboxes.forEach(cb => {
+          cb.checked = false;
+          cb.closest('.snapshot-card').style.border = '';
+          cb.style.accentColor = '';
+          cb.style.filter = '';
+        });
+      } else {
+        checkboxes.forEach(cb => {
+          cb.checked = true;
+          cb.closest('.snapshot-card').style.border = '2px solid red';
+          cb.style.accentColor = 'red';
+          cb.style.filter = 'hue-rotate(120deg)';
+        });
       }
+      updateSnapshotState();
     }
     // Close the dropdown
     const container = e.target.closest('.snapshot-menu-container');
     if (container) container.classList.remove('active');
   }
 });
+
+
+
+
+
+
