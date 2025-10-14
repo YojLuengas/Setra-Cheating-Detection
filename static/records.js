@@ -662,8 +662,17 @@ document.addEventListener('click', function(e) {
   }
 });
 
-
-
-
-
-
+// Make entire snapshot card clickable to open snapshot
+document.querySelectorAll('.snapshot-card').forEach(card => {
+  card.addEventListener('click', e => {
+    // If in select mode, don't navigate
+    if (snapshotSelectModeActive) return;
+    // If click is on menu button or dropdown, don't navigate
+    if (e.target.closest('.snapshot-menu-container')) return;
+    // Else, find the link and navigate
+    const link = card.querySelector('.snapshot-link');
+    if (link) {
+      window.location.href = link.href;
+    }
+  });
+});
