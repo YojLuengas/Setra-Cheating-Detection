@@ -494,16 +494,89 @@ document.addEventListener('DOMContentLoaded', function () {
     const overlay = document.querySelector('.loading-overlay');
     if (overlay) overlay.classList.add('hidden');
   }, 500);
+// --- Handle folder interactions (single, double, ctrl, right-click) --- //
 
-  // Handle folder clicks
-  document.querySelectorAll('.folder-link').forEach(link => {
-    link.addEventListener('click', function() {
-      const folderName = this.dataset.folder;
-      if (folderName) {
-        window.location.href = `/records/folder/${encodeURIComponent(folderName)}`;
+const folderCards = document.querySelectorAll(".folder-card");
+
+// If you track whether select mode is active
+let selectModeActive = false;
+
+// Helper: Update state (optional function, you can define your own)
+function updateFolderState() {
+  const selectedCount = document.querySelectorAll('.folder-card.selected').length;
+  console.log(`Selected folders: ${selectedCount}`);
+}
+
+folderCards.forEach(card => {
+  const folderLinkDiv = card.querySelector(".folder-link");
+  const folderName = folderLinkDiv?.dataset?.folder;
+
+  const openFolder = () => {
+    if (!folderName) return;
+    window.location.href = `/records/folder/${encodeURIComponent(folderName)}`;
+  };
+
+  // Ignore click if it's on a button, menu, or input inside the card
+  const isClickOnControl = (target) => {
+    return !!target.closest("button, input, .folder-menu-btn, .folder-menu-dropdown");
+  };
+
+  // --- Single click (select or toggle) ---
+  card.addEventListener("click", (e) => {
+    if (isClickOnControl(e.target)) return;
+
+    // Ctrl or Cmd pressed → multi-select toggle
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      card.classList.toggle("selected");
+      const cb = card.querySelector('input[type="checkbox"], .select-indicator');
+      if (cb) cb.checked = card.classList.contains("selected");
+      updateFolderState();
+      return;
+    }
+
+    // If select mode is active, toggle
+    if (selectModeActive) {
+      e.preventDefault();
+      card.classList.toggle("selected");
+      const cb = card.querySelector('input[type="checkbox"], .select-indicator');
+      if (cb) cb.checked = card.classList.contains("selected");
+      updateFolderState();
+      return;
+    }
+
+    // Normal single click: clear other selections, select this only
+    document.querySelectorAll('.folder-card.selected').forEach(c => {
+      if (c !== card) {
+        c.classList.remove('selected');
+        const cb = c.querySelector('input[type="checkbox"], .select-indicator');
+        if (cb) cb.checked = false;
       }
     });
+
+    card.classList.add("selected");
+    const cb = card.querySelector('input[type="checkbox"], .select-indicator');
+    if (cb) cb.checked = true;
+    updateFolderState();
   });
+
+  // --- Double-click → open folder ---
+  card.addEventListener("dblclick", (e) => {
+    if (isClickOnControl(e.target)) return;
+    openFolder();
+  });
+
+  // --- Right-click (context) → toggle selection ---
+  card.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+    if (isClickOnControl(e.target)) return;
+    card.classList.toggle("selected");
+    const cb = card.querySelector('input[type="checkbox"], .select-indicator');
+    if (cb) cb.checked = card.classList.contains("selected");
+    updateFolderState();
+  });
+});
+
 
   // Sort and header menu toggle
   const sortDropdown = document.querySelector('.sort-dropdown');
@@ -683,18 +756,6 @@ document.querySelectorAll('.snapshot-card').forEach(card => {
   });
 });
 
-<<<<<<< HEAD
-// === Deselect snapshots when clicking outside ===
-document.addEventListener('click', e => {
-  if (!e.target.closest('.snapshot-card') && !e.target.closest('.snapshot-menu-btn') && !e.target.closest('.snapshot-menu-dropdown')) {
-    document.querySelectorAll('.snapshot-card.selected').forEach(s => {
-      s.classList.remove('selected');
-      const cb = s.querySelector('input[type="checkbox"]');
-      if (cb) cb.checked = false;
-    });
-  }
-});
-=======
 // Handle header dropdown delete for selected items
 document.querySelectorAll('.header-menu-item').forEach(item => {
   item.addEventListener('click', function(e) {
@@ -772,4 +833,3 @@ document.querySelectorAll('.header-menu-item').forEach(item => {
     }
   });
 });
->>>>>>> 02ff8c3ac4be18ab2c7982443bcf54be211c837b

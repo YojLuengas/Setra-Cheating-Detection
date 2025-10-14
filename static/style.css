@@ -1640,68 +1640,117 @@ body.dashboard-body {
   margin-bottom: 20px;
 }
 
-/* Modal Adjustments for Records */
-#deleteModal {
-  display: none; /* enables flex centering */
-  justify-content: center; /* horizontal center */
-  align-items: center; /* vertical center */
-  position: fixed; /* stays in place on scroll */
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.5); /* semi-transparent background */
-  z-index: 1000; /* ensure it’s on top */
-  overflow: auto; /* scroll if content is tall */
+/* =========================
+   Modal Overlay
+========================= */
+.modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background-color: rgba(15, 23, 42, 0.45); /* dark bluish overlay */
 }
 
+/* =========================
+   Show Modal
+========================= */
+.modal.show {
+  display: block;
+}
 
-/* Existing modal content styles */
-#deleteModal .modal-content {
+/* =========================
+   Modal Box
+========================= */
+.modal-content {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   background: #ffffff;
-  border-radius: 10px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-  padding: 20px; /* optional padding */
-  max-width: 400px; /* optional width */
-  width: 90%; /* responsive width */
+  border-radius: 16px;
+  width: 380px;
+  max-width: 90%;
+  padding: 28px 32px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+  text-align: center;
+  font-family: "Inter", system-ui, sans-serif;
+  animation: fadeIn 0.25s ease;
 }
 
+/* =========================
+   Modal Text
+========================= */
+.modal-content p {
+  color: #1e293b;
+  font-size: 15px;
+  line-height: 1.5;
+  margin-bottom: 24px;
+}
 
-#deleteModal .modal-content p {
-  color: #374151;
-  margin-bottom: 20px;
-  font-size: 16px;
+/* =========================
+   Close Button (X)
+========================= */
+.modal-content .close {
+  position: absolute;
+  top: 10px;
+  right: 15px;
+  font-size: 20px;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.modal-content .close:hover {
+  color: #0b3d91;
+}
+
+/* =========================
+   Buttons
+========================= */
+.modal-content button {
+  font-family: inherit;
+  font-size: 14px;
+  padding: 8px 20px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  font-weight: 500;
 }
 
 #confirmDelete {
-  background: #051f4b; /* green for confirm */
-  color: #ffffff;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 500;
+  background-color: #0b3d91; /* deep blue */
+  color: white;
   margin-right: 10px;
-  transition: background 0.2s ease;
 }
 
 #confirmDelete:hover {
-  background: #0c43a1; /* darker green */
+  background-color: #0a3378;
+  box-shadow: 0 0 8px rgba(11, 61, 145, 0.3);
 }
 
 .cancel {
-  background: #f3f4f6;
-  color: #0b3d91; /* dark blue */
-  border: 1px solid #d1d5db;
-  padding: 10px 20px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 500;
-  transition: background 0.2s ease;
+  background-color: transparent;
+  color: #0b3d91;
+  border: 1px solid #0b3d91;
 }
 
 .cancel:hover {
-  background: #e5e7eb;
+  background-color: #f1f5f9;
+}
+
+/* =========================
+   Animation
+========================= */
+@keyframes fadeIn {
+  from {
+    transform: translate(-50%, -40%);
+    opacity: 0;
+  }
+  to {
+    transform: translate(-50%, -50%);
+    opacity: 1;
+  }
 }
 
 /* Empty State */
