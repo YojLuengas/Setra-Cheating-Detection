@@ -48,30 +48,10 @@
     <div class="records-grid">
       {% for s in snapshots %}
       <div class="snapshot-card">
-        <form class="delete-form" method="post"
-          action="{{ url_for('delete_snapshot', snap_id=s.id) }}"
-          style="display: none;">
-        </form>
-
-        <div class="snapshot-menu-container">
-          <button class="snapshot-menu-btn">
-            <span class="material-symbols-outlined">more_vert</span>
-          </button>
-          <div class="snapshot-menu-dropdown">
-            <a href="{{ url_for('cheating', snap_id=s.id) }}" class="snapshot-menu-item">Open</a>
-            <span class="snapshot-menu-item select-mode-btn">Select</span>
-            <span class="snapshot-menu-item select-mode-btn">Select All</span>
-            <a href="{{ url_for('delete_snapshot', snap_id=s.id) }}"
-               class="snapshot-menu-item snapshot-delete-btn"
-               data-delete-url="{{ url_for('delete_snapshot', snap_id=s.id) }}">
-               Delete
-            </a>
-          </div>
-        </div>
-
         <a href="{{ url_for('cheating', snap_id=s.id) }}" class="snapshot-link">
-          <img data-src="{{ s.image_url }}" alt="snapshot" class="record-thumb">
+          <img src="{{ s.image_url }}" alt="snapshot" class="record-thumb">
         </a>
+
       </div>
       {% endfor %}
     </div>

@@ -247,6 +247,28 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   });
 
+  // === Handle delete ===
+  async function handleDelete(forms) {
+    for (const form of forms) {
+      const formData = new FormData(form);
+      try {
+        const response = await fetch(form.action, {
+          method: form.method,
+          body: formData
+        });
+        if (response.ok) {
+          const card = form.closest('.folder-card') || form.closest('.snapshot-card');
+          if (card) card.remove();
+        } else {
+          console.error('Delete failed:', response.status);
+        }
+      } catch (err) {
+        console.error('Error deleting:', err);
+      }
+    }
+    closeModal();
+  }
+
   // === Confirm delete ===
   confirmBtn?.addEventListener('click', async () => {
     if (currentForm) await handleDelete([currentForm]);
@@ -528,6 +550,16 @@ document.addEventListener('DOMContentLoaded', function () {
     const overlay = document.querySelector('.loading-overlay');
     if (overlay) overlay.classList.add('hidden');
   }, 500);
+
+  // Timeline point click handler
+  document.querySelectorAll('.timeline-point').forEach(point => {
+    point.addEventListener('click', function() {
+      const snapId = this.dataset.id;
+      if (snapId) {
+        window.location.href = `/cheating/${snapId}`;
+      }
+    });
+  });
 });
 
 // === Toggle 3-dot dropdown ===
@@ -654,6 +686,16 @@ document.addEventListener('click', function(e) {
     // Close the dropdown
     const container = e.target.closest('.folder-menu-container');
     if (container) container.classList.remove('active');
+  } else if (e.target.classList.contains('folder-menu-item') && e.target.textContent.trim().toLowerCase() === 'delete') {
+    e.stopPropagation();
+    selectedForms = Array.from(document.querySelectorAll('.folder-card input[type="checkbox"]:checked'))
+      .map(cb => cb.closest('.folder-card').querySelector('.delete-form'))
+      .filter(Boolean);
+    if (selectedForms.length === 0) return alert('No folders selected.');
+    handleDelete(selectedForms);
+    // Close the dropdown
+    const container = e.target.closest('.folder-menu-container');
+    if (container) container.classList.remove('active');
   }
 });
 
@@ -718,6 +760,16 @@ document.addEventListener('click', function(e) {
         btn.style.pointerEvents = '';
       }
     }
+    // Close the dropdown
+    const container = e.target.closest('.snapshot-menu-container');
+    if (container) container.classList.remove('active');
+  } else if (e.target.classList.contains('snapshot-menu-item') && e.target.textContent.trim().toLowerCase() === 'delete') {
+    e.stopPropagation();
+    selectedForms = Array.from(document.querySelectorAll('.snapshot-card input[type="checkbox"]:checked'))
+      .map(cb => cb.closest('.snapshot-card').querySelector('.delete-form'))
+      .filter(Boolean);
+    if (selectedForms.length === 0) return alert('No snapshots selected.');
+    handleDelete(selectedForms);
     // Close the dropdown
     const container = e.target.closest('.snapshot-menu-container');
     if (container) container.classList.remove('active');

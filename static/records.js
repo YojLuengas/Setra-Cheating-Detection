@@ -462,9 +462,15 @@ document.addEventListener('DOMContentLoaded', function () {
   // === Search + thumbnails ===
   document.querySelectorAll(".record-thumb").forEach(img => {
     const dataSrc = img.getAttribute("data-src");
-    if (dataSrc) {
-      img.src = dataSrc;
-    }
+    if (!dataSrc) return;
+    fetch(dataSrc)
+      .then(response => response.text())
+      .then(data => {
+        if (!data) return;
+        // If server already returns a data URI use it, otherwise prefix as JPEG base64
+        img.src = data.startsWith("data:") ? data : ("data:image/jpeg;base64," + data);
+      })
+      .catch(err => console.warn("Failed to fetch thumbnail:", err));
   });
 
   document.getElementById('folder-search')?.addEventListener('input', function () {
@@ -673,6 +679,84 @@ document.querySelectorAll('.snapshot-card').forEach(card => {
     const link = card.querySelector('.snapshot-link');
     if (link) {
       window.location.href = link.href;
+    }
+  });
+});
+
+// Handle header dropdown delete for selected items
+document.querySelectorAll('.header-menu-item').forEach(item => {
+  item.addEventListener('click', function(e) {
+    e.stopPropagation();
+    const text = this.textContent.trim().toLowerCase();
+
+    if (text === 'delete') {
+      const isFoldersPage = document.querySelectorAll('.folder-card').length > 0;
+      const isSnapshotsPage = document.querySelectorAll('.snapshot-card').length > 0;
+
+      // Collect selected cards
+      let selectedCards = [];
+      if (isFoldersPage) {
+        selectedCards = Array.from(document.querySelectorAll('.folder-card input[type="checkbox"]:checked'))
+          .map(cb => cb.closest('.folder-card'));
+      } else if (isSnapshotsPage) {
+        selectedCards = Array.from(document.querySelectorAll('.snapshot-card input[type="checkbox"]:checked'))
+          .map(cb => cb.closest('.snapshot-card'));
+      }
+
+      if (selectedCards.length === 0) {
+        alert('No items selected.');
+        return;
+      }
+
+      // Open confirmation modal
+      const modal = document.getElementById('deleteModal');
+      if (!modal) return;
+      const confirmBtn = document.getElementById('confirmDelete');
+      const cancelBtn = modal.querySelector('.cancel');
+      const closeBtn = modal.querySelector('.close');
+
+      modal.querySelector('p').textContent = `Are you sure you want to delete ${selectedCards.length} selected item${selectedCards.length > 1 ? 's' : ''}?`;
+      modal.style.display = 'block';
+      modal.style.zIndex = '1000';
+
+      const handleConfirm = async () => {
+        for (const card of selectedCards) {
+          const form = card.querySelector('.delete-form');
+          const deleteBtn = card.querySelector('.delete-btn');
+          const deleteUrl = deleteBtn?.dataset?.deleteUrl || deleteBtn?.href;
+
+          try {
+            if (form) {
+              const response = await fetch(form.action, { method: form.method || 'POST' });
+              if (!response.ok) console.error('Form delete failed:', response.status);
+            } else if (deleteUrl) {
+              const response = await fetch(deleteUrl, { method: 'POST' });
+              if (!response.ok) console.error('URL delete failed:', response.status);
+            }
+            card.remove();
+          } catch (err) {
+            console.error('Error deleting:', err);
+          }
+        }
+
+        modal.style.display = 'none';
+        if (isFoldersPage) {
+          selectModeActive = false;
+          updateFolderState();
+        } else if (isSnapshotsPage) {
+          snapshotSelectModeActive = false;
+          updateSnapshotState();
+        }
+
+        confirmBtn.removeEventListener('click', handleConfirm);
+      };
+
+      confirmBtn.addEventListener('click', handleConfirm, { once: true });
+      [cancelBtn, closeBtn].forEach(el => el.addEventListener('click', () => modal.style.display = 'none', { once: true }));
+
+      // Close dropdown
+      const headerMenuContainer = document.querySelector('.header-menu-container');
+      if (headerMenuContainer) headerMenuContainer.classList.remove('active');
     }
   });
 });

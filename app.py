@@ -481,10 +481,20 @@ def cheating(snap_id):
 
         snap_id, ts, assessment_session_id = row
 
-        cursor.execute("SELECT id, timestamp, epoch FROM detections WHERE assessment_session_id = %s ORDER BY epoch DESC", (assessment_session_id,))
+        if assessment_session_id is not None:
+            cursor.execute("SELECT id, timestamp, epoch FROM detections WHERE assessment_session_id = %s AND user_id = %s ORDER BY epoch ASC", (assessment_session_id, session["user_id"]))
+        else:
+            cursor.execute("SELECT id, timestamp, epoch FROM detections WHERE assessment_session_id IS NULL AND user_id = %s ORDER BY epoch ASC", (session["user_id"],))
         cheating_snapshots = [{"id": r[0], "timestamp": r[1], "epoch": r[2]} for r in cursor.fetchall()]
 
-        return render_template("cheating.html", snapshot_id=snap_id, timestamp=ts, cheating_snapshots=cheating_snapshots)
+        # Calculate min and max epoch for timeline positioning
+        if cheating_snapshots:
+            min_epoch = min(s["epoch"] for s in cheating_snapshots)
+            max_epoch = max(s["epoch"] for s in cheating_snapshots)
+        else:
+            min_epoch = max_epoch = 0
+
+        return render_template("cheating.html", snapshot_id=snap_id, timestamp=ts, cheating_snapshots=cheating_snapshots, min_epoch=min_epoch, max_epoch=max_epoch)
     except Exception as e:
         logger.exception("cheating page error: %s", e)
         return "Internal server error", 500
@@ -622,6 +632,43 @@ def delete_record(folder_name):
         flash("Failed to delete folder.", "danger")
     return redirect(url_for("records"))
 
+
+@app.route("/copy_snapshot/<snap_id>")
+@login_required
+def copy_snapshot(snap_id):
+    """
+    Copy a single snapshot by creating a duplicate detection record.
+    """
+    try:
+        cursor.execute("SELECT image_path, assessment_session_id FROM detections WHERE id = %s AND user_id = %s", (snap_id, session["user_id"]))
+        row = cursor.fetchone()
+        if not row:
+            flash("Snapshot not found.", "danger")
+            return redirect(url_for("records"))
+        image_path, assessment_session_id = row
+
+        # Create new snapshot with new UUID, current timestamp and epoch
+        new_snap_id = str(uuid.uuid4())
+        new_timestamp = datetime.now()
+        new_epoch = time.time()
+        cursor.execute("INSERT INTO detections (id, timestamp, epoch, image_path, assessment_session_id, user_id) VALUES (%s, %s, %s, %s, %s, %s)", (new_snap_id, new_timestamp, new_epoch, image_path, assessment_session_id, session["user_id"]))
+        db.commit()
+
+        # Get folder_name to redirect back to the folder view
+        cursor.execute("SELECT folder_name FROM records WHERE assessment_session_id = %s AND user_id = %s", (assessment_session_id, session["user_id"]))
+        folder_row = cursor.fetchone()
+        if folder_row:
+            folder_name = folder_row[0]
+            flash("Snapshot copied successfully.", "success")
+            return redirect(url_for("records_folder", folder_name=folder_name))
+        else:
+            flash("Snapshot copied, but folder not found.", "warning")
+            return redirect(url_for("records"))
+    except Exception as e:
+        db.rollback()
+        logger.exception("copy_snapshot error: %s", e)
+        flash("Failed to copy snapshot.", "danger")
+        return redirect(url_for("records"))
 
 @app.route("/delete_snapshot/<snap_id>", methods=["POST"])
 @login_required
