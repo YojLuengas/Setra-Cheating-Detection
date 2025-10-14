@@ -281,21 +281,21 @@ document.addEventListener('DOMContentLoaded', function () {
       bulkContainer.style.alignItems = 'flex-end';
       bulkContainer.style.marginTop = '5px';
 
-      const bulkDeleteBtn = document.createElement('button');
-      bulkDeleteBtn.textContent = 'Delete Selected';
-      bulkDeleteBtn.className = 'delete-selected-btn';
-      bulkDeleteBtn.style.padding = '8px 14px';
-      bulkDeleteBtn.style.backgroundColor = '#dc3545';
-      bulkDeleteBtn.style.color = 'white';
-      bulkDeleteBtn.style.border = 'none';
-      bulkDeleteBtn.style.borderRadius = '8px';
-      bulkDeleteBtn.style.cursor = 'pointer';
-      bulkDeleteBtn.style.fontWeight = '600';
-      bulkDeleteBtn.style.display = 'inline-flex'; // Always visible
-      bulkDeleteBtn.disabled = true;
-      bulkDeleteBtn.style.opacity = '0.5';
-      bulkDeleteBtn.style.pointerEvents = 'none';
-      bulkContainer.appendChild(bulkDeleteBtn);
+      // const bulkDeleteBtn = document.createElement('button');
+      // bulkDeleteBtn.textContent = 'Delete Selected';
+      // bulkDeleteBtn.className = 'delete-selected-btn';
+      // bulkDeleteBtn.style.padding = '8px 14px';
+      // bulkDeleteBtn.style.backgroundColor = '#dc3545';
+      // bulkDeleteBtn.style.color = 'white';
+      // bulkDeleteBtn.style.border = 'none';
+      // bulkDeleteBtn.style.borderRadius = '8px';
+      // bulkDeleteBtn.style.cursor = 'pointer';
+      // bulkDeleteBtn.style.fontWeight = '600';
+      // bulkDeleteBtn.style.display = 'inline-flex'; // Always visible
+      // bulkDeleteBtn.disabled = true;
+      // bulkDeleteBtn.style.opacity = '0.5';
+      // bulkDeleteBtn.style.pointerEvents = 'none';
+      // bulkContainer.appendChild(bulkDeleteBtn);
 
       const selectAllCheckbox = document.createElement('input');
       selectAllCheckbox.type = 'checkbox';
@@ -397,21 +397,21 @@ document.addEventListener('DOMContentLoaded', function () {
       bulkContainer.style.alignItems = 'flex-end';
       bulkContainer.style.marginTop = '5px';
 
-      const bulkDeleteBtnSnapshots = document.createElement('button');
-      bulkDeleteBtnSnapshots.textContent = 'Delete Selected';
-      bulkDeleteBtnSnapshots.className = 'delete-selected-btn';
-      bulkDeleteBtnSnapshots.style.padding = '8px 14px';
-      bulkDeleteBtnSnapshots.style.backgroundColor = '#dc3545';
-      bulkDeleteBtnSnapshots.style.color = 'white';
-      bulkDeleteBtnSnapshots.style.border = 'none';
-      bulkDeleteBtnSnapshots.style.borderRadius = '8px';
-      bulkDeleteBtnSnapshots.style.cursor = 'pointer';
-      bulkDeleteBtnSnapshots.style.fontWeight = '600';
-      bulkDeleteBtnSnapshots.style.display = 'inline-block'; // Always visible
-      bulkDeleteBtnSnapshots.disabled = true;
-      bulkDeleteBtnSnapshots.style.opacity = '0.5';
-      bulkDeleteBtnSnapshots.style.pointerEvents = 'none';
-      bulkContainer.appendChild(bulkDeleteBtnSnapshots);
+      // const bulkDeleteBtnSnapshots = document.createElement('button');
+      // bulkDeleteBtnSnapshots.textContent = 'Delete Selected';
+      // bulkDeleteBtnSnapshots.className = 'delete-selected-btn';
+      // bulkDeleteBtnSnapshots.style.padding = '8px 14px';
+      // bulkDeleteBtnSnapshots.style.backgroundColor = '#dc3545';
+      // bulkDeleteBtnSnapshots.style.color = 'white';
+      // bulkDeleteBtnSnapshots.style.border = 'none';
+      // bulkDeleteBtnSnapshots.style.borderRadius = '8px';
+      // bulkDeleteBtnSnapshots.style.cursor = 'pointer';
+      // bulkDeleteBtnSnapshots.style.fontWeight = '600';
+      // bulkDeleteBtnSnapshots.style.display = 'inline-block'; // Always visible
+      // bulkDeleteBtnSnapshots.disabled = true;
+      // bulkDeleteBtnSnapshots.style.opacity = '0.5';
+      // bulkDeleteBtnSnapshots.style.pointerEvents = 'none';
+      // bulkContainer.appendChild(bulkDeleteBtnSnapshots);
 
       const selectAllCheckbox = document.createElement('input');
       selectAllCheckbox.type = 'checkbox';
@@ -564,19 +564,31 @@ document.addEventListener('click', () => {
   document.querySelectorAll('.snapshot-menu-container').forEach(c => c.classList.remove('active'));
 });
 
-// === Folder menu dropdown toggle ===
+// === Folder menu toggle ===
 document.querySelectorAll('.folder-menu-btn').forEach(btn => {
+  // Prevent blue outline/focus flash
+  btn.addEventListener('mousedown', e => e.preventDefault());
+
   btn.addEventListener('click', e => {
     e.stopPropagation();
     const container = btn.closest('.folder-menu-container');
     const isActive = container.classList.contains('active');
 
-    // Close any open menus
+    // Close all other open menus first
     document.querySelectorAll('.folder-menu-container.active').forEach(c => c.classList.remove('active'));
 
-    // Toggle this one
-    if (!isActive) container.classList.add('active');
+    // Toggle current menu
+    if (!isActive) {
+      container.classList.add('active');
+    }
   });
+});
+
+// Close menu if clicking outside
+document.addEventListener('click', e => {
+  if (!e.target.closest('.folder-menu-container')) {
+    document.querySelectorAll('.folder-menu-container.active').forEach(c => c.classList.remove('active'));
+  }
 });
 
 // === Handle Select mode for folders ===
@@ -721,5 +733,189 @@ document.addEventListener('click', function(e) {
     // Close the dropdown
     const container = e.target.closest('.snapshot-menu-container');
     if (container) container.classList.remove('active');
+  }
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+      const sortDropdown = document.querySelector('.sort-dropdown');
+      const sortBtn = document.querySelector('.sort-btn');
+      const headerMenuContainer = document.querySelector('.header-menu-container');
+      const headerMenuBtn = document.querySelector('.header-menu-btn');
+
+      sortBtn.addEventListener('click', () => {
+        sortDropdown.classList.toggle('active');
+      });
+
+      headerMenuBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        headerMenuContainer.classList.toggle('active');
+      });
+
+      document.addEventListener('click', (e) => {
+        if (!sortDropdown.contains(e.target)) sortDropdown.classList.remove('active');
+        if (!headerMenuContainer.contains(e.target)) headerMenuContainer.classList.remove('active');
+      });
+    });
+
+    document.addEventListener("DOMContentLoaded", () => {
+  const folderCards = document.querySelectorAll(".folder-card");
+  const checkboxes = document.querySelectorAll(".select-indicator");
+
+  // --- Header menu functionality ---
+  const openBtn = document.querySelector(".header-open-btn");
+  const selectBtn = document.querySelector(".header-select-btn");
+  const selectAllBtn = document.querySelector(".header-select-all-btn");
+  const deleteBtn = document.querySelector(".header-delete-btn");
+
+  // 1️⃣ Open → Go to the first folder (if any)
+  openBtn?.addEventListener("click", (e) => {
+    e.preventDefault();
+    const firstLink = document.querySelector(".folder-link");
+    if (firstLink) {
+      window.location.href = firstLink.href;
+    } else {
+      alert("No folders to open.");
+    }
+  });
+
+  // 2️⃣ Select → Show all checkboxes
+  selectBtn?.addEventListener("click", () => {
+    checkboxes.forEach(cb => cb.style.display = "inline-block");
+  });
+
+  // 3️⃣ Select All → Check all boxes
+  selectAllBtn?.addEventListener("click", () => {
+    checkboxes.forEach(cb => {
+      cb.style.display = "inline-block";
+      cb.checked = true;
+    });
+  });
+
+  // 4️⃣ Delete → Remove all selected (with confirmation)
+  deleteBtn?.addEventListener("click", () => {
+    const selected = Array.from(checkboxes).filter(cb => cb.checked);
+    if (selected.length === 0) {
+      alert("No folders selected.");
+      return;
+    }
+
+    if (confirm(`Delete ${selected.length} selected folder(s)?`)) {
+      selected.forEach(cb => {
+        const form = cb.closest(".folder-card").querySelector(".delete-form");
+        if (form) form.submit();
+      });
+    }
+  });
+});
+
+// === Select folder on click & open on double click ===
+document.querySelectorAll('.folder-card').forEach(card => {
+  // Single / Ctrl+Click selection
+  card.addEventListener('click', (e) => {
+    if (e.target.closest('.folder-menu-btn') || e.target.closest('.folder-menu-dropdown')) return;
+
+    const checkbox = card.querySelector('.select-indicator');
+    const isCtrl = e.ctrlKey; // Detect Ctrl key
+
+    // Ctrl+Click → toggle selection
+    if (isCtrl) {
+      card.classList.toggle('selected');
+      if (checkbox) checkbox.checked = card.classList.contains('selected');
+      return;
+    }
+
+    // Normal click → select only this
+    document.querySelectorAll('.folder-card.selected').forEach(selectedCard => {
+      selectedCard.classList.remove('selected');
+      const cb = selectedCard.querySelector('.select-indicator');
+      if (cb) cb.checked = false;
+    });
+
+    card.classList.add('selected');
+    if (checkbox) checkbox.checked = true;
+  });
+
+  // Right-click → toggle (like Ctrl)
+  card.addEventListener('contextmenu', (e) => {
+    e.preventDefault(); // prevent context menu
+    const checkbox = card.querySelector('.select-indicator');
+    card.classList.toggle('selected');
+    if (checkbox) checkbox.checked = card.classList.contains('selected');
+  });
+
+  // Double click → open folder
+  card.addEventListener('dblclick', (e) => {
+    if (e.target.closest('.folder-menu-btn') || e.target.closest('.folder-menu-dropdown')) return;
+
+    const folderAnchor = card.querySelector('.folder-menu-dropdown a[href], .folder-link a[href]');
+    if (folderAnchor) {
+      window.location.href = folderAnchor.href;
+    }
+  });
+});
+
+// === Deselect folder if clicking outside ===
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.folder-card') && !e.target.closest('.folder-menu-btn') && !e.target.closest('.folder-menu-dropdown')) {
+    document.querySelectorAll('.folder-card.selected').forEach(selectedCard => {
+      selectedCard.classList.remove('selected');
+      const cb = selectedCard.querySelector('.select-indicator');
+      if (cb) cb.checked = false;
+    });
+  }
+});
+
+
+// === Snapshot selection & open on double click ===
+document.querySelectorAll('.snapshot-card').forEach(card => {
+  const checkbox = card.querySelector('input[type="checkbox"]');
+
+  // Left click (single or ctrl)
+  card.addEventListener('click', e => {
+    if (e.target.closest('.snapshot-menu-btn') || e.target.closest('.snapshot-menu-dropdown')) return;
+
+    const isCtrl = e.ctrlKey;
+
+    // Ctrl + Click → toggle selection
+    if (isCtrl) {
+      card.classList.toggle('selected');
+      if (checkbox) checkbox.checked = card.classList.contains('selected');
+      return;
+    }
+
+    // Normal click → select only this one
+    document.querySelectorAll('.snapshot-card.selected').forEach(s => {
+      s.classList.remove('selected');
+      const cb = s.querySelector('input[type="checkbox"]');
+      if (cb) cb.checked = false;
+    });
+
+    card.classList.add('selected');
+    if (checkbox) checkbox.checked = true;
+  });
+
+  // Right-click → toggle selection
+  card.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    card.classList.toggle('selected');
+    if (checkbox) checkbox.checked = card.classList.contains('selected');
+  });
+
+  // Double click → open snapshot
+  card.addEventListener('dblclick', e => {
+    if (e.target.closest('.snapshot-menu-btn') || e.target.closest('.snapshot-menu-dropdown')) return;
+    const snapAnchor = card.querySelector('.snapshot-link');
+    if (snapAnchor) window.location.href = snapAnchor.href;
+  });
+});
+
+// === Deselect snapshots when clicking outside ===
+document.addEventListener('click', e => {
+  if (!e.target.closest('.snapshot-card') && !e.target.closest('.snapshot-menu-btn') && !e.target.closest('.snapshot-menu-dropdown')) {
+    document.querySelectorAll('.snapshot-card.selected').forEach(s => {
+      s.classList.remove('selected');
+      const cb = s.querySelector('input[type="checkbox"]');
+      if (cb) cb.checked = false;
+    });
   }
 });
