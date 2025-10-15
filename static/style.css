@@ -2250,6 +2250,68 @@ body.dashboard-body {
     height: 168px;
   }
 }
+
+/* === Circular checkboxes === */
+input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 25px;
+  height: 25px;
+  border: 2px solid #999;
+  border-radius: 50%; /* 🔵 makes them circular */
+  outline: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  background-color: #fff;
+}
+
+input[type="checkbox"]:checked {
+  background-color: green;
+  border-color: green;
+}
+
+input[type="checkbox"]:checked::after {
+  content: "✓";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+/* Specific styles for select-all checkboxes */
+#select-all-folders, #select-all-snapshots {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 25px;
+  height: 25px;
+  border: 2px solid #999;
+  border-radius: 50%;
+  outline: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  background-color: #fff;
+}
+
+#select-all-folders:checked, #select-all-snapshots:checked {
+  background-color: green;
+  border-color: green;
+}
+
+#select-all-folders:checked::after, #select-all-snapshots:checked::after {
+  content: "✓";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  font-size: 14px;
+  font-weight: bold;
+}
 /* === Validation Effects === */
 @keyframes shake {
   0% { transform: translateX(0); }

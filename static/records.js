@@ -348,6 +348,9 @@ document.addEventListener('DOMContentLoaded', function () {
       cb.addEventListener('change', function() {
         this.closest('.folder-card').classList.toggle('selected', this.checked);
         updateFolderState();
+        if (document.querySelectorAll('.folder-card input[type="checkbox"]:checked').length === 0) {
+          selectModeActive = false;
+        }
       });
     });
 
@@ -454,6 +457,9 @@ document.addEventListener('DOMContentLoaded', function () {
           this.closest('.snapshot-card').style.border = '';
           this.style.accentColor = '';
           this.style.filter = '';
+        }
+        if (document.querySelectorAll('.snapshot-card input[type="checkbox"]:checked').length === 0) {
+          snapshotSelectModeActive = false;
         }
         updateSnapshotState();
       });
@@ -612,17 +618,72 @@ folderCards.forEach(card => {
     item.addEventListener('click', function(e) {
       e.stopPropagation();
       const text = this.textContent.trim().toLowerCase();
+
       if (text === 'select') {
-        // Show checkboxes for all cards and activate select mode
+        // === Folder Page ===
         if (isFoldersPage) {
           selectModeActive = true;
-          document.querySelectorAll('.folder-card input[type="checkbox"]').forEach(cb => cb.style.display = 'inline');
+          const checkboxes = document.querySelectorAll('.folder-card input[type="checkbox"]');
+
+          checkboxes.forEach(cb => {
+            cb.style.display = 'inline';
+            cb.style.transition = 'all 0.25s ease';
+            cb.closest('.folder-card').style.transition = 'border 0.25s ease';
+            cb.style.accentColor = 'green'; // ✅ green checkbox
+
+            cb.addEventListener('change', function() {
+              if (this.checked) {
+                this.closest('.folder-card').style.border = '2px solid red';
+              } else {
+                this.closest('.folder-card').style.border = '';
+              }
+
+              // If all checkboxes are unchecked, exit select mode
+              const anyChecked = Array.from(checkboxes).some(c => c.checked);
+              if (!anyChecked) {
+                selectModeActive = false;
+                checkboxes.forEach(c => {
+                  c.style.display = 'none';
+                  c.closest('.folder-card').style.border = '';
+                });
+              }
+            });
+          });
           updateFolderState();
-        } else if (isSnapshotsPage) {
+        }
+
+        // === Snapshot Page ===
+        else if (isSnapshotsPage) {
           snapshotSelectModeActive = true;
-          document.querySelectorAll('.snapshot-card input[type="checkbox"]').forEach(cb => cb.style.display = 'inline');
+          const checkboxes = document.querySelectorAll('.snapshot-card input[type="checkbox"]');
+
+          checkboxes.forEach(cb => {
+            cb.style.display = 'inline';
+            cb.style.transition = 'all 0.25s ease';
+            cb.closest('.snapshot-card').style.transition = 'border 0.25s ease';
+            cb.style.accentColor = 'green'; // ✅ green checkbox
+
+            cb.addEventListener('change', function() {
+              if (this.checked) {
+                this.closest('.snapshot-card').style.border = '2px solid red';
+              } else {
+                this.closest('.snapshot-card').style.border = '';
+              }
+
+              // If all checkboxes are unchecked, exit select mode
+              const anyChecked = Array.from(checkboxes).some(c => c.checked);
+              if (!anyChecked) {
+                snapshotSelectModeActive = false;
+                checkboxes.forEach(c => {
+                  c.style.display = 'none';
+                  c.closest('.snapshot-card').style.border = '';
+                });
+              }
+            });
+          });
           updateSnapshotState();
         }
+
         // Close dropdown
         headerMenuContainer.classList.remove('active');
       } else if (text === 'select all') {
