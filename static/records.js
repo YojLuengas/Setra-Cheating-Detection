@@ -336,14 +336,19 @@ document.addEventListener('DOMContentLoaded', function () {
       checkbox.style.bottom = '10px';
       checkbox.style.left = '10px';
       checkbox.style.zIndex = '10';
-      card.appendChild(checkbox);
+      const link = card.querySelector('.folder-link');
+      if (link) link.appendChild(checkbox);
     });
 
     // Initial toggle to set button state
     updateFolderState();
 
     document.querySelectorAll('.folder-card input[type="checkbox"]').forEach(cb => {
-      cb.addEventListener('change', updateFolderState);
+      cb.addEventListener('click', e => e.stopPropagation());
+      cb.addEventListener('change', function() {
+        this.closest('.folder-card').classList.toggle('selected', this.checked);
+        updateFolderState();
+      });
     });
 
     document.querySelector('.delete-selected-btn')?.addEventListener('click', () => {
@@ -426,16 +431,20 @@ document.addEventListener('DOMContentLoaded', function () {
       checkbox.type = 'checkbox';
       checkbox.style.width = '25px';
       checkbox.style.height = '25px';
-      checkbox.style.marginRight = '1px';
-      checkbox.style.verticalAlign = 'middle';
+      checkbox.style.position = 'absolute';
+      checkbox.style.top = '10px';
+      checkbox.style.left = '10px';
+      checkbox.style.zIndex = '10';
       checkbox.style.display = 'none'; // Hide initially
-      card.insertBefore(checkbox, card.firstChild);
+      card.style.position = 'relative'; // Ensure positioning context
+      card.appendChild(checkbox);
     });
 
     // Initial toggle to set button state
     updateSnapshotState();
 
     document.querySelectorAll('.snapshot-card input[type="checkbox"]').forEach(cb => {
+      cb.addEventListener('click', e => e.stopPropagation()); // Prevent link navigation
       cb.addEventListener('change', function() {
         if (this.checked) {
           this.closest('.snapshot-card').style.border = '2px solid red';
@@ -692,11 +701,11 @@ document.querySelectorAll('.snapshot-menu-dropdown').forEach(dropdown => {
   });
 });
 
-// Prevent snapshot link navigation when menu is active
+// Prevent snapshot link navigation when menu is active or select mode is active
 document.querySelectorAll('.snapshot-link').forEach(link => {
   link.addEventListener('click', e => {
     const container = link.closest('.snapshot-card').querySelector('.snapshot-menu-container');
-    if (container && container.classList.contains('active')) {
+    if ((container && container.classList.contains('active')) || snapshotSelectModeActive) {
       e.preventDefault();
     }
   });
