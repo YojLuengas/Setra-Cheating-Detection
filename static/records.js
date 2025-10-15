@@ -621,14 +621,15 @@ folderCards.forEach(card => {
           const checkboxes = document.querySelectorAll('.folder-card input[type="checkbox"]');
           const allChecked = Array.from(checkboxes).every(cb => cb.checked);
           if (allChecked) {
-            // Uncheck all, keep checkboxes visible
+            // Uncheck all and hide checkboxes
             checkboxes.forEach(cb => {
               cb.checked = false;
-              cb.style.display = 'inline';
+              cb.style.display = 'none';
               cb.closest('.folder-card').style.border = '';
               cb.style.accentColor = '';
               cb.style.filter = '';
             });
+            selectModeActive = false;
           } else {
             // Check all, show checkboxes, apply styles
             checkboxes.forEach(cb => {
@@ -644,14 +645,15 @@ folderCards.forEach(card => {
           const checkboxes = document.querySelectorAll('.snapshot-card input[type="checkbox"]');
           const allChecked = Array.from(checkboxes).every(cb => cb.checked);
           if (allChecked) {
-            // Uncheck all, keep checkboxes visible
+            // Uncheck all and hide checkboxes
             checkboxes.forEach(cb => {
               cb.checked = false;
-              cb.style.display = 'inline';
+              cb.style.display = 'none';
               cb.closest('.snapshot-card').style.border = '';
               cb.style.accentColor = '';
               cb.style.filter = '';
             });
+            snapshotSelectModeActive = false;
           } else {
             // Check all, show checkboxes, apply styles
             checkboxes.forEach(cb => {
@@ -719,15 +721,20 @@ document.addEventListener('click', function(e) {
       const checkboxes = document.querySelectorAll('.snapshot-card input[type="checkbox"]');
       const allChecked = Array.from(checkboxes).every(cb => cb.checked);
       if (allChecked) {
+        // Uncheck all and hide checkboxes
         checkboxes.forEach(cb => {
           cb.checked = false;
+          cb.style.display = 'none';
           cb.closest('.snapshot-card').style.border = '';
           cb.style.accentColor = '';
           cb.style.filter = '';
         });
+        snapshotSelectModeActive = false;
       } else {
+        // Check all, show checkboxes, apply styles
         checkboxes.forEach(cb => {
           cb.checked = true;
+          cb.style.display = 'inline';
           cb.closest('.snapshot-card').style.border = '2px solid red';
           cb.style.accentColor = 'red';
           cb.style.filter = 'hue-rotate(120deg)';
