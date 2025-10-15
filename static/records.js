@@ -33,16 +33,14 @@ function updateFolderState() {
     bulkBtn.style.pointerEvents = checked === 0 ? 'none' : '';
   }
 
-  // Update border & styles
+  // Update styles
   checkboxes.forEach(cb => {
     if (cb.checked) {
-      cb.closest('.folder-card').style.border = '2px solid red';
-      cb.style.accentColor = 'red';
-      cb.style.filter = 'hue-rotate(120deg)';
+      cb.style.accentColor = 'blue';
+      cb.style.transform = 'scale(1.1)';
     } else {
-      cb.closest('.folder-card').style.border = '';
       cb.style.accentColor = '';
-      cb.style.filter = '';
+      cb.style.transform = 'scale(1)';
     }
   });
 }
@@ -79,16 +77,14 @@ function updateSnapshotState() {
     bulkBtn.style.pointerEvents = checked === 0 ? 'none' : '';
   }
 
-  // Update border & styles
+  // Update styles
   checkboxes.forEach(cb => {
     if (cb.checked) {
-      cb.closest('.snapshot-card').style.border = '2px solid red';
-      cb.style.accentColor = 'red';
-      cb.style.filter = 'hue-rotate(120deg)';
+      cb.style.accentColor = 'blue';
+      cb.style.transform = 'scale(1.1)';
     } else {
-      cb.closest('.snapshot-card').style.border = '';
       cb.style.accentColor = '';
-      cb.style.filter = '';
+      cb.style.transform = 'scale(1)';
     }
   });
 }
@@ -284,10 +280,11 @@ document.addEventListener('DOMContentLoaded', function () {
       const selectAllCheckbox = document.createElement('input');
       selectAllCheckbox.type = 'checkbox';
       selectAllCheckbox.id = 'select-all-folders';
-      selectAllCheckbox.style.width = '25px';
-      selectAllCheckbox.style.height = '25px';
+      selectAllCheckbox.style.width = '20px';
+      selectAllCheckbox.style.height = '20px';
       selectAllCheckbox.style.marginTop = '5px';
       selectAllCheckbox.style.display = 'none'; // Hidden initially
+      selectAllCheckbox.style.transition = 'all 0.2s ease';
       const selectAllLabel = document.createElement('label');
       selectAllLabel.htmlFor = 'select-all-folders';
       selectAllLabel.textContent = 'Select All';
@@ -303,15 +300,11 @@ document.addEventListener('DOMContentLoaded', function () {
         allCbs.forEach(cb => cb.checked = this.checked);
         if (this.checked) {
           allCbs.forEach(cb => {
-            cb.closest('.folder-card').style.border = '2px solid red';
-            cb.style.accentColor = 'red';
-            cb.style.filter = 'hue-rotate(120deg)';
+            cb.style.accentColor = 'blue';
           });
         } else {
           allCbs.forEach(cb => {
-            cb.closest('.folder-card').style.border = '';
             cb.style.accentColor = '';
-            cb.style.filter = '';
           });
         }
         document.querySelectorAll('.folder-card .folder-link').forEach(a => {
@@ -410,15 +403,11 @@ document.addEventListener('DOMContentLoaded', function () {
         allCbs.forEach(cb => cb.checked = this.checked);
         if (this.checked) {
           allCbs.forEach(cb => {
-            cb.closest('.snapshot-card').style.border = '2px solid red';
-            cb.style.accentColor = 'red';
-            cb.style.filter = 'hue-rotate(120deg)';
+            cb.style.accentColor = 'blue';
           });
         } else {
           allCbs.forEach(cb => {
-            cb.closest('.snapshot-card').style.border = '';
             cb.style.accentColor = '';
-            cb.style.filter = '';
           });
         }
         updateSnapshotState();
@@ -450,13 +439,9 @@ document.addEventListener('DOMContentLoaded', function () {
       cb.addEventListener('click', e => e.stopPropagation()); // Prevent link navigation
       cb.addEventListener('change', function() {
         if (this.checked) {
-          this.closest('.snapshot-card').style.border = '2px solid red';
-          this.style.accentColor = 'red';
-          this.style.filter = 'hue-rotate(120deg)';
+          this.style.accentColor = 'blue';
         } else {
-          this.closest('.snapshot-card').style.border = '';
           this.style.accentColor = '';
-          this.style.filter = '';
         }
         if (document.querySelectorAll('.snapshot-card input[type="checkbox"]:checked').length === 0) {
           snapshotSelectModeActive = false;
@@ -628,23 +613,15 @@ folderCards.forEach(card => {
           checkboxes.forEach(cb => {
             cb.style.display = 'inline';
             cb.style.transition = 'all 0.25s ease';
-            cb.closest('.folder-card').style.transition = 'border 0.25s ease';
-            cb.style.accentColor = 'green'; // ✅ green checkbox
+            cb.style.accentColor = 'blue'; // blue checkbox
 
             cb.addEventListener('change', function() {
-              if (this.checked) {
-                this.closest('.folder-card').style.border = '2px solid red';
-              } else {
-                this.closest('.folder-card').style.border = '';
-              }
-
               // If all checkboxes are unchecked, exit select mode
               const anyChecked = Array.from(checkboxes).some(c => c.checked);
               if (!anyChecked) {
                 selectModeActive = false;
                 checkboxes.forEach(c => {
                   c.style.display = 'none';
-                  c.closest('.folder-card').style.border = '';
                 });
               }
             });
@@ -661,13 +638,13 @@ folderCards.forEach(card => {
             cb.style.display = 'inline';
             cb.style.transition = 'all 0.25s ease';
             cb.closest('.snapshot-card').style.transition = 'border 0.25s ease';
-            cb.style.accentColor = 'green'; // ✅ green checkbox
+            cb.style.accentColor = 'blue'; // blue checkbox
 
             cb.addEventListener('change', function() {
               if (this.checked) {
-                this.closest('.snapshot-card').style.border = '2px solid red';
+                this.style.accentColor = 'blue';
               } else {
-                this.closest('.snapshot-card').style.border = '';
+                this.style.accentColor = '';
               }
 
               // If all checkboxes are unchecked, exit select mode
@@ -705,9 +682,7 @@ folderCards.forEach(card => {
             checkboxes.forEach(cb => {
               cb.checked = true;
               cb.style.display = 'inline';
-              cb.closest('.folder-card').style.border = '2px solid red';
-              cb.style.accentColor = 'red';
-              cb.style.filter = 'hue-rotate(120deg)';
+              cb.style.accentColor = 'blue';
             });
           }
           updateFolderState();
@@ -729,9 +704,7 @@ folderCards.forEach(card => {
             checkboxes.forEach(cb => {
               cb.checked = true;
               cb.style.display = 'inline';
-              cb.closest('.snapshot-card').style.border = '2px solid red';
-              cb.style.accentColor = 'red';
-              cb.style.filter = 'hue-rotate(120deg)';
+              cb.style.accentColor = 'blue';
             });
           }
           updateSnapshotState();
@@ -805,9 +778,7 @@ document.addEventListener('click', function(e) {
         checkboxes.forEach(cb => {
           cb.checked = true;
           cb.style.display = 'inline';
-          cb.closest('.snapshot-card').style.border = '2px solid red';
-          cb.style.accentColor = 'red';
-          cb.style.filter = 'hue-rotate(120deg)';
+          cb.style.accentColor = 'blue';
         });
       }
       updateSnapshotState();
