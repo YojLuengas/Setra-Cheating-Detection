@@ -209,21 +209,35 @@ def add_user():
     if session.get("role") != "admin":
         flash("Access denied!", "danger")
         return redirect(url_for("home"))
+
     if request.method == "POST":
+        name = request.form["name"]
+        username = request.form["username"]
+        password = request.form["password"]
+
         try:
-            hashed_pw = bcrypt.hashpw(request.form["password"].encode("utf-8"), bcrypt.gensalt()).decode()
-            cursor.execute(
-                "INSERT INTO users (name, username, password_hash, status, created_by) VALUES (%s, %s, %s, 'Active', %s)",
-                (request.form["name"], request.form["username"], hashed_pw, session.get("username")),
-            )
-            db.commit()
-            flash("User added successfully!", "success")
-            return redirect(url_for("list_users"))
+            # Check if username already exists
+            cursor.execute("SELECT id FROM users WHERE username=%s", (username,))
+            if cursor.fetchone():
+                flash("Username already exists!", "danger")
+            else:
+                hashed_pw = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode()
+                cursor.execute(
+                    "INSERT INTO users (name, username, password_hash, status, created_by) VALUES (%s, %s, %s, 'Active', %s)",
+                    (name, username, hashed_pw, session.get("username")),
+                )
+                db.commit()
+                flash(f"User '{username}' added successfully!", "success")
         except Exception as e:
             db.rollback()
             logger.exception("add_user DB error: %s", e)
             flash("Unable to add user.", "danger")
+
+        # Redirect after POST so flash messages show on a fresh GET
+        return redirect(url_for("add_user"))
+
     return render_template("add_user.html", show_sidebar=True)
+
 
 @app.route("/admin/reset_password/<int:user_id>", methods=["POST"])
 @login_required
