@@ -45,7 +45,10 @@
     {% if folders %}
     <div class="records-grid">
       {% for f in folders %}
-      <div class="folder-card">
+      <!-- Updated folder-card -->
+      <div class="folder-card" 
+           data-created-at="{{ f.created_at }}" 
+           data-count="{{ f.count }}">
         <form class="delete-form" method="post" action="{{ url_for('delete_record', folder_name=f.folder_name) }}" style="display: none;"></form>
 
         <div class="folder-content">

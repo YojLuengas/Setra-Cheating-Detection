@@ -560,6 +560,52 @@ folderCards.forEach(card => {
     updateFolderState();
   });
 
+
+  // --- SORT MENU FUNCTIONALITY ---
+
+document.querySelectorAll('.sort-option').forEach(option => {
+  option.addEventListener('click', () => {
+    const sortType = option.dataset.sort;
+    const grid = document.querySelector('.records-grid');
+    if (!grid) return;
+
+    // Get all folder cards
+    const folders = Array.from(grid.querySelectorAll('.folder-card'));
+
+    // Sort logic
+    let sortedFolders = [];
+    if (sortType === 'name') {
+      sortedFolders = folders.sort((a, b) => {
+        const nameA = a.querySelector('.folder-name').textContent.trim().toLowerCase();
+        const nameB = b.querySelector('.folder-name').textContent.trim().toLowerCase();
+        return nameA.localeCompare(nameB);
+      });
+    } 
+    else if (sortType === 'date') {
+      // Requires Flask to include folder.created_at
+      sortedFolders = folders.sort((a, b) => {
+        const dateA = new Date(a.dataset.createdAt || 0);
+        const dateB = new Date(b.dataset.createdAt || 0);
+        return dateB - dateA; // newest first
+      });
+    } 
+    else if (sortType === 'count') {
+      sortedFolders = folders.sort((a, b) => {
+        const countA = parseInt(a.querySelector('.folder-count').textContent) || 0;
+        const countB = parseInt(b.querySelector('.folder-count').textContent) || 0;
+        return countB - countA; // highest first
+      });
+    }
+
+    // Re-append sorted elements to the grid
+    sortedFolders.forEach(folder => grid.appendChild(folder));
+
+    // Close dropdown after sort
+    document.querySelector('.sort-dropdown')?.classList.remove('active');
+  });
+});
+
+
   // --- Double-click → open folder ---
   card.addEventListener("dblclick", (e) => {
     if (isClickOnControl(e.target)) return;
