@@ -288,7 +288,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // === Snapshot page checkboxes ===
   if (isSnapshotsPage) {
-    // Add checkboxes to snapshot cards beside delete button
+    // Add checkboxes to snapshot cards beside delete button, initially hidden
     document.querySelectorAll('.snapshot-card').forEach(card => {
       const checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
@@ -296,6 +296,7 @@ document.addEventListener('DOMContentLoaded', function () {
       checkbox.style.height = '25px'; // Match delete button height
       checkbox.style.marginRight = '1px';
       checkbox.style.verticalAlign = 'middle'; // Align with delete button
+      checkbox.style.display = 'none'; // Hide initially
       const deleteForm = card.querySelector('.delete-form');
       if (deleteForm) {
         deleteForm.insertBefore(checkbox, deleteForm.firstChild);
