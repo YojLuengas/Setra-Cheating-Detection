@@ -156,7 +156,7 @@ document.addEventListener('DOMContentLoaded', function () {
     cards.forEach(card => {
       const link = card.querySelector('.folder-link');
       if (!link) return;
-      link.style.pointerEvents = (checked > 0 || anyVisible) ? 'none' : '';
+      link.style.pointerEvents = anyVisible ? 'none' : '';
       // Removed opacity fade to prevent white fade color on folders
     });
 
@@ -388,17 +388,50 @@ document.addEventListener('DOMContentLoaded', function () {
     if (e.target.classList.contains('select-mode-btn')) {
       const text = e.target.textContent.trim().toLowerCase();
       if (text === 'select') {
-        // Enable select mode for folders or snapshots
+        // Toggle select mode for folders or snapshots
         if (isFoldersPage) {
-          document.querySelectorAll('.folder-card input[type="checkbox"]').forEach(cb => {
-            cb.style.display = 'inline';
-          });
-          updateFolderState();
+          const anyVisible = Array.from(document.querySelectorAll('.folder-card input[type="checkbox"]')).some(cb => cb.style.display !== 'none');
+          if (anyVisible) {
+            // Exit select mode
+            document.querySelectorAll('.folder-card input[type="checkbox"]').forEach(cb => {
+              cb.style.display = 'none';
+              cb.checked = false;
+              cb.closest('.folder-card').style.border = '';
+              cb.style.accentColor = '';
+              cb.style.filter = '';
+            });
+            document.querySelectorAll('.folder-card .delete-btn').forEach(btn => btn.style.display = '');
+            document.querySelectorAll('.folder-card .folder-link').forEach(a => {
+              a.style.pointerEvents = '';
+            });
+            updateFolderState();
+          } else {
+            // Enter select mode
+            document.querySelectorAll('.folder-card input[type="checkbox"]').forEach(cb => {
+              cb.style.display = 'inline';
+            });
+            updateFolderState();
+          }
         } else if (isSnapshotsPage) {
-          document.querySelectorAll('.snapshot-card input[type="checkbox"]').forEach(cb => {
-            cb.style.display = 'inline';
-          });
-          updateSnapshotState();
+          const anyVisible = Array.from(document.querySelectorAll('.snapshot-card input[type="checkbox"]')).some(cb => cb.style.display !== 'none');
+          if (anyVisible) {
+            // Exit select mode
+            document.querySelectorAll('.snapshot-card input[type="checkbox"]').forEach(cb => {
+              cb.style.display = 'none';
+              cb.checked = false;
+              cb.closest('.snapshot-card').style.border = '';
+              cb.style.accentColor = '';
+              cb.style.filter = '';
+            });
+            document.querySelectorAll('.snapshot-card .delete-btn').forEach(btn => btn.style.display = '');
+            updateSnapshotState();
+          } else {
+            // Enter select mode
+            document.querySelectorAll('.snapshot-card input[type="checkbox"]').forEach(cb => {
+              cb.style.display = 'inline';
+            });
+            updateSnapshotState();
+          }
         }
         // Close the dropdown
         headerMenuContainer.classList.remove('active');
