@@ -179,21 +179,38 @@ def admin_page():
     if session.get("role") != "admin":
         flash("Access denied!", "danger")
         return redirect(url_for("home"))
+
     try:
         admin_username = session.get("username")
+
         cursor.execute("SELECT COUNT(*) FROM users WHERE username != %s", (admin_username,))
         total_users = cursor.fetchone()[0]
+
         cursor.execute("SELECT COUNT(*) FROM users WHERE status = 'Active' AND username != %s", (admin_username,))
         active_users = cursor.fetchone()[0]
+
         cursor.execute("SELECT COUNT(*) FROM users WHERE status = 'Inactive' AND username != %s", (admin_username,))
         inactive_users = cursor.fetchone()[0]
-        cursor.execute("SELECT username, role, status FROM users WHERE username != %s ORDER BY id DESC LIMIT 5", (admin_username,))
-        users_preview = cursor.fetchall()
+
+        # Preview - convert tuples to dicts so templates can use user.username, user.role, user.status
+        cursor.execute("SELECT id, username, role, status FROM users WHERE username != %s ORDER BY id DESC LIMIT 5", (admin_username,))
+        preview_rows = cursor.fetchall()
+        users_preview = []
+        for r in preview_rows:
+            # r expected: (id, username, role, status)
+            users_preview.append({
+                "id": r[0],
+                "username": r[1],
+                "role": r[2],
+                "status": r[3]
+            })
+
     except Exception as e:
         logger.exception("admin_page DB error: %s", e)
         flash("Unable to load admin data.", "danger")
         total_users = active_users = inactive_users = 0
         users_preview = []
+
     return render_template(
         "admin.html",
         total_users=total_users,
@@ -202,6 +219,47 @@ def admin_page():
         users_preview=users_preview,
         show_sidebar=True,
     )
+
+@app.after_request
+def add_header(response):
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+@app.route("/admin/users")
+@login_required
+def list_users():
+    if session.get("role") != "admin":
+        flash("Access denied!", "danger")
+        return redirect(url_for("home"))
+
+    try:
+        cursor.execute("""
+            SELECT id, name, username, role, status
+            FROM users
+            WHERE role != 'admin'
+            ORDER BY id ASC
+        """)
+        rows = cursor.fetchall()
+
+        users = []
+        for r in rows:
+            users.append({
+                "id": r[0],
+                "name": r[1],
+                "username": r[2],
+                "role": r[3] if r[3] else "—",
+                "status": r[4] if r[4] else "—"
+            })
+
+        # Debug print to confirm columns
+        print("DEBUG USERS:", users)
+
+    except Exception as e:
+        logger.exception("list_users error: %s", e)
+        users = []
+
+    return render_template("list_users.html", users=users, show_sidebar=True)
+
 
 @app.route("/admin/add_user", methods=["GET", "POST"])
 @login_required
@@ -241,20 +299,7 @@ def reset_password(user_id):
         flash("Unable to reset password.", "danger")
     return redirect(url_for("list_users"))
 
-@app.route("/admin/deactivate_user/<int:user_id>", methods=["POST"])
-@login_required
-def deactivate_user(user_id):
-    if session.get("role") != "admin":
-        return redirect(url_for("home"))
-    try:
-        cursor.execute("UPDATE users SET status='Inactive', updated_by=%s WHERE id=%s", (session.get("username"), user_id))
-        db.commit()
-        flash("User deactivated successfully.", "warning")
-    except Exception as e:
-        db.rollback()
-        logger.exception("deactivate_user error: %s", e)
-        flash("Unable to deactivate user.", "danger")
-    return redirect(url_for("list_users"))
+
 
 @app.route("/admin/delete_user/<int:user_id>", methods=["POST"])
 @login_required
@@ -274,34 +319,51 @@ def delete_user(user_id):
         flash("Unable to delete user.", "danger")
     return redirect(url_for("admin_page"))
 
-@app.route("/admin/users")
-@login_required
-def list_users():
-    if session.get("role") != "admin":
-        flash("Access denied!", "danger")
-        return redirect(url_for("home"))
-    try:
-        cursor.execute("SELECT id, name, username, role, status FROM users WHERE role != 'admin'")
-        users = cursor.fetchall()
-    except Exception as e:
-        logger.exception("list_users error: %s", e)
-        users = []
-    return render_template("list_users.html", users=users, show_sidebar=True)
-
 @app.route("/admin/activate_user/<int:user_id>", methods=["POST"])
 @login_required
 def activate_user(user_id):
     if session.get("role") != "admin":
+        flash("Access denied!", "danger")
         return redirect(url_for("home"))
+
     try:
-        cursor.execute("UPDATE users SET status='Active', updated_by=%s WHERE id=%s", (session.get("username"), user_id))
+        cursor.execute("""
+            UPDATE users 
+            SET status='Active', updated_by=%s 
+            WHERE id=%s
+        """, (session.get("username"), user_id))
         db.commit()
         flash("User activated successfully.", "success")
     except Exception as e:
         db.rollback()
         logger.exception("activate_user error: %s", e)
         flash("Unable to activate user.", "danger")
+
     return redirect(url_for("list_users"))
+
+
+@app.route("/admin/deactivate_user/<int:user_id>", methods=["POST"])
+@login_required
+def deactivate_user(user_id):
+    if session.get("role") != "admin":
+        flash("Access denied!", "danger")
+        return redirect(url_for("home"))
+
+    try:
+        cursor.execute("""
+            UPDATE users 
+            SET status='Inactive', updated_by=%s 
+            WHERE id=%s
+        """, (session.get("username"), user_id))
+        db.commit()
+        flash("User deactivated successfully.", "success")
+    except Exception as e:
+        db.rollback()
+        logger.exception("deactivate_user error: %s", e)
+        flash("Unable to deactivate user.", "danger")
+
+    return redirect(url_for("list_users"))
+
 # ---------- Assessment session ----------
 @app.route("/assessment-session", methods=["POST"])
 @login_required

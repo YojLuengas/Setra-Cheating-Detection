@@ -1416,8 +1416,6 @@ body.dashboard-body {
   margin-right: 12px;
   position: relative;
   height: 100%;
-  pointer-events: auto;
-  cursor: pointer;
 }
 
 .folder-thumb {
@@ -1532,7 +1530,6 @@ body.dashboard-body {
   opacity: 1;
   transition: opacity 0.2s ease;
   z-index: 1;
-  pointer-events: none;
 }
 
 
@@ -1640,117 +1637,68 @@ body.dashboard-body {
   margin-bottom: 20px;
 }
 
-/* =========================
-   Modal Overlay
-========================= */
-.modal {
-  display: none;
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  background-color: rgba(15, 23, 42, 0.45); /* dark bluish overlay */
+/* Modal Adjustments for Records */
+#deleteModal {
+  display: none; /* enables flex centering */
+  justify-content: center; /* horizontal center */
+  align-items: center; /* vertical center */
+  position: fixed; /* stays in place on scroll */
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5); /* semi-transparent background */
+  z-index: 1000; /* ensure it’s on top */
+  overflow: auto; /* scroll if content is tall */
 }
 
-/* =========================
-   Show Modal
-========================= */
-.modal.show {
-  display: block;
-}
 
-/* =========================
-   Modal Box
-========================= */
-.modal-content {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+/* Existing modal content styles */
+#deleteModal .modal-content {
   background: #ffffff;
-  border-radius: 16px;
-  width: 380px;
-  max-width: 90%;
-  padding: 28px 32px;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
-  text-align: center;
-  font-family: "Inter", system-ui, sans-serif;
-  animation: fadeIn 0.25s ease;
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  padding: 20px; /* optional padding */
+  max-width: 400px; /* optional width */
+  width: 90%; /* responsive width */
 }
 
-/* =========================
-   Modal Text
-========================= */
-.modal-content p {
-  color: #1e293b;
-  font-size: 15px;
-  line-height: 1.5;
-  margin-bottom: 24px;
-}
 
-/* =========================
-   Close Button (X)
-========================= */
-.modal-content .close {
-  position: absolute;
-  top: 10px;
-  right: 15px;
-  font-size: 20px;
-  color: #94a3b8;
-  cursor: pointer;
-  transition: color 0.2s ease;
-}
-
-.modal-content .close:hover {
-  color: #0b3d91;
-}
-
-/* =========================
-   Buttons
-========================= */
-.modal-content button {
-  font-family: inherit;
-  font-size: 14px;
-  padding: 8px 20px;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.25s ease;
-  font-weight: 500;
+#deleteModal .modal-content p {
+  color: #374151;
+  margin-bottom: 20px;
+  font-size: 16px;
 }
 
 #confirmDelete {
-  background-color: #0b3d91; /* deep blue */
-  color: white;
+  background: #051f4b; /* green for confirm */
+  color: #ffffff;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
   margin-right: 10px;
+  transition: background 0.2s ease;
 }
 
 #confirmDelete:hover {
-  background-color: #0a3378;
-  box-shadow: 0 0 8px rgba(11, 61, 145, 0.3);
+  background: #0c43a1; /* darker green */
 }
 
 .cancel {
-  background-color: transparent;
-  color: #0b3d91;
-  border: 1px solid #0b3d91;
+  background: #f3f4f6;
+  color: #0b3d91; /* dark blue */
+  border: 1px solid #d1d5db;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.2s ease;
 }
 
 .cancel:hover {
-  background-color: #f1f5f9;
-}
-
-/* =========================
-   Animation
-========================= */
-@keyframes fadeIn {
-  from {
-    transform: translate(-50%, -40%);
-    opacity: 0;
-  }
-  to {
-    transform: translate(-50%, -50%);
-    opacity: 1;
-  }
+  background: #e5e7eb;
 }
 
 /* Empty State */
@@ -2145,6 +2093,13 @@ body.dashboard-body {
   color: #475569;
 }
 
+.no-snapshots {
+  color: #64748b;
+  font-size: 0.95rem;
+  text-align: center;
+  padding: 10px 0;
+}
+
 /* Responsive behavior */
 @media (max-width: 768px) {
   .cheating-message h1 {
@@ -2300,4 +2255,330 @@ body.dashboard-body {
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 20px;
   padding: 24px;
+}
+
+/* admin list users styles */
+body {
+  background-color: #f8fafc;
+  overflow-x: hidden;
+  font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  color: #1e293b;
+}
+
+h2 {
+  font-weight: 600;
+  color: #0f172a;
+}
+
+/* ====== Card Styling ====== */
+.card {
+  border: none;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+/* ====== Table Styling ====== */
+.table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.table thead {
+  background-color: #f9fafb;
+}
+
+.table thead th {
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.85rem;
+  color: #475569;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.table tbody td {
+  background-color: #fff;
+  padding: 0.75rem 1rem;
+  border-top: 1px solid #f1f5f9;
+  color: #1e293b;
+  transition: background-color 0.2s ease, transform 0.1s ease;
+}
+
+/* ====== Hover & Selection ====== */
+.user-row {
+  position: relative;
+  transition: background-color 0.2s ease, transform 0.1s ease;
+}
+
+.user-row:hover {
+  background-color: rgba(37, 100, 235, 0.05);
+  transform: scale(1.002);
+}
+
+/* Overlay highlight */
+.user-row::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(37, 99, 235, 0.15);
+  border-radius: 4px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  z-index: 0;
+}
+
+.user-row.selected-row::after {
+  opacity: 1;
+}
+
+.user-row td {
+  position: relative;
+  z-index: 1;
+  background-color: transparent !important;
+}
+
+/* ====== Badges ====== */
+.badge {
+  font-weight: 500;
+  border-radius: 6px;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.8rem;
+}
+
+.badge.bg-success-subtle {
+  background-color: #dcfce7;
+  color: #166534;
+}
+
+.badge.bg-secondary-subtle {
+  background-color: #e5e7eb;
+  color: #374151;
+}
+
+/* ====== Dropdown Menu ====== */
+.dropdown .btn {
+  background-color: #ffffff;
+  border-radius: 50%;
+  padding: 8px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.dropdown .btn:hover {
+  background-color: #f1f5f9;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.08);
+}
+
+.dropdown-menu {
+  border: none;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  font-size: 0.95rem;
+  padding: 0.4rem 0;
+  background-color: #ffffff;
+}
+
+/* unified color for all items */
+.dropdown-menu .dropdown-item {
+  color: #334155;
+  padding: 0.6rem 1rem;
+  transition: background-color 0.2s ease, color 0.2s ease;
+  border-radius: 6px;
+}
+
+.dropdown-menu .dropdown-item:hover {
+  background-color: #e2e8f0;
+  color: #1e293b;
+}
+
+.dropdown-menu .dropdown-divider {
+  border-color: #e5e7eb;
+  margin: 0.3rem 0;
+}
+
+/* ====== Utility ====== */
+.main-container {
+  max-width: 100%;
+}
+
+th,
+td {
+  text-align: left;
+}
+
+.table td:last-child,
+.table th:last-child {
+  text-align: center;
+}
+
+/* ===== Backdrop ===== */
+.modal-backdrop.show {
+  background-color: rgba(15, 23, 42, 0.25);
+  z-index: 1045;
+  pointer-events: none;
+}
+
+/* Ensure modal is above backdrop */
+.modal {
+  z-index: 1055;
+  pointer-events: auto;
+}
+
+/* ===== Center modal ===== */
+.modal-dialog {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100vh - 3.5rem);
+  margin: 0 auto;
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+/* Animate modal appearance */
+.modal.fade .modal-dialog {
+  transform: translateY(-10px) scale(0.97);
+  opacity: 0;
+}
+
+.modal.fade.show .modal-dialog {
+  transform: translateY(0) scale(1);
+  opacity: 1;
+}
+
+/* ===== Modal Box ===== */
+.modal-content {
+  border: none;
+  border-radius: 16px;
+  background: #ffffff; /* clean white */
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.2); /* subtle depth */
+  transform-origin: center top;
+  animation: fadeInLift 0.35s ease forwards;
+}
+
+@keyframes fadeInLift {
+  from {
+    transform: translateY(-10px) scale(0.97);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+/* ===== Confirmation Modal Redesign ===== */
+
+/* Center the header like the screenshot */
+.modal-header {
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding-bottom: 0;
+}
+
+/* Question icon styling */
+.confirm-icon i {
+  font-size: 2.5rem;
+  color: #1e40af; /* deep blue */
+  border-radius: 50%;
+  padding: 0.5rem;
+}
+
+/* Title */
+.modal-title {
+  margin-top: 0.5rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+/* Body */
+.modal-body {
+  text-align: center;
+  color: #666;
+  font-size: 0.95rem;
+  padding: 1rem 1.5rem 0.5rem;
+}
+
+/* Footer with centered buttons */
+.modal-footer {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+}
+
+/* Buttons */
+.modal-footer .btn {
+  border: none;
+  outline: none;
+  border-radius: 25px;
+  padding: 10px 24px;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.modal-footer .btn-light {
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #334155;
+}
+
+.modal-footer .btn-light:hover {
+  background-color: #e2e8f0;
+  color: #1e293b;
+}
+
+.modal-footer .btn-primary {
+  background-color: #1e40af;
+  border: none;
+  box-shadow: 0 2px 6px rgba(29, 78, 216, 0.25);
+}
+
+.modal-footer .btn-primary:hover {
+  background-color: #1d4ed8;
+  box-shadow: 0 4px 12px rgba(29, 78, 216, 0.3);
+}
+
+/* ===== Feedback Modal ===== */
+#feedbackModal .modal-content {
+  text-align: center;
+  border-radius: 14px;
+  padding: 1.2rem;
+}
+
+#feedbackModal .modal-title {
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+#feedbackModal .modal-body {
+  padding: 0.75rem 1rem 1rem 1rem;
+  color: #475569;
+}
+
+/* ===== Status Colors ===== */
+.modal-title.text-success {
+  color: #16a34a !important; /* green success */
+}
+
+.modal-title.text-danger {
+  color: #dc2626 !important; /* red danger */
+}
+
+/* ===== Responsive adjustments ===== */
+@media (max-width: 576px) {
+  .modal-dialog {
+    width: 90%;
+    margin: auto;
+  }
+}
+
+.flash-message {
+  transition: opacity 0.5s ease, transform 0.5s ease;
 }
