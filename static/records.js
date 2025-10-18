@@ -207,7 +207,7 @@ document.addEventListener('DOMContentLoaded', function () {
       const link = card.querySelector('a'); // snapshot links
       if (!link) return;
       link.style.pointerEvents = (checked > 0 || anyVisible) ? 'none' : '';
-      link.style.opacity = (checked > 0 || anyVisible) ? '0.5' : '1';
+      // Removed opacity fade to prevent white fade color on snapshots
     });
 
     // Show/hide checkboxes
@@ -847,7 +847,7 @@ document.querySelectorAll('.folder-card').forEach(card => {
   card.addEventListener('dblclick', (e) => {
     if (e.target.closest('.folder-menu-btn') || e.target.closest('.folder-menu-dropdown')) return;
 
-    const folderAnchor = card.querySelector('.folder-menu-dropdown a[href], .folder-link a[href]');
+    const folderAnchor = card.querySelector('.folder-menu-dropdown a[href], .folder-link[href]');
     if (folderAnchor) {
       window.location.href = folderAnchor.href;
     }

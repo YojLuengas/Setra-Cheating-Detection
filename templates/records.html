@@ -13,7 +13,39 @@
     {% set header_title = "Detection Records" %}
     {% set search_input_id = "folder-search" %}
     {% set search_placeholder = "Search folders..." %}
-    {% include 'records_header.html' %}
+    <div class="records-header">
+      <div class="header-content">
+        <h2>{{ header_title }}</h2>
+      </div>
+
+      <div class="header-actions">
+        <div class="sort-dropdown">
+          <button class="sort-btn">
+            <span class="material-symbols-outlined">sort</span>
+            Sort
+          </button>
+          <div class="sort-menu">
+            <span class="sort-option" data-sort="name">Name (A–Z)</span>
+            <span class="sort-option" data-sort="date">Date Created</span>
+            <span class="sort-option" data-sort="count">Snapshot Count</span>
+          </div>
+        </div>
+
+        <div class="header-menu-container">
+          <button class="header-menu-btn">
+            <span class="material-symbols-outlined">more_horiz</span>
+          </button>
+          <div class="header-menu-dropdown">
+            <a href="#" class="header-menu-item">Open</a>
+            <span class="header-menu-item select-mode-btn">Select</span>
+            <span class="header-menu-item select-mode-btn">Select All</span>
+            <span class="header-menu-item folder-delete-btn">Delete</span>
+          </div>
+        </div>
+
+        <input type="text" id="{{ search_input_id }}" placeholder="{{ search_placeholder }}" class="search-bar">
+      </div>
+    </div>
 
     {% if folders %}
     <div class="records-grid">
@@ -21,25 +53,8 @@
       <div class="folder-card">
         <form class="delete-form" method="post" action="{{ url_for('delete_record', folder_name=f.folder_name) }}" style="display: none;"></form>
 
-        <div class="folder-menu-container">
-          <input type="checkbox" class="select-indicator" style="display: none;">
-          <button class="folder-menu-btn">
-            <span class="material-symbols-outlined">more_vert</span>
-          </button>
-          <div class="folder-menu-dropdown">
-            <a href="{{ url_for('records_folder', folder_name=f.folder_name) }}" class="folder-menu-item">Open</a>
-            <span class="folder-menu-item select-mode-btn">Select</span>
-            <span class="folder-menu-item select-mode-btn">Select All</span>
-            <a href="{{ url_for('delete_record', folder_name=f.folder_name) }}"
-               class="folder-menu-item folder-delete-btn"
-               data-delete-url="{{ url_for('delete_record', folder_name=f.folder_name) }}">
-               Delete
-            </a>
-          </div>
-        </div>
-
         <div class="folder-content">
-          <div class="folder-link" data-folder="{{ f.folder_name }}">
+          <a href="{{ url_for('records_folder', folder_name=f.folder_name) }}" class="folder-link" data-folder="{{ f.folder_name }}">
             {% if f.first_image %}
               <img src="{{ f.first_image }}" alt="thumbnail" class="folder-thumb">
             {% else %}
@@ -47,7 +62,7 @@
             {% endif %}
             <div class="folder-name">{{ f.display_title }}</div>
             <div class="folder-count">{{ f.count }} snapshot{{ 's' if f.count|int != 1 else '' }}</div>
-          </div>
+          </a>
         </div>
       </div>
       {% endfor %}
