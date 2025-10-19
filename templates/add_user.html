@@ -14,41 +14,6 @@
       {% endfor %}
     {% endif %}
   {% endwith %}
-<<<<<<< HEAD
-
-  <form method="POST" action="{{ url_for('add_user') }}">
-    <div class="mb-3">
-      <label class="form-label">Name</label>
-      <input name="name" class="form-control" required>
-    </div>
-    <div class="mb-3">
-      <label class="form-label">Username</label>
-      <input name="username" class="form-control" required>
-    </div>
-    <div class="mb-3">
-      <label class="form-label">Password</label>
-      <input name="password" type="password" class="form-control" required>
-    </div>
-    <button type="submit" class="btn btn-success btn-lg rounded-pill">
-      <i class="fa-solid fa-check"></i> Add User
-    </button>{% extends "base.html" %}
-{% block title %}Add User{% endblock %}
-
-{% block content %}
-<div class="card shadow-lg border-0 rounded-4 p-4">
-  <h2 class="mb-4 text-primary">
-    <i class="fa-solid fa-user-plus"></i> Add New User
-  </h2>
-
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-      {% for category, message in messages %}
-        <div class="alert alert-{{ category }} flash-message">{{ message }}</div>
-      {% endfor %}
-    {% endif %}
-  {% endwith %}
-=======
->>>>>>> 103668eb5195c96aa06d1878541924a7e91f30a7
 
   <form method="POST" action="{{ url_for('add_user') }}">
     <div class="mb-3">
@@ -73,13 +38,3 @@
 {% block scripts %}
 <script src="{{ url_for('static', filename='add_user.js') }}"></script>
 {% endblock %}
-<<<<<<< HEAD
-  </form>
-</div>
-{% endblock %}
-
-{% block scripts %}
-<script src="{{ url_for('static', filename='add_user.js') }}"></script>
-{% endblock %}
-=======
->>>>>>> 103668eb5195c96aa06d1878541924a7e91f30a7
