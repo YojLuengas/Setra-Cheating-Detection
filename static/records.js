@@ -399,12 +399,12 @@ document.addEventListener('DOMContentLoaded', function () {
       e.stopPropagation();
       const text = this.textContent.trim().toLowerCase();
       if (text === 'select') {
-        // Activate select mode
+        // Toggle select mode
         if (isFoldersPage) {
-          selectModeActive = true;
+          selectModeActive = !selectModeActive;
           updateFolderState();
         } else if (isSnapshotsPage) {
-          snapshotSelectModeActive = true;
+          snapshotSelectModeActive = !snapshotSelectModeActive;
           updateSnapshotState();
         }
         // Close dropdown
