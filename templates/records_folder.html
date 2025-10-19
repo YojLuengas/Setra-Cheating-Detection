@@ -57,9 +57,8 @@
         </form>
 
         <a href="{{ url_for('cheating', snap_id=s.id) }}" class="snapshot-link">
-          <img src="{{ s.image_url }}" alt="snapshot" class="record-thumb">
+          <img data-src="{{ s.image_url }}" alt="snapshot" class="record-thumb">
         </a>
-
       </div>
       {% endfor %}
     </div>

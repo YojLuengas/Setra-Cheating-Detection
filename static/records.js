@@ -19,7 +19,6 @@ function updateFolderState() {
     const link = card.querySelector('.folder-link');
     if (!link) return;
     link.style.pointerEvents = (checked > 0 || selectModeActive) ? 'none' : '';
-    link.style.opacity = (checked > 0 || selectModeActive) ? '0.5' : '1';
   });
 
   // Show/hide checkboxes
@@ -36,9 +35,9 @@ function updateFolderState() {
   // Update border & styles
   checkboxes.forEach(cb => {
     if (cb.checked) {
-      cb.closest('.folder-card')
-      cb.style.filter = 'hue-rotate(120deg)';
+      cb.closest('.folder-card').classList.add('selected');
     } else {
+      cb.closest('.folder-card').classList.remove('selected');
       cb.closest('.folder-card').style.border = '';
       cb.style.accentColor = '';
       cb.style.filter = '';
@@ -64,7 +63,6 @@ function updateSnapshotState() {
     const link = card.querySelector('a'); // snapshot links
     if (!link) return;
     link.style.pointerEvents = (checked > 0 || snapshotSelectModeActive) ? 'none' : '';
-    link.style.opacity = (checked > 0 || snapshotSelectModeActive) ? '0.5' : '1';
   });
 
   // Show/hide checkboxes
@@ -81,9 +79,10 @@ function updateSnapshotState() {
   // Update border & styles
   checkboxes.forEach(cb => {
     if (cb.checked) {
-      cb.closest('.snapshot-card')
+      cb.closest('.snapshot-card').classList.add('selected');
       cb.style.filter = 'hue-rotate(120deg)';
     } else {
+      cb.closest('.snapshot-card').classList.remove('selected');
       cb.closest('.snapshot-card').style.border = '';
       cb.style.accentColor = '';
       cb.style.filter = '';
@@ -301,7 +300,6 @@ document.addEventListener('DOMContentLoaded', function () {
         allCbs.forEach(cb => cb.checked = this.checked);
         if (this.checked) {
           allCbs.forEach(cb => {
-            cb.closest('.folder-card')
             cb.style.filter = 'hue-rotate(120deg)';
           });
         } else {
@@ -399,7 +397,6 @@ document.addEventListener('DOMContentLoaded', function () {
         allCbs.forEach(cb => cb.checked = this.checked);
         if (this.checked) {
           allCbs.forEach(cb => {
-            cb.closest('.snapshot-card')
             cb.style.filter = 'hue-rotate(120deg)';
           });
         } else {
@@ -434,9 +431,10 @@ document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('.snapshot-card input[type="checkbox"]').forEach(cb => {
       cb.addEventListener('change', function() {
         if (this.checked) {
-          this.closest('.snapshot-card')
+          this.closest('.snapshot-card').classList.add('selected');
           this.style.filter = 'hue-rotate(120deg)';
         } else {
+          this.closest('.snapshot-card').classList.remove('selected');
           this.closest('.snapshot-card').style.border = '';
           this.style.accentColor = '';
           this.style.filter = '';
@@ -489,135 +487,124 @@ document.addEventListener('DOMContentLoaded', function () {
     const overlay = document.querySelector('.loading-overlay');
     if (overlay) overlay.classList.add('hidden');
   }, 500);
-// --- Handle folder interactions (single, double, ctrl, right-click) --- //
 
-const folderCards = document.querySelectorAll(".folder-card");
+  // --- Handle folder interactions (single, double, ctrl, right-click) --- //
 
-// If you track whether select mode is active
-let selectModeActive = false;
+  const folderCards = document.querySelectorAll(".folder-card");
 
-// Helper: Update state (optional function, you can define your own)
-function updateFolderState() {
-  const selectedCount = document.querySelectorAll('.folder-card.selected').length;
-  console.log(`Selected folders: ${selectedCount}`);
-}
+  folderCards.forEach(card => {
+    const folderLinkDiv = card.querySelector(".folder-link");
+    const folderName = folderLinkDiv?.dataset?.folder;
 
-folderCards.forEach(card => {
-  const folderLinkDiv = card.querySelector(".folder-link");
-  const folderName = folderLinkDiv?.dataset?.folder;
+    const openFolder = () => {
+      if (!folderName) return;
+      window.location.href = `/records/folder/${encodeURIComponent(folderName)}`;
+    };
 
-  const openFolder = () => {
-    if (!folderName) return;
-    window.location.href = `/records/folder/${encodeURIComponent(folderName)}`;
-  };
+    // Ignore click if it's on a button, menu, or input inside the card
+    const isClickOnControl = (target) => {
+      return !!target.closest("button, input, .folder-menu-btn, .folder-menu-dropdown");
+    };
 
-  // Ignore click if it's on a button, menu, or input inside the card
-  const isClickOnControl = (target) => {
-    return !!target.closest("button, input, .folder-menu-btn, .folder-menu-dropdown");
-  };
+    // --- Single click (select or toggle) ---
+    card.addEventListener("click", (e) => {
+      if (isClickOnControl(e.target)) return;
 
-  // --- Single click (select or toggle) ---
-  card.addEventListener("click", (e) => {
-    if (isClickOnControl(e.target)) return;
-
-    // Ctrl or Cmd pressed → multi-select toggle
-    if (e.ctrlKey || e.metaKey) {
-      e.preventDefault();
-      card.classList.toggle("selected");
-      const cb = card.querySelector('input[type="checkbox"], .select-indicator');
-      if (cb) cb.checked = card.classList.contains("selected");
-      updateFolderState();
-      return;
-    }
-
-    // If select mode is active, toggle
-    if (selectModeActive) {
-      e.preventDefault();
-      card.classList.toggle("selected");
-      const cb = card.querySelector('input[type="checkbox"], .select-indicator');
-      if (cb) cb.checked = card.classList.contains("selected");
-      updateFolderState();
-      return;
-    }
-
-    // Normal single click: clear other selections, select this only
-    document.querySelectorAll('.folder-card.selected').forEach(c => {
-      if (c !== card) {
-        c.classList.remove('selected');
-        const cb = c.querySelector('input[type="checkbox"], .select-indicator');
-        if (cb) cb.checked = false;
+      // Ctrl or Cmd pressed → multi-select toggle
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        card.classList.toggle("selected");
+        const cb = card.querySelector('input[type="checkbox"], .select-indicator');
+        if (cb) cb.checked = card.classList.contains("selected");
+        updateFolderState();
+        return;
       }
+
+      // If select mode is active, toggle
+      if (selectModeActive) {
+        e.preventDefault();
+        card.classList.toggle("selected");
+        const cb = card.querySelector('input[type="checkbox"], .select-indicator');
+        if (cb) cb.checked = card.classList.contains("selected");
+        updateFolderState();
+        return;
+      }
+
+      // Normal single click: clear other selections, select this only
+      document.querySelectorAll('.folder-card.selected').forEach(c => {
+        if (c !== card) {
+          c.classList.remove('selected');
+          const cb = c.querySelector('input[type="checkbox"], .select-indicator');
+          if (cb) cb.checked = false;
+        }
+      });
+
+      card.classList.add("selected");
+      const cb = card.querySelector('input[type="checkbox"], .select-indicator');
+      if (cb) cb.checked = true;
+      updateFolderState();
     });
 
-    card.classList.add("selected");
-    const cb = card.querySelector('input[type="checkbox"], .select-indicator');
-    if (cb) cb.checked = true;
-    updateFolderState();
-  });
+    // --- SORT MENU FUNCTIONALITY ---
 
+    document.querySelectorAll('.sort-option').forEach(option => {
+      option.addEventListener('click', () => {
+        const sortType = option.dataset.sort;
+        const grid = document.querySelector('.records-grid');
+        if (!grid) return;
 
-  // --- SORT MENU FUNCTIONALITY ---
+        // Get all folder cards
+        const folders = Array.from(grid.querySelectorAll('.folder-card'));
 
-document.querySelectorAll('.sort-option').forEach(option => {
-  option.addEventListener('click', () => {
-    const sortType = option.dataset.sort;
-    const grid = document.querySelector('.records-grid');
-    if (!grid) return;
+        // Sort logic
+        let sortedFolders = [];
+        if (sortType === 'name') {
+          sortedFolders = folders.sort((a, b) => {
+            const nameA = a.querySelector('.folder-name').textContent.trim().toLowerCase();
+            const nameB = b.querySelector('.folder-name').textContent.trim().toLowerCase();
+            return nameA.localeCompare(nameB);
+          });
+        }
+        else if (sortType === 'date') {
+          // Requires Flask to include folder.created_at
+          sortedFolders = folders.sort((a, b) => {
+            const dateA = new Date(a.dataset.createdAt || 0);
+            const dateB = new Date(b.dataset.createdAt || 0);
+            return dateB - dateA; // newest first
+          });
+        }
+        else if (sortType === 'count') {
+          sortedFolders = folders.sort((a, b) => {
+            const countA = parseInt(a.querySelector('.folder-count').textContent) || 0;
+            const countB = parseInt(b.querySelector('.folder-count').textContent) || 0;
+            return countB - countA; // highest first
+          });
+        }
 
-    // Get all folder cards
-    const folders = Array.from(grid.querySelectorAll('.folder-card'));
+        // Re-append sorted elements to the grid
+        sortedFolders.forEach(folder => grid.appendChild(folder));
 
-    // Sort logic
-    let sortedFolders = [];
-    if (sortType === 'name') {
-      sortedFolders = folders.sort((a, b) => {
-        const nameA = a.querySelector('.folder-name').textContent.trim().toLowerCase();
-        const nameB = b.querySelector('.folder-name').textContent.trim().toLowerCase();
-        return nameA.localeCompare(nameB);
+        // Close dropdown after sort
+        document.querySelector('.sort-dropdown')?.classList.remove('active');
       });
-    } 
-    else if (sortType === 'date') {
-      // Requires Flask to include folder.created_at
-      sortedFolders = folders.sort((a, b) => {
-        const dateA = new Date(a.dataset.createdAt || 0);
-        const dateB = new Date(b.dataset.createdAt || 0);
-        return dateB - dateA; // newest first
-      });
-    } 
-    else if (sortType === 'count') {
-      sortedFolders = folders.sort((a, b) => {
-        const countA = parseInt(a.querySelector('.folder-count').textContent) || 0;
-        const countB = parseInt(b.querySelector('.folder-count').textContent) || 0;
-        return countB - countA; // highest first
-      });
-    }
+    });
 
-    // Re-append sorted elements to the grid
-    sortedFolders.forEach(folder => grid.appendChild(folder));
+    // --- Double-click → open folder ---
+    card.addEventListener("dblclick", (e) => {
+      if (isClickOnControl(e.target)) return;
+      openFolder();
+    });
 
-    // Close dropdown after sort
-    document.querySelector('.sort-dropdown')?.classList.remove('active');
+    // --- Right-click (context) → toggle selection ---
+    card.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      if (isClickOnControl(e.target)) return;
+      card.classList.toggle("selected");
+      const cb = card.querySelector('input[type="checkbox"], .select-indicator');
+      if (cb) cb.checked = card.classList.contains("selected");
+      updateFolderState();
+    });
   });
-});
-
-
-  // --- Double-click → open folder ---
-  card.addEventListener("dblclick", (e) => {
-    if (isClickOnControl(e.target)) return;
-    openFolder();
-  });
-
-  // --- Right-click (context) → toggle selection ---
-  card.addEventListener("contextmenu", (e) => {
-    e.preventDefault();
-    if (isClickOnControl(e.target)) return;
-    card.classList.toggle("selected");
-    const cb = card.querySelector('input[type="checkbox"], .select-indicator');
-    if (cb) cb.checked = card.classList.contains("selected");
-    updateFolderState();
-  });
-});
-
 
   // Sort and header menu toggle
   const sortDropdown = document.querySelector('.sort-dropdown');
@@ -662,21 +649,20 @@ document.querySelectorAll('.sort-option').forEach(option => {
           const checkboxes = document.querySelectorAll('.folder-card input[type="checkbox"]');
           const allChecked = Array.from(checkboxes).every(cb => cb.checked);
           if (allChecked) {
-            // Uncheck all, keep checkboxes visible
+            // Deselect all
             checkboxes.forEach(cb => {
               cb.checked = false;
               cb.style.display = 'inline';
-              cb.closest('.folder-card').style.border = '';
-              cb.style.accentColor = '';
-              cb.style.filter = '';
+              const card = cb.closest('.folder-card');
+              card.classList.remove('selected');
             });
           } else {
-            // Check all, show checkboxes, apply styles
+            // Select all
             checkboxes.forEach(cb => {
               cb.checked = true;
               cb.style.display = 'inline';
-              cb.closest('.folder-card')
-              cb.style.filter = 'hue-rotate(120deg)';
+              const card = cb.closest('.folder-card');
+              card.classList.add('selected');
             });
           }
           updateFolderState();
@@ -684,21 +670,20 @@ document.querySelectorAll('.sort-option').forEach(option => {
           const checkboxes = document.querySelectorAll('.snapshot-card input[type="checkbox"]');
           const allChecked = Array.from(checkboxes).every(cb => cb.checked);
           if (allChecked) {
-            // Uncheck all, keep checkboxes visible
+            // Deselect all
             checkboxes.forEach(cb => {
               cb.checked = false;
               cb.style.display = 'inline';
-              cb.closest('.snapshot-card').style.border = '';
-              cb.style.accentColor = '';
-              cb.style.filter = '';
+              const card = cb.closest('.snapshot-card');
+              card.classList.remove('selected');
             });
           } else {
-            // Check all, show checkboxes, apply styles
+            // Select all
             checkboxes.forEach(cb => {
               cb.checked = true;
               cb.style.display = 'inline';
-              cb.closest('.snapshot-card')
-              cb.style.filter = 'hue-rotate(120deg)';
+              const card = cb.closest('.snapshot-card');
+              card.classList.add('selected');
             });
           }
           updateSnapshotState();
@@ -781,16 +766,72 @@ document.addEventListener('click', function(e) {
 
 // Make entire snapshot card clickable to open snapshot
 document.querySelectorAll('.snapshot-card').forEach(card => {
-  card.addEventListener('click', e => {
-    // If in select mode, don't navigate
-    if (snapshotSelectModeActive) return;
-    // If click is on menu button or dropdown, don't navigate
-    if (e.target.closest('.snapshot-menu-container')) return;
-    // Else, find the link and navigate
-    const link = card.querySelector('.snapshot-link');
+  const link = card.querySelector('.snapshot-link');
+
+  const openSnapshot = () => {
     if (link) {
       window.location.href = link.href;
     }
+  };
+
+  // Ignore click if it's on a button, menu, or input inside the card
+  const isClickOnControl = (target) => {
+    return !!target.closest("button, input, .snapshot-menu-btn, .snapshot-menu-dropdown");
+  };
+
+  // --- Single click (select or toggle) ---
+  card.addEventListener('click', e => {
+    if (isClickOnControl(e.target)) return;
+
+    // Ctrl or Cmd pressed → multi-select toggle
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      card.classList.toggle("selected");
+      const cb = card.querySelector('input[type="checkbox"]');
+      if (cb) cb.checked = card.classList.contains("selected");
+      updateSnapshotState();
+      return;
+    }
+
+    // If select mode is active, toggle
+    if (snapshotSelectModeActive) {
+      e.preventDefault();
+      card.classList.toggle("selected");
+      const cb = card.querySelector('input[type="checkbox"]');
+      if (cb) cb.checked = card.classList.contains("selected");
+      updateSnapshotState();
+      return;
+    }
+
+    // Normal single click: clear other selections, select this only
+    document.querySelectorAll('.snapshot-card.selected').forEach(c => {
+      if (c !== card) {
+        c.classList.remove('selected');
+        const cb = c.querySelector('input[type="checkbox"]');
+        if (cb) cb.checked = false;
+      }
+    });
+
+    card.classList.add("selected");
+    const cb = card.querySelector('input[type="checkbox"]');
+    if (cb) cb.checked = true;
+    updateSnapshotState();
+  });
+
+  // --- Double-click → open snapshot ---
+  card.addEventListener("dblclick", (e) => {
+    if (isClickOnControl(e.target)) return;
+    openSnapshot();
+  });
+
+  // --- Right-click (context) → toggle selection ---
+  card.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+    if (isClickOnControl(e.target)) return;
+    card.classList.toggle("selected");
+    const cb = card.querySelector('input[type="checkbox"]');
+    if (cb) cb.checked = card.classList.contains("selected");
+    updateSnapshotState();
   });
 });
 
