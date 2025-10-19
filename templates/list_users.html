@@ -18,11 +18,7 @@
         <li><a class="dropdown-item d-flex align-items-center rounded-2" href="#" id="activateBtn"><i class="bi bi-check-circle me-2"></i>Activate</a></li>
         <li><a class="dropdown-item d-flex align-items-center rounded-2" href="#" id="deactivateBtn"><i class="bi bi-slash-circle me-2"></i>Deactivate</a></li>
         <li><hr class="dropdown-divider"></li>
-<<<<<<< HEAD
-        <li><a class="dropdown-item d-flex align-items-center rounded-2 text-danger" href="#" id="deleteBtn"><i class="bi bi-trash me-2"></i>Delete</a></li>
-=======
         <li><a class="dropdown-item d-flex align-items-center rounded-2" href="#" id="deleteBtn"><i class="bi bi-trash me-2"></i>Delete</a></li>
->>>>>>> 103668eb5195c96aa06d1878541924a7e91f30a7
       </ul>
     </div>
   </div>
@@ -43,13 +39,7 @@
           <tr class="user-row" data-id="{{ user[0] }}">
             <td class="ps-4 fw-medium text-dark">{{ user[1] }}</td>
             <td class="text-muted">{{ user[2] }}</td>
-            <td class="text-center">
-              {% if user[4] == "Active" %}
-                <span class="badge rounded-pill bg-success-subtle text-success px-3 py-2">Active</span>
-              {% else %}
-                <span class="badge rounded-pill bg-secondary-subtle text-secondary px-3 py-2">Inactive</span>
-              {% endif %}
-            </td>
+             <td class="text-muted">{{ user[4] }}</td>
           </tr>
           {% endif %}
         {% endfor %}
