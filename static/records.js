@@ -97,7 +97,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   const openModal = (message) => {
     modal.querySelector('p').textContent = message;
-    modal.style.display = 'block';
+    modal.style.display = 'flex';
     modal.style.zIndex = '1000';
     setElementsState(true);
   };
@@ -176,7 +176,7 @@ document.addEventListener('DOMContentLoaded', function () {
       e.preventDefault();
       currentDeleteUrl = btn.dataset.deleteUrl;
       currentCard = btn.closest('.snapshot-card');
-      document.getElementById('deleteModal').style.display = 'block';
+      document.getElementById('deleteModal').style.display = 'flex';
     });
   });
 
@@ -607,7 +607,7 @@ document.querySelectorAll('.header-menu-item').forEach(item => {
       const closeBtn = modal.querySelector('.close');
 
       modal.querySelector('p').textContent = `Are you sure you want to delete ${selectedCards.length} selected item${selectedCards.length > 1 ? 's' : ''}?`;
-      modal.style.display = 'block';
+      modal.style.display = 'flex';
       modal.style.zIndex = '1000';
 
       const handleConfirm = async () => {
