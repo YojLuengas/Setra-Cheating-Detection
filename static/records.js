@@ -36,8 +36,7 @@ function updateFolderState() {
   // Update border & styles
   checkboxes.forEach(cb => {
     if (cb.checked) {
-      cb.closest('.folder-card').style.border = '2px solid red';
-      cb.style.accentColor = 'red';
+      cb.closest('.folder-card')
       cb.style.filter = 'hue-rotate(120deg)';
     } else {
       cb.closest('.folder-card').style.border = '';
@@ -82,8 +81,7 @@ function updateSnapshotState() {
   // Update border & styles
   checkboxes.forEach(cb => {
     if (cb.checked) {
-      cb.closest('.snapshot-card').style.border = '2px solid red';
-      cb.style.accentColor = 'red';
+      cb.closest('.snapshot-card')
       cb.style.filter = 'hue-rotate(120deg)';
     } else {
       cb.closest('.snapshot-card').style.border = '';
@@ -151,6 +149,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (isSnapshotsPage) updateSnapshotState();
   };
 
+
   let currentFolderDeleteBtn = null;
 
   // Handle delete button click
@@ -206,6 +205,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   });
 
+
   let currentDeleteUrl = null;
   let currentCard = null;
 
@@ -233,103 +233,6 @@ document.addEventListener('DOMContentLoaded', function () {
     currentCard = null;
   });
 
-<<<<<<< HEAD
-=======
-  // === Folder state update ===
-  function updateFolderState() {
-    const cards = document.querySelectorAll('.folder-card');
-    const checkboxes = document.querySelectorAll('.folder-card input[type="checkbox"]');
-    const checked = document.querySelectorAll('.folder-card input[type="checkbox"]:checked').length;
-    const anyVisible = Array.from(checkboxes).some(cb => cb.style.display !== 'none');
-
-    // Show/hide delete buttons
-    cards.forEach(card => {
-      const deleteBtn = card.querySelector('.delete-btn');
-      if (!deleteBtn) return;
-      deleteBtn.style.display = (checked === 0 && !anyVisible) ? '' : 'none';
-    });
-
-    // Enable/disable folder links
-    cards.forEach(card => {
-      const link = card.querySelector('.folder-link');
-      if (!link) return;
-      link.style.pointerEvents = anyVisible ? 'none' : '';
-      // Removed opacity fade to prevent white fade color on folders
-    });
-
-    // Show/hide checkboxes
-    checkboxes.forEach(cb => cb.style.display = anyVisible ? 'inline' : 'none');
-
-    // Enable/disable bulk delete button
-    const bulkBtn = document.querySelector('.delete-selected-btn');
-    if (bulkBtn) {
-      bulkBtn.disabled = checked === 0;
-      bulkBtn.style.opacity = checked === 0 ? '0.5' : '1';
-      bulkBtn.style.pointerEvents = checked === 0 ? 'none' : '';
-    }
-
-    // Update border & styles
-    checkboxes.forEach(cb => {
-      if (cb.checked) {
-        cb.closest('.folder-card').style.border = '2px solid red';
-        cb.style.accentColor = 'red';
-        cb.style.filter = 'hue-rotate(120deg)';
-      } else {
-        cb.closest('.folder-card').style.border = '';
-        cb.style.accentColor = '';
-        cb.style.filter = '';
-      }
-    });
-  }
-
-  // === Snapshot state update ===
-  function updateSnapshotState() {
-    const cards = document.querySelectorAll('.snapshot-card');
-    const checkboxes = document.querySelectorAll('.snapshot-card input[type="checkbox"]');
-    const checked = document.querySelectorAll('.snapshot-card input[type="checkbox"]:checked').length;
-    const anyVisible = Array.from(checkboxes).some(cb => cb.style.display !== 'none');
-
-    // Show/hide delete buttons
-    cards.forEach(card => {
-      const deleteBtn = card.querySelector('.delete-btn');
-      if (!deleteBtn) return;
-      deleteBtn.style.display = (checked === 0 && !anyVisible) ? '' : 'none';
-    });
-
-    // Enable/disable links
-    cards.forEach(card => {
-      const link = card.querySelector('a'); // snapshot links
-      if (!link) return;
-      link.style.pointerEvents = (checked > 0 || anyVisible) ? 'none' : '';
-      // Removed opacity fade to prevent white fade color on snapshots
-    });
-
-    // Show/hide checkboxes
-    checkboxes.forEach(cb => cb.style.display = anyVisible ? 'inline' : 'none');
-
-    // Enable/disable bulk delete button
-    const bulkBtn = document.querySelector('.delete-selected-btn');
-    if (bulkBtn) {
-      bulkBtn.disabled = checked === 0;
-      bulkBtn.style.opacity = checked === 0 ? '0.5' : '1';
-      bulkBtn.style.pointerEvents = checked === 0 ? 'none' : '';
-    }
-
-    // Update border & styles
-    checkboxes.forEach(cb => {
-      if (cb.checked) {
-        cb.closest('.snapshot-card').style.border = '2px solid red';
-        cb.style.accentColor = 'red';
-        cb.style.filter = 'hue-rotate(120deg)';
-      } else {
-        cb.closest('.snapshot-card').style.border = '';
-        cb.style.accentColor = '';
-        cb.style.filter = '';
-      }
-    });
-  }
-
->>>>>>> 103668eb5195c96aa06d1878541924a7e91f30a7
   // === Bind single delete ===
   document.querySelectorAll('.delete-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -353,7 +256,73 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // === Folder page checkboxes ===
   if (isFoldersPage) {
-    // Add checkboxes to folder cards beside delete button, initially hidden
+    // Add checkboxes and bulk delete button
+    const headerActions = document.querySelector('.header-actions');
+    if (headerActions) {
+      headerActions.style.display = 'flex';
+      headerActions.style.justifyContent = 'space-between';
+      headerActions.style.alignItems = 'flex-start';
+
+      const rightContainer = document.createElement('div');
+      rightContainer.style.display = 'flex';
+      rightContainer.style.flexDirection = 'column';
+      rightContainer.style.alignItems = 'flex-end';
+
+      const backLink = headerActions.querySelector('.back-link');
+      if (backLink) {
+        rightContainer.appendChild(backLink);
+      }
+
+      const bulkContainer = document.createElement('div');
+      bulkContainer.style.display = 'flex';
+      bulkContainer.style.flexDirection = 'column';
+      bulkContainer.style.alignItems = 'flex-end';
+      bulkContainer.style.marginTop = '5px';
+
+      const selectAllCheckbox = document.createElement('input');
+      selectAllCheckbox.type = 'checkbox';
+      selectAllCheckbox.id = 'select-all-folders';
+      selectAllCheckbox.style.width = '25px';
+      selectAllCheckbox.style.height = '25px';
+      selectAllCheckbox.style.marginTop = '5px';
+      selectAllCheckbox.style.display = 'none'; // Hidden initially
+      const selectAllLabel = document.createElement('label');
+      selectAllLabel.htmlFor = 'select-all-folders';
+      selectAllLabel.textContent = 'Select All';
+      selectAllLabel.style.fontSize = '14px';
+      selectAllLabel.style.marginTop = '5px';
+      selectAllLabel.style.display = 'none'; // Hidden initially
+      bulkContainer.appendChild(selectAllLabel);
+      bulkContainer.appendChild(selectAllCheckbox);
+
+      // Bind select all checkbox
+      selectAllCheckbox.addEventListener('change', function() {
+        const allCbs = document.querySelectorAll('.folder-card input[type="checkbox"]');
+        allCbs.forEach(cb => cb.checked = this.checked);
+        if (this.checked) {
+          allCbs.forEach(cb => {
+            cb.closest('.folder-card')
+            cb.style.filter = 'hue-rotate(120deg)';
+          });
+        } else {
+          allCbs.forEach(cb => {
+            cb.closest('.folder-card').style.border = '';
+            cb.style.accentColor = '';
+            cb.style.filter = '';
+          });
+        }
+        document.querySelectorAll('.folder-card .folder-link').forEach(a => {
+          a.style.pointerEvents = this.checked ? 'none' : '';
+          a.style.opacity = this.checked ? '0.5' : '1';
+        });
+        updateFolderState();
+      });
+
+      rightContainer.appendChild(bulkContainer);
+      headerActions.appendChild(rightContainer);
+    }
+
+    // Add checkboxes to folder cards, initially hidden
     document.querySelectorAll('.folder-card').forEach(card => {
       const checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
@@ -385,19 +354,78 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // === Snapshot page checkboxes ===
   if (isSnapshotsPage) {
-    // Add checkboxes to snapshot cards beside delete button, initially hidden
+    // Add checkboxes and bulk delete button for snapshots
+    const headerActions = document.querySelector('.header-actions');
+    if (headerActions) {
+      headerActions.style.display = 'flex';
+      headerActions.style.justifyContent = 'space-between';
+      headerActions.style.alignItems = 'flex-start';
+
+      const rightContainer = document.createElement('div');
+      rightContainer.style.display = 'flex';
+      rightContainer.style.flexDirection = 'column';
+      rightContainer.style.alignItems = 'flex-end';
+
+      const backLink = headerActions.querySelector('.back-link');
+      if (backLink) {
+        rightContainer.appendChild(backLink);
+      }
+
+      const bulkContainer = document.createElement('div');
+      bulkContainer.style.display = 'flex';
+      bulkContainer.style.flexDirection = 'column';
+      bulkContainer.style.alignItems = 'flex-end';
+      bulkContainer.style.marginTop = '5px';
+
+      const selectAllCheckbox = document.createElement('input');
+      selectAllCheckbox.type = 'checkbox';
+      selectAllCheckbox.id = 'select-all-snapshots';
+      selectAllCheckbox.style.width = '25px';
+      selectAllCheckbox.style.height = '25px';
+      selectAllCheckbox.style.marginTop = '5px';
+      selectAllCheckbox.style.display = 'none'; // Hidden initially
+      const selectAllLabel = document.createElement('label');
+      selectAllLabel.htmlFor = 'select-all-snapshots';
+      selectAllLabel.textContent = 'Select All';
+      selectAllLabel.style.fontSize = '14px';
+      selectAllLabel.style.marginTop = '5px';
+      selectAllLabel.style.display = 'none'; // Hidden initially
+      bulkContainer.appendChild(selectAllLabel);
+      bulkContainer.appendChild(selectAllCheckbox);
+
+      // Bind select all checkbox
+      selectAllCheckbox.addEventListener('change', function() {
+        const allCbs = document.querySelectorAll('.snapshot-card input[type="checkbox"]');
+        allCbs.forEach(cb => cb.checked = this.checked);
+        if (this.checked) {
+          allCbs.forEach(cb => {
+            cb.closest('.snapshot-card')
+            cb.style.filter = 'hue-rotate(120deg)';
+          });
+        } else {
+          allCbs.forEach(cb => {
+            cb.closest('.snapshot-card').style.border = '';
+            cb.style.accentColor = '';
+            cb.style.filter = '';
+          });
+        }
+        updateSnapshotState();
+      });
+
+      rightContainer.appendChild(bulkContainer);
+      headerActions.appendChild(rightContainer);
+    }
+
+    // Add checkboxes to snapshot cards
     document.querySelectorAll('.snapshot-card').forEach(card => {
       const checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
       checkbox.style.width = '25px';
       checkbox.style.height = '25px';
       checkbox.style.marginRight = '1px';
-      checkbox.style.verticalAlign = 'middle'; // Align with delete button
+      checkbox.style.verticalAlign = 'middle';
       checkbox.style.display = 'none'; // Hide initially
-      const deleteForm = card.querySelector('.delete-form');
-      if (deleteForm) {
-        deleteForm.insertBefore(checkbox, deleteForm.firstChild);
-      }
+      card.insertBefore(checkbox, card.firstChild);
     });
 
     // Initial toggle to set button state
@@ -406,8 +434,7 @@ document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('.snapshot-card input[type="checkbox"]').forEach(cb => {
       cb.addEventListener('change', function() {
         if (this.checked) {
-          this.closest('.snapshot-card').style.border = '2px solid red';
-          this.style.accentColor = 'red';
+          this.closest('.snapshot-card')
           this.style.filter = 'hue-rotate(120deg)';
         } else {
           this.closest('.snapshot-card').style.border = '';
@@ -462,8 +489,137 @@ document.addEventListener('DOMContentLoaded', function () {
     const overlay = document.querySelector('.loading-overlay');
     if (overlay) overlay.classList.add('hidden');
   }, 500);
+// --- Handle folder interactions (single, double, ctrl, right-click) --- //
 
-  // === Sort dropdown ===
+const folderCards = document.querySelectorAll(".folder-card");
+
+// If you track whether select mode is active
+let selectModeActive = false;
+
+// Helper: Update state (optional function, you can define your own)
+function updateFolderState() {
+  const selectedCount = document.querySelectorAll('.folder-card.selected').length;
+  console.log(`Selected folders: ${selectedCount}`);
+}
+
+folderCards.forEach(card => {
+  const folderLinkDiv = card.querySelector(".folder-link");
+  const folderName = folderLinkDiv?.dataset?.folder;
+
+  const openFolder = () => {
+    if (!folderName) return;
+    window.location.href = `/records/folder/${encodeURIComponent(folderName)}`;
+  };
+
+  // Ignore click if it's on a button, menu, or input inside the card
+  const isClickOnControl = (target) => {
+    return !!target.closest("button, input, .folder-menu-btn, .folder-menu-dropdown");
+  };
+
+  // --- Single click (select or toggle) ---
+  card.addEventListener("click", (e) => {
+    if (isClickOnControl(e.target)) return;
+
+    // Ctrl or Cmd pressed → multi-select toggle
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      card.classList.toggle("selected");
+      const cb = card.querySelector('input[type="checkbox"], .select-indicator');
+      if (cb) cb.checked = card.classList.contains("selected");
+      updateFolderState();
+      return;
+    }
+
+    // If select mode is active, toggle
+    if (selectModeActive) {
+      e.preventDefault();
+      card.classList.toggle("selected");
+      const cb = card.querySelector('input[type="checkbox"], .select-indicator');
+      if (cb) cb.checked = card.classList.contains("selected");
+      updateFolderState();
+      return;
+    }
+
+    // Normal single click: clear other selections, select this only
+    document.querySelectorAll('.folder-card.selected').forEach(c => {
+      if (c !== card) {
+        c.classList.remove('selected');
+        const cb = c.querySelector('input[type="checkbox"], .select-indicator');
+        if (cb) cb.checked = false;
+      }
+    });
+
+    card.classList.add("selected");
+    const cb = card.querySelector('input[type="checkbox"], .select-indicator');
+    if (cb) cb.checked = true;
+    updateFolderState();
+  });
+
+
+  // --- SORT MENU FUNCTIONALITY ---
+
+document.querySelectorAll('.sort-option').forEach(option => {
+  option.addEventListener('click', () => {
+    const sortType = option.dataset.sort;
+    const grid = document.querySelector('.records-grid');
+    if (!grid) return;
+
+    // Get all folder cards
+    const folders = Array.from(grid.querySelectorAll('.folder-card'));
+
+    // Sort logic
+    let sortedFolders = [];
+    if (sortType === 'name') {
+      sortedFolders = folders.sort((a, b) => {
+        const nameA = a.querySelector('.folder-name').textContent.trim().toLowerCase();
+        const nameB = b.querySelector('.folder-name').textContent.trim().toLowerCase();
+        return nameA.localeCompare(nameB);
+      });
+    } 
+    else if (sortType === 'date') {
+      // Requires Flask to include folder.created_at
+      sortedFolders = folders.sort((a, b) => {
+        const dateA = new Date(a.dataset.createdAt || 0);
+        const dateB = new Date(b.dataset.createdAt || 0);
+        return dateB - dateA; // newest first
+      });
+    } 
+    else if (sortType === 'count') {
+      sortedFolders = folders.sort((a, b) => {
+        const countA = parseInt(a.querySelector('.folder-count').textContent) || 0;
+        const countB = parseInt(b.querySelector('.folder-count').textContent) || 0;
+        return countB - countA; // highest first
+      });
+    }
+
+    // Re-append sorted elements to the grid
+    sortedFolders.forEach(folder => grid.appendChild(folder));
+
+    // Close dropdown after sort
+    document.querySelector('.sort-dropdown')?.classList.remove('active');
+  });
+});
+
+
+  // --- Double-click → open folder ---
+  card.addEventListener("dblclick", (e) => {
+    if (isClickOnControl(e.target)) return;
+    openFolder();
+  });
+
+  // --- Right-click (context) → toggle selection ---
+  card.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+    if (isClickOnControl(e.target)) return;
+    card.classList.toggle("selected");
+    const cb = card.querySelector('input[type="checkbox"], .select-indicator');
+    if (cb) cb.checked = card.classList.contains("selected");
+    updateFolderState();
+  });
+});
+
+
+  // Sort and header menu toggle
   const sortDropdown = document.querySelector('.sort-dropdown');
   const sortBtn = document.querySelector('.sort-btn');
   const headerMenuContainer = document.querySelector('.header-menu-container');
@@ -479,424 +635,239 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   document.addEventListener('click', (e) => {
-    if (!sortDropdown?.contains(e.target)) sortDropdown?.classList.remove('active');
-    if (!headerMenuContainer?.contains(e.target)) headerMenuContainer?.classList.remove('active');
+    if (sortDropdown && !sortDropdown.contains(e.target)) sortDropdown.classList.remove('active');
+    if (headerMenuContainer && !headerMenuContainer.contains(e.target)) headerMenuContainer.classList.remove('active');
   });
 
   // Handle header menu item clicks
-  document.addEventListener('click', (e) => {
-    if (e.target.classList.contains('select-mode-btn')) {
-      const text = e.target.textContent.trim().toLowerCase();
+  document.querySelectorAll('.header-menu-item').forEach(item => {
+    item.addEventListener('click', function(e) {
+      e.stopPropagation();
+      const text = this.textContent.trim().toLowerCase();
       if (text === 'select') {
-        // Toggle select mode for folders or snapshots
+        // Show checkboxes for all cards and activate select mode
         if (isFoldersPage) {
-          const anyVisible = Array.from(document.querySelectorAll('.folder-card input[type="checkbox"]')).some(cb => cb.style.display !== 'none');
-          if (anyVisible) {
-            // Exit select mode
-            document.querySelectorAll('.folder-card input[type="checkbox"]').forEach(cb => {
-              cb.style.display = 'none';
-              cb.checked = false;
-              cb.closest('.folder-card').style.border = '';
-              cb.style.accentColor = '';
-              cb.style.filter = '';
-            });
-            document.querySelectorAll('.folder-card .delete-btn').forEach(btn => btn.style.display = '');
-            document.querySelectorAll('.folder-card .folder-link').forEach(a => {
-              a.style.pointerEvents = '';
-            });
-            updateFolderState();
-          } else {
-            // Enter select mode
-            document.querySelectorAll('.folder-card input[type="checkbox"]').forEach(cb => {
-              cb.style.display = 'inline';
-            });
-            updateFolderState();
-          }
+          selectModeActive = true;
+          document.querySelectorAll('.folder-card input[type="checkbox"]').forEach(cb => cb.style.display = 'inline');
+          updateFolderState();
         } else if (isSnapshotsPage) {
-          const anyVisible = Array.from(document.querySelectorAll('.snapshot-card input[type="checkbox"]')).some(cb => cb.style.display !== 'none');
-          if (anyVisible) {
-            // Exit select mode
-            document.querySelectorAll('.snapshot-card input[type="checkbox"]').forEach(cb => {
-              cb.style.display = 'none';
-              cb.checked = false;
-              cb.closest('.snapshot-card').style.border = '';
-              cb.style.accentColor = '';
-              cb.style.filter = '';
-            });
-            document.querySelectorAll('.snapshot-card .delete-btn').forEach(btn => btn.style.display = '');
-            updateSnapshotState();
-          } else {
-            // Enter select mode
-            document.querySelectorAll('.snapshot-card input[type="checkbox"]').forEach(cb => {
-              cb.style.display = 'inline';
-            });
-            updateSnapshotState();
-          }
+          snapshotSelectModeActive = true;
+          document.querySelectorAll('.snapshot-card input[type="checkbox"]').forEach(cb => cb.style.display = 'inline');
+          updateSnapshotState();
         }
-        // Close the dropdown
+        // Close dropdown
         headerMenuContainer.classList.remove('active');
       } else if (text === 'select all') {
-        // Toggle select all
         if (isFoldersPage) {
           const checkboxes = document.querySelectorAll('.folder-card input[type="checkbox"]');
           const allChecked = Array.from(checkboxes).every(cb => cb.checked);
           if (allChecked) {
-            // Uncheck all and exit select mode
+            // Uncheck all, keep checkboxes visible
             checkboxes.forEach(cb => {
               cb.checked = false;
-              cb.style.display = 'none';
+              cb.style.display = 'inline';
               cb.closest('.folder-card').style.border = '';
               cb.style.accentColor = '';
               cb.style.filter = '';
             });
-            document.querySelectorAll('.folder-card .delete-btn').forEach(btn => btn.style.display = '');
-        document.querySelectorAll('.folder-card .folder-link').forEach(a => {
-          a.style.pointerEvents = '';
-        });
-            updateFolderState();
           } else {
-            // Check all
+            // Check all, show checkboxes, apply styles
             checkboxes.forEach(cb => {
-              cb.style.display = 'inline';
               cb.checked = true;
-              cb.closest('.folder-card').style.border = '2px solid red';
-              cb.style.accentColor = 'red';
+              cb.style.display = 'inline';
+              cb.closest('.folder-card')
               cb.style.filter = 'hue-rotate(120deg)';
             });
-            document.querySelectorAll('.folder-card .folder-link').forEach(a => {
-              a.style.pointerEvents = 'none';
-            });
-            updateFolderState();
           }
+          updateFolderState();
         } else if (isSnapshotsPage) {
           const checkboxes = document.querySelectorAll('.snapshot-card input[type="checkbox"]');
           const allChecked = Array.from(checkboxes).every(cb => cb.checked);
           if (allChecked) {
-            // Uncheck all and exit select mode
+            // Uncheck all, keep checkboxes visible
             checkboxes.forEach(cb => {
               cb.checked = false;
-              cb.style.display = 'none';
+              cb.style.display = 'inline';
               cb.closest('.snapshot-card').style.border = '';
               cb.style.accentColor = '';
               cb.style.filter = '';
             });
-            document.querySelectorAll('.snapshot-card .delete-btn').forEach(btn => btn.style.display = '');
-            updateSnapshotState();
           } else {
-            // Check all
+            // Check all, show checkboxes, apply styles
             checkboxes.forEach(cb => {
-              cb.style.display = 'inline';
               cb.checked = true;
-              cb.closest('.snapshot-card').style.border = '2px solid red';
-              cb.style.accentColor = 'red';
+              cb.style.display = 'inline';
+              cb.closest('.snapshot-card')
               cb.style.filter = 'hue-rotate(120deg)';
             });
-            updateSnapshotState();
           }
+          updateSnapshotState();
         }
-        // Close the dropdown
+        // Close dropdown
         headerMenuContainer.classList.remove('active');
       }
+    });
+  });
+});
+
+// === Toggle 3-dot dropdown ===
+document.querySelectorAll('.snapshot-menu-btn').forEach(btn => {
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    const container = btn.closest('.snapshot-menu-container');
+    document.querySelectorAll('.snapshot-menu-container').forEach(c => {
+      if (c !== container) c.classList.remove('active');
+    });
+    container.classList.toggle('active');
+  });
+});
+
+// Prevent bubbling from dropdown to snapshot link
+document.querySelectorAll('.snapshot-menu-dropdown').forEach(dropdown => {
+  dropdown.addEventListener('click', e => {
+    e.stopPropagation();
+  });
+});
+
+// Prevent snapshot link navigation when menu is active
+document.querySelectorAll('.snapshot-link').forEach(link => {
+  link.addEventListener('click', e => {
+    const container = link.closest('.snapshot-card').querySelector('.snapshot-menu-container');
+    if (container && container.classList.contains('active')) {
+      e.preventDefault();
     }
   });
+});
 
-  // === Toggle 3-dot dropdown ===
-  document.querySelectorAll('.snapshot-menu-btn').forEach(btn => {
-    btn.addEventListener('click', e => {
-      e.stopPropagation();
-      const container = btn.closest('.snapshot-menu-container');
-      document.querySelectorAll('.snapshot-menu-container').forEach(c => {
-        if (c !== container) c.classList.remove('active');
-      });
-      container.classList.toggle('active');
-    });
-  });
+// Close dropdown when clicking outside
+document.addEventListener('click', () => {
+  document.querySelectorAll('.snapshot-menu-container').forEach(c => c.classList.remove('active'));
+});
 
-  // Prevent bubbling from dropdown to snapshot link
-  document.querySelectorAll('.snapshot-menu-dropdown').forEach(dropdown => {
-    dropdown.addEventListener('click', e => {
-      e.stopPropagation();
-    });
-  });
-
-  // Prevent snapshot link navigation when menu is active
-  document.querySelectorAll('.snapshot-link').forEach(link => {
-    link.addEventListener('click', e => {
-      const container = link.closest('.snapshot-card').querySelector('.snapshot-menu-container');
-      if (container && container.classList.contains('active')) {
-        e.preventDefault();
-      }
-    });
-  });
-
-  // Close dropdown when clicking outside
-  document.addEventListener('click', () => {
-    document.querySelectorAll('.snapshot-menu-container').forEach(c => c.classList.remove('active'));
-  });
-
-  // === Folder menu toggle ===
-  document.querySelectorAll('.folder-menu-btn').forEach(btn => {
-    // Prevent blue outline/focus flash
-    btn.addEventListener('mousedown', e => e.preventDefault());
-
-    btn.addEventListener('click', e => {
-      e.stopPropagation();
-      const container = btn.closest('.folder-menu-container');
-      const isActive = container.classList.contains('active');
-
-      // Close all other open menus first
-      document.querySelectorAll('.folder-menu-container.active').forEach(c => c.classList.remove('active'));
-
-      // Toggle current menu
-      if (!isActive) {
-        container.classList.add('active');
-      }
-    });
-  });
-
-  // Close menu if clicking outside
-  document.addEventListener('click', e => {
-    if (!e.target.closest('.folder-menu-container')) {
-      document.querySelectorAll('.folder-menu-container.active').forEach(c => c.classList.remove('active'));
-    }
-  });
-
-  // === Handle Select mode for folders ===
-  document.addEventListener('click', function(e) {
-    if (e.target.classList.contains('folder-menu-item') && e.target.textContent.trim().toLowerCase() === 'select') {
-      e.stopPropagation();
-      // Hide delete buttons
-      document.querySelectorAll('.folder-card .delete-btn').forEach(btn => btn.style.display = 'none');
-      // Show checkboxes
-      document.querySelectorAll('.folder-card input[type="checkbox"]').forEach(cb => {
-        cb.style.display = 'inline';
-      });
-      updateFolderState();
-      // Close the dropdown
-      const container = e.target.closest('.folder-menu-container');
-      if (container) container.classList.remove('active');
-    } else if (e.target.classList.contains('folder-menu-item') && e.target.textContent.trim().toLowerCase() === 'select all') {
-      e.stopPropagation();
-      // Hide delete buttons
-      document.querySelectorAll('.folder-card .delete-btn').forEach(btn => btn.style.display = 'none');
-      // Show checkboxes
-      document.querySelectorAll('.folder-card input[type="checkbox"]').forEach(cb => {
-        cb.style.display = 'inline';
-      });
-      // Toggle select all
-      const checkboxes = document.querySelectorAll('.folder-card input[type="checkbox"]');
-      const allChecked = Array.from(checkboxes).every(cb => cb.checked);
-      if (allChecked) {
-        // Uncheck all and exit select mode
-        checkboxes.forEach(cb => {
-          cb.checked = false;
-          cb.style.display = 'none';
-          cb.closest('.folder-card').style.border = '';
-          cb.style.accentColor = '';
-          cb.style.filter = '';
-        });
-        document.querySelectorAll('.folder-card .delete-btn').forEach(btn => btn.style.display = '');
-        document.querySelectorAll('.folder-card .folder-link').forEach(a => {
-          a.style.pointerEvents = '';
-          a.style.opacity = '1';
-        });
-        updateFolderState();
-      } else {
-        // Check all
-        checkboxes.forEach(cb => {
-          cb.checked = true;
-          cb.closest('.folder-card').style.border = '2px solid red';
-          cb.style.accentColor = 'red';
-          cb.style.filter = 'hue-rotate(120deg)';
-        });
-        document.querySelectorAll('.folder-card .folder-link').forEach(a => {
-          a.style.pointerEvents = 'none';
-          a.style.opacity = '0.5';
-        });
-        updateFolderState();
-      }
-      // Close the dropdown
-      const container = e.target.closest('.folder-menu-container');
-      if (container) container.classList.remove('active');
-    }
-  });
-
-  // === Handle Select mode for snapshots ===
-  document.addEventListener('click', function(e) {
-    if (e.target.classList.contains('snapshot-menu-item') && e.target.textContent.trim().toLowerCase() === 'select') {
-      e.stopPropagation();
-      // Hide delete buttons
-      document.querySelectorAll('.snapshot-card .delete-btn').forEach(btn => btn.style.display = 'none');
-      // Show checkboxes
-      document.querySelectorAll('.snapshot-card input[type="checkbox"]').forEach(cb => {
-        cb.style.display = 'inline';
-      });
+// Handle snapshot menu item clicks
+document.addEventListener('click', function(e) {
+  if (e.target.classList.contains('snapshot-menu-item')) {
+    const text = e.target.textContent.trim().toLowerCase();
+    if (text === 'select') {
+      // Show checkboxes for snapshots
+      snapshotSelectModeActive = true;
+      document.querySelectorAll('.snapshot-card input[type="checkbox"]').forEach(cb => cb.style.display = 'inline');
       updateSnapshotState();
-      // Close the dropdown
-      const container = e.target.closest('.snapshot-menu-container');
-      if (container) container.classList.remove('active');
-    } else if (e.target.classList.contains('snapshot-menu-item') && e.target.textContent.trim().toLowerCase() === 'select all') {
-      e.stopPropagation();
-      // Hide delete buttons
-      document.querySelectorAll('.snapshot-card .delete-btn').forEach(btn => btn.style.display = 'none');
-      // Show checkboxes
-      document.querySelectorAll('.snapshot-card input[type="checkbox"]').forEach(cb => {
-        cb.style.display = 'inline';
-      });
-      // Toggle select all
+    } else if (text === 'select all') {
+      // Handle select all for snapshots
       const checkboxes = document.querySelectorAll('.snapshot-card input[type="checkbox"]');
       const allChecked = Array.from(checkboxes).every(cb => cb.checked);
       if (allChecked) {
-        // Uncheck all and exit select mode
         checkboxes.forEach(cb => {
           cb.checked = false;
-          cb.style.display = 'none';
           cb.closest('.snapshot-card').style.border = '';
           cb.style.accentColor = '';
           cb.style.filter = '';
         });
-        document.querySelectorAll('.snapshot-card .delete-btn').forEach(btn => btn.style.display = '');
-        updateSnapshotState();
       } else {
-        // Check all
         checkboxes.forEach(cb => {
           cb.checked = true;
-          cb.closest('.snapshot-card').style.border = '2px solid red';
-          cb.style.accentColor = 'red';
+          cb.closest('.snapshot-card')
           cb.style.filter = 'hue-rotate(120deg)';
         });
-        updateSnapshotState();
       }
-      // Close the dropdown
-      const container = e.target.closest('.snapshot-menu-container');
-      if (container) container.classList.remove('active');
+      updateSnapshotState();
+    }
+    // Close the dropdown
+    const container = e.target.closest('.snapshot-menu-container');
+    if (container) container.classList.remove('active');
+  }
+});
+
+// Make entire snapshot card clickable to open snapshot
+document.querySelectorAll('.snapshot-card').forEach(card => {
+  card.addEventListener('click', e => {
+    // If in select mode, don't navigate
+    if (snapshotSelectModeActive) return;
+    // If click is on menu button or dropdown, don't navigate
+    if (e.target.closest('.snapshot-menu-container')) return;
+    // Else, find the link and navigate
+    const link = card.querySelector('.snapshot-link');
+    if (link) {
+      window.location.href = link.href;
     }
   });
+});
 
-  // === Select folder on click & open on double click ===
-  document.querySelectorAll('.folder-card').forEach(card => {
-    // Single / Ctrl+Click selection
-    card.addEventListener('click', (e) => {
-      if (e.target.closest('.folder-menu-btn') || e.target.closest('.folder-menu-dropdown')) return;
+// Handle header dropdown delete for selected items
+document.querySelectorAll('.header-menu-item').forEach(item => {
+  item.addEventListener('click', function(e) {
+    e.stopPropagation();
+    const text = this.textContent.trim().toLowerCase();
 
-      const checkbox = card.querySelector('input[type="checkbox"]');
-      const isSelectMode = checkbox && checkbox.style.display !== 'none';
-      const isCtrl = e.ctrlKey; // Detect Ctrl key
+    if (text === 'delete') {
+      const isFoldersPage = document.querySelectorAll('.folder-card').length > 0;
+      const isSnapshotsPage = document.querySelectorAll('.snapshot-card').length > 0;
 
-      if (isSelectMode) {
-        // In select mode, toggle selection on click
-        card.classList.toggle('selected');
-        if (checkbox) checkbox.checked = card.classList.contains('selected');
+      // Collect selected cards
+      let selectedCards = [];
+      if (isFoldersPage) {
+        selectedCards = Array.from(document.querySelectorAll('.folder-card input[type="checkbox"]:checked'))
+          .map(cb => cb.closest('.folder-card'));
+      } else if (isSnapshotsPage) {
+        selectedCards = Array.from(document.querySelectorAll('.snapshot-card input[type="checkbox"]:checked'))
+          .map(cb => cb.closest('.snapshot-card'));
+      }
+
+      if (selectedCards.length === 0) {
+        alert('No items selected.');
         return;
       }
 
-      // Ctrl+Click → toggle selection
-      if (isCtrl) {
-        card.classList.toggle('selected');
-        if (checkbox) checkbox.checked = card.classList.contains('selected');
-        return;
-      }
+      // Open confirmation modal
+      const modal = document.getElementById('deleteModal');
+      if (!modal) return;
+      const confirmBtn = document.getElementById('confirmDelete');
+      const cancelBtn = modal.querySelector('.cancel');
+      const closeBtn = modal.querySelector('.close');
 
-      // Normal click → select only this
-      document.querySelectorAll('.folder-card.selected').forEach(selectedCard => {
-        selectedCard.classList.remove('selected');
-        const cb = selectedCard.querySelector('input[type="checkbox"]');
-        if (cb) cb.checked = false;
-      });
+      modal.querySelector('p').textContent = `Are you sure you want to delete ${selectedCards.length} selected item${selectedCards.length > 1 ? 's' : ''}?`;
+      modal.style.display = 'block';
+      modal.style.zIndex = '1000';
 
-      card.classList.add('selected');
-      if (checkbox) checkbox.checked = true;
-    });
+      const handleConfirm = async () => {
+        for (const card of selectedCards) {
+          const form = card.querySelector('.delete-form');
+          const deleteBtn = card.querySelector('.delete-btn');
+          const deleteUrl = deleteBtn?.dataset?.deleteUrl || deleteBtn?.href;
 
-    // Right-click → toggle (like Ctrl)
-    card.addEventListener('contextmenu', (e) => {
-      e.preventDefault(); // prevent context menu
-      const checkbox = card.querySelector('input[type="checkbox"]');
-      card.classList.toggle('selected');
-      if (checkbox) checkbox.checked = card.classList.contains('selected');
-    });
+          try {
+            if (form) {
+              const response = await fetch(form.action, { method: form.method || 'POST' });
+              if (!response.ok) console.error('Form delete failed:', response.status);
+            } else if (deleteUrl) {
+              const response = await fetch(deleteUrl, { method: 'POST' });
+              if (!response.ok) console.error('URL delete failed:', response.status);
+            }
+            card.remove();
+          } catch (err) {
+            console.error('Error deleting:', err);
+          }
+        }
 
-    // Double click → open folder
-    card.addEventListener('dblclick', (e) => {
-      if (e.target.closest('.folder-menu-btn') || e.target.closest('.folder-menu-dropdown')) return;
+        modal.style.display = 'none';
+        if (isFoldersPage) {
+          selectModeActive = false;
+          updateFolderState();
+        } else if (isSnapshotsPage) {
+          snapshotSelectModeActive = false;
+          updateSnapshotState();
+        }
 
-      const folderAnchor = card.querySelector('.folder-menu-dropdown a[href], .folder-link[href]');
-      if (folderAnchor) {
-        window.location.href = folderAnchor.href;
-      }
-    });
-  });
+        confirmBtn.removeEventListener('click', handleConfirm);
+      };
 
-  // === Deselect folder if clicking outside ===
-  document.addEventListener('click', (e) => {
-    if (!e.target.closest('.folder-card') && !e.target.closest('.folder-menu-btn') && !e.target.closest('.folder-menu-dropdown')) {
-      document.querySelectorAll('.folder-card.selected').forEach(selectedCard => {
-        selectedCard.classList.remove('selected');
-        const cb = selectedCard.querySelector('input[type="checkbox"]');
-        if (cb) cb.checked = false;
-      });
-    }
-  });
+      confirmBtn.addEventListener('click', handleConfirm, { once: true });
+      [cancelBtn, closeBtn].forEach(el => el.addEventListener('click', () => modal.style.display = 'none', { once: true }));
 
-  // === Snapshot selection & open on double click ===
-  document.querySelectorAll('.snapshot-card').forEach(card => {
-    const checkbox = card.querySelector('input[type="checkbox"]');
-
-    // Left click (single or ctrl)
-    card.addEventListener('click', e => {
-      if (e.target.closest('.snapshot-menu-btn') || e.target.closest('.snapshot-menu-dropdown')) return;
-
-      const isSelectMode = checkbox && checkbox.style.display !== 'none';
-      const isCtrl = e.ctrlKey;
-
-      if (isSelectMode) {
-        // In select mode, toggle selection on click
-        card.classList.toggle('selected');
-        if (checkbox) checkbox.checked = card.classList.contains('selected');
-        return;
-      }
-
-      // Ctrl + Click → toggle selection
-      if (isCtrl) {
-        card.classList.toggle('selected');
-        if (checkbox) checkbox.checked = card.classList.contains('selected');
-        return;
-      }
-
-      // Normal click → select only this one
-      document.querySelectorAll('.snapshot-card.selected').forEach(s => {
-        s.classList.remove('selected');
-        const cb = s.querySelector('input[type="checkbox"]');
-        if (cb) cb.checked = false;
-      });
-
-      card.classList.add('selected');
-      if (checkbox) checkbox.checked = true;
-    });
-
-    // Right-click → toggle selection
-    card.addEventListener('contextmenu', e => {
-      e.preventDefault();
-      card.classList.toggle('selected');
-      if (checkbox) checkbox.checked = card.classList.contains('selected');
-    });
-
-    // Double click → open snapshot
-    card.addEventListener('dblclick', e => {
-      if (e.target.closest('.snapshot-menu-btn') || e.target.closest('.snapshot-menu-dropdown')) return;
-      const snapAnchor = card.querySelector('.snapshot-link');
-      if (snapAnchor) window.location.href = snapAnchor.href;
-    });
-  });
-
-  // === Deselect snapshots when clicking outside ===
-  document.addEventListener('click', e => {
-    if (!e.target.closest('.snapshot-card') && !e.target.closest('.snapshot-menu-btn') && !e.target.closest('.snapshot-menu-dropdown')) {
-      document.querySelectorAll('.snapshot-card.selected').forEach(s => {
-        s.classList.remove('selected');
-        const cb = s.querySelector('input[type="checkbox"]');
-        if (cb) cb.checked = false;
-      });
+      // Close dropdown
+      const headerMenuContainer = document.querySelector('.header-menu-container');
+      if (headerMenuContainer) headerMenuContainer.classList.remove('active');
     }
   });
 });
