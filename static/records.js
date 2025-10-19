@@ -592,14 +592,7 @@ document.querySelectorAll('.header-menu-item').forEach(item => {
       const isSnapshotsPage = document.querySelectorAll('.snapshot-card').length > 0;
 
       // Collect selected cards
-      let selectedCards = [];
-      if (isFoldersPage) {
-        selectedCards = Array.from(document.querySelectorAll('.folder-card input[type="checkbox"]:checked'))
-          .map(cb => cb.closest('.folder-card'));
-      } else if (isSnapshotsPage) {
-        selectedCards = Array.from(document.querySelectorAll('.snapshot-card input[type="checkbox"]:checked'))
-          .map(cb => cb.closest('.snapshot-card'));
-      }
+      let selectedCards = Array.from(document.querySelectorAll('.folder-card.selected, .snapshot-card.selected'));
 
       if (selectedCards.length === 0) {
         alert('No items selected.');
