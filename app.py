@@ -316,6 +316,42 @@ def activate_user(user_id):
         logger.exception("activate_user error: %s", e)
         flash("Unable to activate user.", "danger")
     return redirect(url_for("list_users"))
+
+@app.route("/admin/dashboard")
+@login_required
+def admin_dashboard():
+    if session.get("role") != "admin":
+        flash("Access denied!", "danger")
+        return redirect(url_for("home"))
+
+    try:
+        # Summary counts
+        cursor.execute("SELECT COUNT(*) FROM users")
+        total_users = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM users WHERE status='Active'")
+        active_users = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM users WHERE status='Inactive'")
+        inactive_users = cursor.fetchone()[0]
+
+        # Recent users preview (include status here)
+        cursor.execute("SELECT username, role, status FROM users ORDER BY id DESC LIMIT 5")
+        users_preview = cursor.fetchall()
+
+    except Exception as e:
+        logger.exception("admin_dashboard error: %s", e)
+        total_users = active_users = inactive_users = 0
+        users_preview = []
+
+    return render_template(
+        "admin_dashboard.html",
+        total_users=total_users,
+        active_users=active_users,
+        inactive_users=inactive_users,
+        users_preview=users_preview
+    )
+
 # ---------- Assessment session ----------
 @app.route("/assessment-session", methods=["POST"])
 @login_required
