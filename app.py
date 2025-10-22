@@ -759,6 +759,8 @@ def delete_notification(snap_id):
                     os.remove(image_path)
             except Exception:
                 logger.exception("Failed to remove image file")
+        # Emit socket event to update cheating page timeline
+        socketio.emit("snapshot_deleted", {"snap_id": snap_id})
         return jsonify({"success": True})
     except Exception as e:
         db.rollback()

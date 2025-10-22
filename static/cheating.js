@@ -54,6 +54,18 @@ window.addEventListener("DOMContentLoaded", () => {
         }
       }
     });
+
+    socket.on("snapshot_deleted", (data) => {
+      console.log("🗑️ Snapshot deleted:", data.snap_id);
+      const timeline = document.getElementById("timeline");
+      if (timeline) {
+        const pointToRemove = timeline.querySelector(`[data-id="${data.snap_id}"]`);
+        if (pointToRemove) {
+          pointToRemove.remove();
+          if (window.refreshTimeline) window.refreshTimeline();
+        }
+      }
+    });
   }
 });
 
