@@ -403,15 +403,17 @@ button:hover {
 .badge {
   background: #ff4444;
   color: #fff;
-  font-size: 12px;
+  font-size: 10px;
   font-weight: bold;
   border-radius: 50%;
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   margin-left: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
+  line-height: 1;
+  box-sizing: border-box;
 }
 
 
@@ -1474,10 +1476,6 @@ body.dashboard-body {
   cursor: pointer;
   padding: 4px;
   transition: background 0.2s;
-}
-
-.folder-menu-btn:hover {
-  background: rgba(255, 255, 255, 0.15);
 }
 
 /* Dropdown styles */

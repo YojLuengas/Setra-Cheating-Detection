@@ -1,4 +1,4 @@
-import { appendNotification, persistState, alertCount, updateBadge, seenSnapshots } from "./notifications.js";
+import { appendNotification, persistState, updateBadge, seenSnapshots, refreshNotifications } from "./notifications.js";
 
 let socket;
 
@@ -28,35 +28,45 @@ function initSocket(video, statusDiv) {
     });
 
     socket.on("cheating_notification", (data) => {
-  const snapId = data.url.split("/").pop();
-  if (!seenSnapshots.has(snapId)) {
-    appendNotification(data);
-    updateBadge();
+      const snapId = data.url.split("/").pop();
+      if (!seenSnapshots.has(snapId)) {
+        appendNotification(data);
+        updateBadge();
 
-    const timestampMatch = data.message.match(/at (.+)!/);
-    const timestamp = timestampMatch ? timestampMatch[1] : new Date().toLocaleString();
-    const epoch = Date.now() / 1000;
+        const timestampMatch = data.message.match(/at (.+)!/);
+        const timestamp = timestampMatch ? timestampMatch[1] : new Date().toLocaleString();
+        const epoch = Date.now() / 1000;
 
-    const timeline = document.getElementById("timeline");
-    if (timeline) {
-      const point = document.createElement("div");
-      point.className = "timeline-point";
-      point.dataset.id = snapId;
-      point.dataset.timestamp = timestamp;
-      point.dataset.epoch = epoch;
-      point.title = "Taken at " + timestamp;
+        const timeline = document.getElementById("timeline");
+        if (timeline) {
+          const point = document.createElement("div");
+          point.className = "timeline-point";
+          point.dataset.id = snapId;
+          point.dataset.timestamp = timestamp;
+          point.dataset.epoch = epoch;
+          point.title = "Taken at " + timestamp;
 
-      timeline.appendChild(point);
+          timeline.appendChild(point);
 
-      // ⏩ Update timeline
-      if (window.refreshTimeline) window.refreshTimeline();
+          // ⏩ Update timeline
+          if (window.refreshTimeline) window.refreshTimeline();
 
-      // ⏩ Auto-jump to newest snapshot (force = true)
-      if (window.autoSwitchTo) window.autoSwitchTo(point, true);
-    }
+          // ⏩ Auto-jump to newest snapshot (force = true)
+          if (window.autoSwitchTo) window.autoSwitchTo(point, true);
+        }
 
-    persistState(data, { id: snapId, timestamp, epoch });
-  }
+        persistState(data, { id: snapId, timestamp, epoch });
+      }
+    });
+
+    // When server tells clients to refresh notifications (e.g. after stopping assessment)
+    socket.on("refresh_notifications", (payload) => {
+      try {
+        if (typeof refreshNotifications === "function") refreshNotifications();
+        else if (window.refreshNotifications) window.refreshNotifications();
+      } catch (e) {
+        console.warn("refresh_notifications handler error", e);
+      }
     });
   }
 }

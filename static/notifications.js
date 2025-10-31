@@ -188,6 +188,75 @@ function appendNotification(data) {
   if (notifications) notifications.prepend(li);
 }
 
+// --- Restore notifications on page load ---
+window.addEventListener("DOMContentLoaded", async () => {
+  const storedSeen = JSON.parse(sessionStorage.getItem("seenSnapshots") || "[]");
+  storedSeen.forEach(id => seenSnapshots.add(id));
+
+  const res = await fetch("/api/notifications");
+  const data = await res.json();
+  notifications.innerHTML = "";
+
+  if (data.notifications.length === 0) {
+    // Show the "No alerts yet" message
+    let noAlertsMsg = document.getElementById("no-alerts-msg");
+    if (!noAlertsMsg) {
+      noAlertsMsg = document.createElement("p");
+      noAlertsMsg.id = "no-alerts-msg";
+      noAlertsMsg.textContent = "No alerts yet";
+      notifications.appendChild(noAlertsMsg);
+    }
+  } else {
+    // Hide the "No alerts yet" message if present
+    const noAlertsMsg = document.getElementById("no-alerts-msg");
+    if (noAlertsMsg) noAlertsMsg.style.display = "none";
+    data.notifications.reverse().forEach(n => {
+      const snapId = n.url ? n.url.split("/").pop() : null;
+      if (snapId && seenSnapshots.has(snapId)) n.read = true;
+      appendNotification(n);
+    });
+  }
+
+  const alertsMenu = document.getElementById("alerts-menu");
+  if (alertsMenu) {
+    alertsMenu.addEventListener("click", () => {
+      const notifPanel = document.querySelector(".notifPanel");
+      if (notifPanel) notifPanel.classList.toggle("open");
+    });
+  }
+
+  updateBadge();
+});
+
+// --- Refresh notifications from server and rebuild UI ---
+async function refreshNotifications() {
+  if (!notifications) return;
+  try {
+    const res = await fetch("/api/notifications");
+    if (!res.ok) return;
+    const data = await res.json();
+    notifications.innerHTML = "";
+    if (!data || !data.notifications || data.notifications.length === 0) {
+      let noAlertsMsg = document.getElementById("no-alerts-msg");
+      if (!noAlertsMsg) {
+        noAlertsMsg = document.createElement("p");
+        noAlertsMsg.id = "no-alerts-msg";
+        noAlertsMsg.textContent = "No alerts yet";
+        notifications.appendChild(noAlertsMsg);
+      }
+    } else {
+      data.notifications.reverse().forEach(n => {
+        const snapId = n.url ? n.url.split("/").pop() : null;
+        if (snapId && seenSnapshots.has(snapId)) n.read = true;
+        appendNotification(n);
+      });
+    }
+    updateBadge();
+  } catch (err) {
+    console.error("Failed to refresh notifications:", err);
+  }
+}
+
 // --- Persist notifications & timeline points ---
 function persistState(newNotif, newPoint) {
   if (newNotif) {
@@ -203,60 +272,25 @@ function persistState(newNotif, newPoint) {
   sessionStorage.setItem("seenSnapshots", JSON.stringify(Array.from(seenSnapshots)));
 }
 
-// --- Add system notification ---
-function addNotification(message) {
-  if (!notifications) return;
-  if (notifications.firstChild && notifications.firstChild.textContent === "No alerts yet") {
-    notifications.removeChild(notifications.firstChild);
-  }
-  const notifData = { message };
-  appendNotification(notifData);
-  persistState(notifData, null);
-  updateBadge();
+// Prevent duplicates by snapshot id
+function addNotification(data) {
+  // Prevent duplicates by snapshot id
+  try {
+    const snapId = data.url ? data.url.split('/').pop() : null;
+    if (snapId && seenSnapshots.has(snapId)) return;
+  } catch (e) { /* ignore parsing errors */ }
+
+  appendNotification(data);
+  // persist the new notification (no timeline point in this helper)
+  persistState(data, null);
 }
 
-// --- Restore notifications on page load ---
-window.addEventListener("DOMContentLoaded", async () => {
-  const storedSeen = JSON.parse(sessionStorage.getItem("seenSnapshots") || "[]");
-  storedSeen.forEach(id => seenSnapshots.add(id));
-
-  const res = await fetch("/api/notifications");
-  const data = await res.json();
-  notifications.innerHTML = "";
-
-  if (data.notifications.length === 0) {
-  // Show the "No alerts yet" message
-  let noAlertsMsg = document.getElementById("no-alerts-msg");
-  if (!noAlertsMsg) {
-    noAlertsMsg = document.createElement("p");
-    noAlertsMsg.id = "no-alerts-msg";
-    noAlertsMsg.textContent = "No alerts yet";
-    notifications.appendChild(noAlertsMsg);
-  }
-} else {
-  // Hide the "No alerts yet" message if present
-  const noAlertsMsg = document.getElementById("no-alerts-msg");
-  if (noAlertsMsg) noAlertsMsg.style.display = "none";
-  data.notifications.reverse().forEach(n => {
-    const snapId = n.url ? n.url.split("/").pop() : null;
-    if (snapId && seenSnapshots.has(snapId)) n.read = true;
-    appendNotification(n);
-  });
-}
-
-  const alertsMenu = document.getElementById("alerts-menu");
-if (alertsMenu) {
-  alertsMenu.addEventListener("click", () => {
-    const notifPanel = document.querySelector(".notifPanel");
-    if (notifPanel) notifPanel.classList.toggle("open");
-  });
-}
-
-  updateBadge();
-});
+// expose refresh on window for non-module callers
+window.refreshNotifications = refreshNotifications;
 
 window.seenSnapshots = seenSnapshots;
 window.persistState = persistState;
 window.alertCount = alertCount;
 window.updateBadge = updateBadge;
-export { addNotification, appendNotification, persistState, alertCount, updateBadge, seenSnapshots };
+
+export { addNotification, appendNotification, persistState, alertCount, updateBadge, seenSnapshots, refreshNotifications };

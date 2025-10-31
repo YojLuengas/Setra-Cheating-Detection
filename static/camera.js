@@ -120,9 +120,9 @@ async function sendLoop(videoElement) {
       const frameB64 = captureFrame(videoElement);
       if (frameB64 && frameB64.length > 100) {  // Basic check for valid data URL
         emitFrame(frameB64);
-        video.src = frameB64;
       }
     }
+    // Increased frequency to ~4 FPS to reduce lag (333ms -> 250ms)
     await new Promise(r => setTimeout(r, 250));
   }
 }

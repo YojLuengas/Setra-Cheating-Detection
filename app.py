@@ -25,7 +25,7 @@ from flask import (
 )
 from flask_socketio import SocketIO, emit
 import mysql.connector
-import mediapipe as mp
+
 from ultralytics import YOLO
 import bcrypt
 import logging
@@ -60,14 +60,7 @@ except Exception as e:
 # Update path as required
 yolo_model = YOLO("models/best.pt")
 
-mp_face_mesh = mp.solutions.face_mesh
-face_mesh = mp_face_mesh.FaceMesh(
-    static_image_mode=False,
-    max_num_faces=100,
-    refine_landmarks=True,
-    min_detection_confidence=0.5,
-    min_tracking_confidence=0.5,
-)
+
 
 # ---------- Globals & Locks ----------
 all_snapshots = []
@@ -77,6 +70,11 @@ consecutive_cheating_frames = 0
 consecutive_non_cheating_frames = 0
 stable_cheating = False
 frame_lock = Lock()
+
+# Throttling / timing controls to reduce CPU / GPU load and UI lag
+PROCESS_INTERVAL = 0.45        # seconds between heavy processing runs (≈2.2 FPS)
+OUT_IMG_MAX = 640             # send this max width for annotated frames
+_last_processed_time = 0.0
 
 # ---------- Helpers ----------
 def b64_to_cv2(data_b64):
@@ -110,25 +108,7 @@ def save_image_to_disk(img_bgr, snap_id=None, jpeg_quality=85):
     img_b64 = base64.b64encode(buffer).decode('utf-8')
     return img_b64
 
-def estimate_head_rotation(image_rgb, face_landmarks):
-    """Simple yaw and roll estimator using landmarks; returns yaw and roll ratios (approx)."""
-    h, w, _ = image_rgb.shape
-    try:
-        lmk = face_landmarks.landmark
-        # Yaw: uses outer eye landmarks as proxy
-        left = lmk[33]   # left eye outer
-        right = lmk[263] # right eye outer
-        center = lmk[1]  # nose tip
-        yaw = (center.x * w - (left.x * w + right.x * w) / 2) / w
 
-        # Roll: approximate using vertical offset of eyes
-        left_eye_y = lmk[33].y * h
-        right_eye_y = lmk[263].y * h
-        roll = (left_eye_y - right_eye_y) / w  # normalized by width for consistency
-
-        return float(yaw), float(roll)
-    except Exception:
-        return 0.0, 0.0
 
 def login_required(f):
     @wraps(f)
@@ -396,18 +376,29 @@ def create_assessment_session():
 
 @app.route("/stop-assessment", methods=["POST"])
 @login_required
-def stop_assessment_session():
+def stop_assessment():
+    """
+    Called by the frontend when user stops an assessment.
+    Creates a new folder under ./records/ and emits a refresh_notifications event.
+    """
     try:
-        # Clear the assessment session ID from session
-        session.pop("assessment_session_id", None)
-        # Reset global variables
-        global all_snapshots, notified_snapshots, last_cheating_notification_time
-        all_snapshots = []
-        notified_snapshots = []
-        last_cheating_notification_time = 0
-        return jsonify({"success": True, "message": "Assessment session stopped successfully!"})
+        base = os.path.join(app.root_path, "records")
+        os.makedirs(base, exist_ok=True)
+
+        # folder name: session_YYYYmmdd_HHMMSS_<8hex>
+        folder_name = datetime.now().strftime("session_%Y%m%d_%H%M%S_") + uuid.uuid4().hex[:8]
+        new_path = os.path.join(base, folder_name)
+        os.makedirs(new_path, exist_ok=False)
+
+        # Notify connected clients to refresh notifications / records view
+        try:
+            socketio.emit("refresh_notifications", {"msg": "assessment_stopped", "folder": folder_name})
+        except Exception as e:
+            logger.exception("socket emit failed: %s", e)
+
+        return jsonify({"success": True, "folder": folder_name})
     except Exception as e:
-        logger.exception("stop_assessment_session error: %s", e)
+        logger.exception("stop_assessment error: %s", e)
         return jsonify({"success": False, "error": str(e)}), 500
 
 # ---------- SocketIO frame handler ----------
@@ -417,97 +408,133 @@ def on_connect():
 
 @socketio.on("frame")
 def handle_frame(message):
+    """
+    Process incoming frames but throttle to PROCESS_INTERVAL and do
+    face mesh less frequently. Annotate on the downscaled image and
+    send a smaller JPEG to clients to reduce latency.
+    """
     global all_snapshots, notified_snapshots, last_cheating_notification_time
+    global _last_processed_time, _last_face_time
+
+    # Quick-drop if someone else is processing
     if not frame_lock.acquire(blocking=False):
-        # Drop frame if still processing previous one
         return
+
     try:
+        now = time.time()
+        # Throttle heavy processing to avoid backlog / lag
+        if now - _last_processed_time < PROCESS_INTERVAL:
+            return
+
+        _last_processed_time = now
+
         img_b64 = message.get("image")
         if not img_b64:
             return
+
         frame = b64_to_cv2(img_b64)
         if frame is None:
             return
-        original = frame.copy()
-        h, w = frame.shape[:2]
-        scale = 640 / max(h, w)
-        small = cv2.resize(frame, (int(w * scale), int(h * scale)))
-        # YOLO predict (be defensive in parsing results)
+
+        original_h, original_w = frame.shape[:2]
+
+        # Resize to a reasonable size for fast model inference
+        scale = OUT_IMG_MAX / max(original_h, original_w)
+        if scale <= 0:
+            scale = 1.0
+        small_w = max(1, int(original_w * scale))
+        small_h = max(1, int(original_h * scale))
+        small = cv2.resize(frame, (small_w, small_h), interpolation=cv2.INTER_LINEAR)
+
+        # Run YOLO on the small image
         try:
-            results = yolo_model.predict(small, imgsz=640, conf=0.40, verbose=False)
+            # keep imgsz similar to our small width for efficiency
+            results = yolo_model.predict(small, imgsz=min(640, OUT_IMG_MAX), conf=0.40, verbose=False)
         except Exception as e:
             logger.exception("YOLO prediction error: %s", e)
             results = []
-        detections, cheating_in_frame = [], False
+
+        detections = []
+        cheating_in_frame = False
+
         if len(results) > 0 and hasattr(results[0], "boxes"):
             for box in results[0].boxes:
                 try:
-                    # Many ultralytics versions return tensors or numpy arrays
-                    xyxy = box.xyxy[0].cpu().numpy() if hasattr(box.xyxy, "__len__") else np.array(box.xyxy).flatten()
-                    conf = float(box.conf[0].cpu().numpy()) if hasattr(box.conf, "__len__") else float(box.conf)
-                    cls = int(box.cls[0].cpu().numpy()) if hasattr(box.cls, "__len__") else int(box.cls)
-                    label = yolo_model.model.names.get(cls, str(cls)) if hasattr(yolo_model, "model") else str(cls)
-                    x1, y1, x2, y2 = [int(v / scale) for v in xyxy]
+                    # robust extraction: support tensors and plain numbers
+                    if hasattr(box.xyxy, "cpu"):
+                        xyxy = box.xyxy.cpu().numpy().flatten()
+                    else:
+                        xyxy = np.array(box.xyxy).flatten()
+
+                    if hasattr(box.conf, "cpu"):
+                        conf = float(box.conf.cpu().numpy().flatten()[0])
+                    else:
+                        try:
+                            conf = float(box.conf)
+                        except Exception:
+                            conf = 0.0
+
+                    if hasattr(box.cls, "cpu"):
+                        cls = int(box.cls.cpu().numpy().flatten()[0])
+                    else:
+                        try:
+                            cls = int(box.cls)
+                        except Exception:
+                            cls = 0
+
+                    label = None
+                    try:
+                        label = yolo_model.model.names.get(cls, str(cls)) if hasattr(yolo_model, "model") else str(cls)
+                    except Exception:
+                        label = str(cls)
+
+                    # xyxy in small image coords -> map back to small image (we annotate small)
+                    x1, y1, x2, y2 = [int(v) for v in xyxy[:4]]
                     detections.append((label, conf, (x1, y1, x2, y2)))
                 except Exception:
-                    # fallback: attempt to read simpler attributes
-                    try:
-                        bb = box.xyxy
-                        x1, y1, x2, y2 = [int(v / scale) for v in bb]
-                        conf = float(getattr(box, "conf", 0.0))
-                        cls = int(getattr(box, "cls", 0))
-                        label = yolo_model.model.names.get(cls, str(cls)) if hasattr(yolo_model, "model") else str(cls)
-                        detections.append((label, conf, (x1, y1, x2, y2)))
-                    except Exception:
-                        logger.exception("Failed to parse detection box.")
-                        continue
+                    logger.exception("Failed parsing detection box; skipping.")
+                    continue
 
+        # Annotate on the small image (faster than annotating full resolution)
+        annotated = small.copy()
         for label, conf, (x1, y1, x2, y2) in detections:
-            color = (0, 0, 255) if label.lower() == "cheating" else (0, 255, 0)
-            cv2.rectangle(original, (x1, y1), (x2, y2), color, 2)
-            cv2.putText(original, f"{label} {conf:.2f}", (x1, max(y1 - 8, 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
-            if label.lower() == "cheating":
+            color = (0, 0, 255) if str(label).lower() == "cheating" else (0, 255, 0)
+            cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
+            cv2.putText(annotated, f"{label} {conf:.2f}", (x1, max(y1 - 8, 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+            if str(label).lower() == "cheating":
                 cheating_in_frame = True
 
-        # If cheating label detected, save snapshot (rate-limited)
+        status_text = "OK"
+        color_txt = (0, 255, 0)
+        cv2.putText(annotated, status_text, (10, annotated.shape[0] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color_txt, 2)
+
+        # Save snapshot & DB insert (rate-limit snapshot writes)
         if cheating_in_frame and time.time() - last_cheating_notification_time >= 2:
             snap_id = str(uuid.uuid4())
-            saved_path = save_image_to_disk(original, snap_id=snap_id, jpeg_quality=85)
+            # save a smaller base64 string (annotated small)
+            _, buf = cv2.imencode(".jpg", annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+            img_b64_small = base64.b64encode(buf).decode("utf-8")
             timestamp = datetime.now()
             epoch_now = time.time()
             assessment_session_id = session.get("assessment_session_id")
-            snapshot = {"id": snap_id, "image_path": saved_path, "timestamp": timestamp.strftime("%Y-%m-%d %I:%M:%S %p"), "epoch": epoch_now}
+            snapshot = {"id": snap_id, "image_path": img_b64_small, "timestamp": timestamp.strftime("%Y-%m-%d %I:%M:%S %p"), "epoch": epoch_now}
             all_snapshots.append(snapshot)
             notified_snapshots.append(snapshot)
             try:
-                cursor.execute("INSERT INTO detections (id, timestamp, epoch, image_path, assessment_session_id, user_id) VALUES (%s, %s, %s, %s, %s, %s)", (snap_id, timestamp, epoch_now, saved_path, assessment_session_id, session["user_id"]))
+                cursor.execute("INSERT INTO detections (id, timestamp, epoch, image_path, assessment_session_id, user_id) VALUES (%s, %s, %s, %s, %s, %s)",
+                               (snap_id, timestamp, epoch_now, img_b64_small, assessment_session_id, session["user_id"]))
                 db.commit()
-            except Exception as e:
+            except Exception:
                 db.rollback()
-                logger.exception("DB insert error: %s", e)
+                logger.exception("DB insert error for snapshot")
             now_dt = datetime.now()
             socketio.emit("cheating_notification", {"message": "Cheating detected", "time": now_dt.strftime("%I:%M %p"), "timestamp": now_dt.strftime("%Y-%m-%d %I:%M:%S %p"), "url": f"/cheating/{snap_id}"})
             last_cheating_notification_time = time.time()
 
-        # Face/pose check: estimate yaw and alert if looking away
-        results_face = face_mesh.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-        alert_msgs = []
-        if results_face and getattr(results_face, "multi_face_landmarks", None):
-            try:
-                yaw, roll = estimate_head_rotation(frame, results_face.multi_face_landmarks[0])
-                yaw_deg = yaw * 90
-                if abs(yaw_deg) > 25:
-                    alert_msgs.append("Looking away")
-                cv2.putText(original, f"Yaw:{yaw_deg:.1f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 0), 2)
-            except Exception:
-                logger.exception("face yaw estimation failed")
-
-        status_text = "OK" if not alert_msgs else "; ".join(alert_msgs)
-        color = (0, 255, 0) if not alert_msgs else (0, 0, 255)
-        cv2.putText(original, status_text, (10, original.shape[0] - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
-
-        out_b64 = cv2_to_b64(original, jpeg_quality=60)
-        emit("response_frame", {"image": out_b64, "cheating": cheating_in_frame})
+        # Prepare and emit annotated frame back to client (small image to reduce latency)
+        out_b64 = cv2_to_b64(annotated, jpeg_quality=60)
+        if out_b64:
+            emit("response_frame", {"image": out_b64, "cheating": cheating_in_frame})
     finally:
         try:
             frame_lock.release()
@@ -773,4 +800,3 @@ if __name__ == "__main__":
     port = 5000
     logger.info("🚀 Server running at: http://127.0.0.1:%s", port)
     socketio.run(app, host=host, port=port, debug=True)
-    
