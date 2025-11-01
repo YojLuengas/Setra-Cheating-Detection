@@ -122,8 +122,8 @@ async function sendLoop(videoElement) {
         emitFrame(frameB64);
       }
     }
-    // Increased frequency to ~4 FPS to reduce lag (333ms -> 250ms)
-    await new Promise(r => setTimeout(r, 250));
+    // Increased frequency to ~20 FPS to reduce lag (100ms -> 50ms)
+    await new Promise(r => setTimeout(r, 50));
   }
 }
 

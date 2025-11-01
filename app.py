@@ -379,24 +379,16 @@ def create_assessment_session():
 def stop_assessment():
     """
     Called by the frontend when user stops an assessment.
-    Creates a new folder under ./records/ and emits a refresh_notifications event.
+    Emits a refresh_notifications event.
     """
     try:
-        base = os.path.join(app.root_path, "records")
-        os.makedirs(base, exist_ok=True)
-
-        # folder name: session_YYYYmmdd_HHMMSS_<8hex>
-        folder_name = datetime.now().strftime("session_%Y%m%d_%H%M%S_") + uuid.uuid4().hex[:8]
-        new_path = os.path.join(base, folder_name)
-        os.makedirs(new_path, exist_ok=False)
-
         # Notify connected clients to refresh notifications / records view
         try:
-            socketio.emit("refresh_notifications", {"msg": "assessment_stopped", "folder": folder_name})
+            socketio.emit("refresh_notifications", {"msg": "assessment_stopped"})
         except Exception as e:
             logger.exception("socket emit failed: %s", e)
 
-        return jsonify({"success": True, "folder": folder_name})
+        return jsonify({"success": True})
     except Exception as e:
         logger.exception("stop_assessment error: %s", e)
         return jsonify({"success": False, "error": str(e)}), 500
