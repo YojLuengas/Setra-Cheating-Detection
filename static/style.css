@@ -75,6 +75,7 @@ header {
 .notifPanel h2 {
   font-size: 25px;
   margin-bottom: 15px;
+  color: white;
 }
 
 .notifPanel ul {

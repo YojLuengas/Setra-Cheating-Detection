@@ -58,6 +58,33 @@ function updateSnapshotState() {
 }
 
 document.addEventListener('DOMContentLoaded', function () {
+  // Check if records page needs refresh due to updates
+  if (window.location.pathname === '/records') {
+    if (sessionStorage.getItem('records_need_refresh') === 'true') {
+      sessionStorage.removeItem('records_need_refresh');
+      window.location.href = window.location.href;
+    }
+  }
+
+  // Handle page restore from cache (e.g., browser back)
+  window.addEventListener('pageshow', function(event) {
+    if (event.persisted && window.location.pathname === '/records') {
+      window.location.reload();
+    }
+  });
+
+  // Initialize socket listener for records updates
+  if (typeof io !== 'undefined') {
+    const socket = io({ transports: ["websocket"] });
+    socket.on("records_updated", () => {
+      if (window.location.pathname === "/records") {
+        window.location.reload();
+      } else {
+        sessionStorage.setItem('records_need_refresh', 'true');
+      }
+    });
+  }
+
   const modal = document.getElementById('deleteModal');
   if (!modal) return;
 

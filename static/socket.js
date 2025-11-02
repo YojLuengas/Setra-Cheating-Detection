@@ -68,6 +68,13 @@ function initSocket(video, statusDiv) {
         console.warn("refresh_notifications handler error", e);
       }
     });
+
+    // When server tells clients to update records page (e.g. after deleting snapshots/folders)
+    socket.on("records_updated", () => {
+      if (window.location.pathname === "/records") {
+        window.location.reload();
+      }
+    });
   }
 }
 

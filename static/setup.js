@@ -355,15 +355,26 @@ async function stopAssessment() {
   setAssessmentActive(false);
   try { await fetch("/stop-assessment", { method: "POST" }); } catch {}
 
-  // Ask clients to refresh notifications immediately if available
-  try {
-    if (window.refreshNotifications) {
-      window.refreshNotifications();
-    } else if (window.updateBadge) {
-      // fallback: update badge count
-      window.updateBadge();
+  // Clear notifications UI and related storage
+  const notifications = document.getElementById('notifications');
+  if (notifications) {
+    notifications.innerHTML = '';
+    let noAlertsMsg = document.getElementById("no-alerts-msg");
+    if (!noAlertsMsg) {
+      noAlertsMsg = document.createElement("p");
+      noAlertsMsg.id = "no-alerts-msg";
+      noAlertsMsg.textContent = "No alerts yet";
+      notifications.appendChild(noAlertsMsg);
     }
-  } catch (_) {}
+  }
+  // Reset badge
+  const badge = document.getElementById("alert-badge");
+  if (badge) {
+    badge.style.display = "none";
+  }
+  // Clear sessionStorage for notifications
+  sessionStorage.removeItem("seenSnapshots");
+  sessionStorage.removeItem("notifications");
 
   const cameraContainer = document.querySelector(".camera-container");
   if (cameraContainer) cameraContainer.style.display = "none";

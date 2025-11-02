@@ -379,9 +379,12 @@ def create_assessment_session():
 def stop_assessment():
     """
     Called by the frontend when user stops an assessment.
-    Emits a refresh_notifications event.
+    Emits a refresh_notifications event and clears the session assessment ID.
     """
     try:
+        # Clear the assessment session ID from the session
+        session.pop("assessment_session_id", None)
+
         # Notify connected clients to refresh notifications / records view
         try:
             socketio.emit("refresh_notifications", {"msg": "assessment_stopped"})
@@ -584,7 +587,7 @@ def records():
     """
     try:
         cursor.execute("""
-            SELECT r.folder_name, as_.course, as_.subject, as_.exam_type, as_.exam_datetime, COUNT(d.id) as cnt,
+            SELECT r.folder_name, as_.course, as_.subject, as_.exam_type, as_.exam_datetime, COUNT(d.id) as cnt, r.created_at,
                    (SELECT d2.image_path FROM detections d2 WHERE d2.assessment_session_id = r.assessment_session_id ORDER BY d2.timestamp ASC LIMIT 1) as first_image
             FROM records r
             LEFT JOIN assessment_sessions as_ ON r.assessment_session_id = as_.id
@@ -605,7 +608,8 @@ def records():
                 "folder_name": r[0],
                 "display_title": display_title,
                 "count": r[5],
-                "first_image": f"data:image/jpeg;base64,{r[6]}" if r[6] else None
+                "created_at": r[6].isoformat() if r[6] else None,
+                "first_image": f"data:image/jpeg;base64,{r[7]}" if r[7] else None
             })
     except Exception as e:
         logger.exception("records folders fetch error: %s", e)
@@ -697,6 +701,7 @@ def delete_record(folder_name):
 def delete_snapshot(snap_id):
     """
     Delete a single snapshot and associated data.
+    If this was the last snapshot in the folder, delete the folder as well.
     """
     try:
         cursor.execute("SELECT image_path, assessment_session_id FROM detections WHERE id = %s AND user_id = %s", (snap_id, session["user_id"]))
@@ -718,16 +723,34 @@ def delete_snapshot(snap_id):
             except Exception:
                 logger.exception("Failed to delete image file: %s", full_path)
 
-        # Get folder_name to redirect back to the folder view
-        cursor.execute("SELECT folder_name FROM records WHERE assessment_session_id = %s AND user_id = %s", (assessment_session_id, session["user_id"]))
-        folder_row = cursor.fetchone()
-        if folder_row:
-            folder_name = folder_row[0]
-            flash("Snapshot deleted successfully.", "success")
-            return redirect(url_for("records_folder", folder_name=folder_name))
-        else:
-            flash("Snapshot deleted, but folder not found.", "warning")
+        # Check if there are any remaining detections for this assessment_session_id
+        cursor.execute("SELECT COUNT(*) FROM detections WHERE assessment_session_id = %s", (assessment_session_id,))
+        remaining_count = cursor.fetchone()[0]
+
+        if remaining_count == 0:
+            # No more snapshots, delete the folder (record) and assessment session
+            cursor.execute("DELETE FROM records WHERE assessment_session_id = %s AND user_id = %s", (assessment_session_id, session["user_id"]))
+            cursor.execute("DELETE FROM assessment_sessions WHERE id = %s", (assessment_session_id,))
+            db.commit()
+            flash("Snapshot deleted successfully. Folder was empty and has been deleted.", "success")
+            # Emit socket event to update records page
+            socketio.emit("records_updated")
             return redirect(url_for("records"))
+        else:
+            # Get folder_name to redirect back to the folder view
+            cursor.execute("SELECT folder_name FROM records WHERE assessment_session_id = %s AND user_id = %s", (assessment_session_id, session["user_id"]))
+            folder_row = cursor.fetchone()
+            if folder_row:
+                folder_name = folder_row[0]
+                flash("Snapshot deleted successfully.", "success")
+                # Emit socket event to update records page
+                socketio.emit("records_updated")
+                return redirect(url_for("records_folder", folder_name=folder_name))
+            else:
+                flash("Snapshot deleted, but folder not found.", "warning")
+                # Emit socket event to update records page
+                socketio.emit("records_updated")
+                return redirect(url_for("records"))
     except Exception as e:
         db.rollback()
         logger.exception("delete_snapshot error: %s", e)
@@ -762,14 +785,19 @@ def get_notifications():
 @login_required
 def delete_notification(snap_id):
     try:
-        cursor.execute("SELECT image_path FROM detections WHERE id = %s AND user_id = %s", (snap_id, session["user_id"]))
+        cursor.execute("SELECT image_path, assessment_session_id FROM detections WHERE id = %s AND user_id = %s", (snap_id, session["user_id"]))
         row = cursor.fetchone()
-        image_path = row[0] if row else None
+        if not row:
+            return jsonify({"success": False, "error": "Snapshot not found"}), 404
+        image_path, assessment_session_id = row
+
         cursor.execute("DELETE FROM detections WHERE id = %s AND user_id = %s", (snap_id, session["user_id"]))
         db.commit()
+
         global all_snapshots, notified_snapshots
         all_snapshots = [s for s in all_snapshots if s["id"] != snap_id]
         notified_snapshots = [s for s in notified_snapshots if s["id"] != snap_id]
+
         if image_path:
             try:
                 if not os.path.isabs(image_path):
@@ -778,6 +806,17 @@ def delete_notification(snap_id):
                     os.remove(image_path)
             except Exception:
                 logger.exception("Failed to remove image file")
+
+        # Check if there are any remaining detections for this assessment_session_id
+        cursor.execute("SELECT COUNT(*) FROM detections WHERE assessment_session_id = %s", (assessment_session_id,))
+        remaining_count = cursor.fetchone()[0]
+
+        if remaining_count == 0:
+            # No more snapshots, delete the folder (record) and assessment session
+            cursor.execute("DELETE FROM records WHERE assessment_session_id = %s AND user_id = %s", (assessment_session_id, session["user_id"]))
+            cursor.execute("DELETE FROM assessment_sessions WHERE id = %s", (assessment_session_id,))
+            db.commit()
+
         # Emit socket event to update cheating page timeline
         socketio.emit("snapshot_deleted", {"snap_id": snap_id})
         return jsonify({"success": True})
