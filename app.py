@@ -523,7 +523,7 @@ def handle_frame(message):
                 db.rollback()
                 logger.exception("DB insert error for snapshot")
             now_dt = datetime.now()
-            socketio.emit("cheating_notification", {"message": "Cheating detected", "time": now_dt.strftime("%I:%M %p"), "timestamp": now_dt.strftime("%Y-%m-%d %I:%M:%S %p"), "url": f"/cheating/{snap_id}"})
+            socketio.emit("cheating_notification", {"message": "Possible Cheating detected", "time": now_dt.strftime("%I:%M %p"), "timestamp": now_dt.strftime("%Y-%m-%d %I:%M:%S %p"), "url": f"/cheating/{snap_id}"})
             last_cheating_notification_time = time.time()
 
         # Prepare and emit annotated frame back to client (small image to reduce latency)
@@ -775,7 +775,7 @@ def get_notifications():
             else:
                 ts_str = str(ts)
                 time_str = " ".join(str(ts).split()[-2:])
-            notifications.append({"id": snap_id, "message": "Cheating detected", "time": time_str, "timestamp": ts_str, "url": f"/cheating/{snap_id}"})
+            notifications.append({"id": snap_id, "message": "Possible Cheating detected", "time": time_str, "timestamp": ts_str, "url": f"/cheating/{snap_id}"})
         return jsonify({"notifications": notifications})
     except Exception as e:
         logger.exception("get_notifications error: %s", e)

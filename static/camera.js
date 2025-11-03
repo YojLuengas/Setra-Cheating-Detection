@@ -107,7 +107,7 @@ function showTemporaryStatus(message, duration = 3000) {
   statusDiv.style.fontWeight = "bold";
 
   setTimeout(() => {
-    statusDiv.textContent = "No cheating detected";
+    statusDiv.textContent = "No possible cheating detected";
     statusDiv.style.color = "#222";
     statusDiv.style.fontWeight = "normal";
   }, duration);

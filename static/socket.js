@@ -15,12 +15,12 @@ function initSocket(video, statusDiv) {
       video.src = msg.image;
 
       if (msg.cheating) {
-        statusDiv.textContent = "Cheating detected!";
+            statusDiv.textContent = "Possible Cheating detected!";
         statusDiv.style.color = "#ff4444";
         statusDiv.style.fontWeight = "bold";
         video.style.borderColor = "#ff4444";
       } else {
-        statusDiv.textContent = "No cheating detected";
+        statusDiv.textContent = "No possible cheating detected";
         statusDiv.style.color = "#228B22";
         statusDiv.style.fontWeight = "bold";
         video.style.borderColor = "#228B22";

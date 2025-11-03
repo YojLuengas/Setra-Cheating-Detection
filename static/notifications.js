@@ -46,7 +46,7 @@ function appendNotification(data) {
     // Message on top
     const msgEl = document.createElement("span");
     msgEl.classList.add("notif-msg");
-    msgEl.textContent = "Cheating detected";
+    msgEl.textContent = "Possible Cheating detected";
 
     // Time below (no seconds)
     let timeOnly = "";
