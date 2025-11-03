@@ -75,6 +75,7 @@ header {
 .notifPanel h2 {
   font-size: 25px;
   margin-bottom: 15px;
+  color: white;
 }
 
 .notifPanel ul {
@@ -403,13 +404,20 @@ button:hover {
 .badge {
   background: #ff4444;
   color: #fff;
-  font-size: 12px;
+  font-size: 10px;
   font-weight: bold;
-  border-radius: 100%;
-  padding: 2px 6px;
+  border-radius: 50%;
+  min-width: 24px;
+  height: 24px;
   margin-left: 6px;
-  display: none; /* hidden by default */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  box-sizing: border-box;
+  padding: 0 4px;
 }
+
 
 #alerts-menu {
   position: relative;
@@ -1153,7 +1161,6 @@ body.dashboard-body {
    Modern Explorer-style Header
    ============================ */
 .records-body {
-  background-color: #1e1e1e;
   color: #e0e0e0;
   font-family: "Segoe UI", sans-serif;
 }
@@ -1471,10 +1478,6 @@ body.dashboard-body {
   cursor: pointer;
   padding: 4px;
   transition: background 0.2s;
-}
-
-.folder-menu-btn:hover {
-  background: rgba(255, 255, 255, 0.15);
 }
 
 /* Dropdown styles */

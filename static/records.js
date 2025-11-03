@@ -4,94 +4,87 @@ let snapshotSelectModeActive = false;
 // === Folder state update ===
 function updateFolderState() {
   const cards = document.querySelectorAll('.folder-card');
-  const checkboxes = document.querySelectorAll('.folder-card input[type="checkbox"]');
-  const checked = document.querySelectorAll('.folder-card input[type="checkbox"]:checked').length;
+  const selected = document.querySelectorAll('.folder-card.selected').length;
 
   // Show/hide delete buttons
   cards.forEach(card => {
     const deleteBtn = card.querySelector('.delete-btn');
     if (!deleteBtn) return;
-    deleteBtn.style.display = (checked === 0 && !selectModeActive) ? '' : 'none';
+    deleteBtn.style.display = (selected === 0 && !selectModeActive) ? '' : 'none';
   });
 
   // Enable/disable folder links
   cards.forEach(card => {
     const link = card.querySelector('.folder-link');
     if (!link) return;
-    link.style.pointerEvents = (checked > 0 || selectModeActive) ? 'none' : '';
-    link.style.opacity = (checked > 0 || selectModeActive) ? '0.5' : '1';
+    link.style.pointerEvents = (selected > 0 || selectModeActive) ? 'none' : '';
   });
-
-  // Show/hide checkboxes
-  checkboxes.forEach(cb => cb.style.display = (selectModeActive || checked > 0) ? 'inline' : 'none');
 
   // Enable/disable bulk delete button
   const bulkBtn = document.querySelector('.delete-selected-btn');
   if (bulkBtn) {
-    bulkBtn.disabled = checked === 0;
-    bulkBtn.style.opacity = checked === 0 ? '0.5' : '1';
-    bulkBtn.style.pointerEvents = checked === 0 ? 'none' : '';
+    bulkBtn.disabled = selected === 0;
+    bulkBtn.style.opacity = selected === 0 ? '0.5' : '1';
+    bulkBtn.style.pointerEvents = selected === 0 ? 'none' : '';
   }
-
-  // Update border & styles
-  checkboxes.forEach(cb => {
-    if (cb.checked) {
-      cb.closest('.folder-card')
-      cb.style.filter = 'hue-rotate(120deg)';
-    } else {
-      cb.closest('.folder-card').style.border = '';
-      cb.style.accentColor = '';
-      cb.style.filter = '';
-    }
-  });
 }
 
 // === Snapshot state update ===
 function updateSnapshotState() {
   const cards = document.querySelectorAll('.snapshot-card');
-  const checkboxes = document.querySelectorAll('.snapshot-card input[type="checkbox"]');
-  const checked = document.querySelectorAll('.snapshot-card input[type="checkbox"]:checked').length;
+  const selected = document.querySelectorAll('.snapshot-card.selected').length;
 
   // Show/hide delete buttons
   cards.forEach(card => {
     const deleteBtn = card.querySelector('.delete-btn');
     if (!deleteBtn) return;
-    deleteBtn.style.display = (checked === 0 && !snapshotSelectModeActive) ? '' : 'none';
+    deleteBtn.style.display = (selected === 0 && !snapshotSelectModeActive) ? '' : 'none';
   });
 
   // Enable/disable links
   cards.forEach(card => {
     const link = card.querySelector('a'); // snapshot links
     if (!link) return;
-    link.style.pointerEvents = (checked > 0 || snapshotSelectModeActive) ? 'none' : '';
-    link.style.opacity = (checked > 0 || snapshotSelectModeActive) ? '0.5' : '1';
+    link.style.pointerEvents = (selected > 0 || snapshotSelectModeActive) ? 'none' : '';
   });
-
-  // Show/hide checkboxes
-  checkboxes.forEach(cb => cb.style.display = (snapshotSelectModeActive || checked > 0) ? 'inline' : 'none');
 
   // Enable/disable bulk delete button
   const bulkBtn = document.querySelector('.delete-selected-btn');
   if (bulkBtn) {
-    bulkBtn.disabled = checked === 0;
-    bulkBtn.style.opacity = checked === 0 ? '0.5' : '1';
-    bulkBtn.style.pointerEvents = checked === 0 ? 'none' : '';
+    bulkBtn.disabled = selected === 0;
+    bulkBtn.style.opacity = selected === 0 ? '0.5' : '1';
+    bulkBtn.style.pointerEvents = selected === 0 ? 'none' : '';
   }
-
-  // Update border & styles
-  checkboxes.forEach(cb => {
-    if (cb.checked) {
-      cb.closest('.snapshot-card')
-      cb.style.filter = 'hue-rotate(120deg)';
-    } else {
-      cb.closest('.snapshot-card').style.border = '';
-      cb.style.accentColor = '';
-      cb.style.filter = '';
-    }
-  });
 }
 
 document.addEventListener('DOMContentLoaded', function () {
+  // Check if records page needs refresh due to updates
+  if (window.location.pathname === '/records') {
+    if (sessionStorage.getItem('records_need_refresh') === 'true') {
+      sessionStorage.removeItem('records_need_refresh');
+      window.location.href = window.location.href;
+    }
+  }
+
+  // Handle page restore from cache (e.g., browser back)
+  window.addEventListener('pageshow', function(event) {
+    if (event.persisted && window.location.pathname === '/records') {
+      window.location.reload();
+    }
+  });
+
+  // Initialize socket listener for records updates
+  if (typeof io !== 'undefined') {
+    const socket = io({ transports: ["websocket"] });
+    socket.on("records_updated", () => {
+      if (window.location.pathname === "/records") {
+        window.location.reload();
+      } else {
+        sessionStorage.setItem('records_need_refresh', 'true');
+      }
+    });
+  }
+
   const modal = document.getElementById('deleteModal');
   if (!modal) return;
 
@@ -105,9 +98,7 @@ document.addEventListener('DOMContentLoaded', function () {
   const isFoldersPage = document.querySelectorAll('.folder-card').length > 0;
   const isSnapshotsPage = document.querySelectorAll('.snapshot-card').length > 0;
 
-  const disableCheckboxes = (state = true) => {
-    document.querySelectorAll('input[type="checkbox"]').forEach(cb => (cb.disabled = state));
-  };
+  // Removed disableCheckboxes as no checkboxes exist
 
   const setElementsState = (disabled) => {
     document.querySelectorAll('.delete-form').forEach(f => {
@@ -133,15 +124,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
   const openModal = (message) => {
     modal.querySelector('p').textContent = message;
-    modal.style.display = 'block';
+    modal.style.display = 'flex';
     modal.style.zIndex = '1000';
-    disableCheckboxes(true);
     setElementsState(true);
   };
 
   const closeModal = () => {
     modal.style.display = 'none';
-    disableCheckboxes(false);
     setElementsState(false);
     currentForm = null;
     selectedForms = [];
@@ -214,7 +203,7 @@ document.addEventListener('DOMContentLoaded', function () {
       e.preventDefault();
       currentDeleteUrl = btn.dataset.deleteUrl;
       currentCard = btn.closest('.snapshot-card');
-      document.getElementById('deleteModal').style.display = 'block';
+      document.getElementById('deleteModal').style.display = 'flex';
     });
   });
 
@@ -256,202 +245,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // === Folder page checkboxes ===
   if (isFoldersPage) {
-    // Add checkboxes and bulk delete button
-    const headerActions = document.querySelector('.header-actions');
-    if (headerActions) {
-      headerActions.style.display = 'flex';
-      headerActions.style.justifyContent = 'space-between';
-      headerActions.style.alignItems = 'flex-start';
-
-      const rightContainer = document.createElement('div');
-      rightContainer.style.display = 'flex';
-      rightContainer.style.flexDirection = 'column';
-      rightContainer.style.alignItems = 'flex-end';
-
-      const backLink = headerActions.querySelector('.back-link');
-      if (backLink) {
-        rightContainer.appendChild(backLink);
-      }
-
-      const bulkContainer = document.createElement('div');
-      bulkContainer.style.display = 'flex';
-      bulkContainer.style.flexDirection = 'column';
-      bulkContainer.style.alignItems = 'flex-end';
-      bulkContainer.style.marginTop = '5px';
-
-      const selectAllCheckbox = document.createElement('input');
-      selectAllCheckbox.type = 'checkbox';
-      selectAllCheckbox.id = 'select-all-folders';
-      selectAllCheckbox.style.width = '25px';
-      selectAllCheckbox.style.height = '25px';
-      selectAllCheckbox.style.marginTop = '5px';
-      selectAllCheckbox.style.display = 'none'; // Hidden initially
-      const selectAllLabel = document.createElement('label');
-      selectAllLabel.htmlFor = 'select-all-folders';
-      selectAllLabel.textContent = 'Select All';
-      selectAllLabel.style.fontSize = '14px';
-      selectAllLabel.style.marginTop = '5px';
-      selectAllLabel.style.display = 'none'; // Hidden initially
-      bulkContainer.appendChild(selectAllLabel);
-      bulkContainer.appendChild(selectAllCheckbox);
-
-      // Bind select all checkbox
-      selectAllCheckbox.addEventListener('change', function() {
-        const allCbs = document.querySelectorAll('.folder-card input[type="checkbox"]');
-        allCbs.forEach(cb => cb.checked = this.checked);
-        if (this.checked) {
-          allCbs.forEach(cb => {
-            cb.closest('.folder-card')
-            cb.style.filter = 'hue-rotate(120deg)';
-          });
-        } else {
-          allCbs.forEach(cb => {
-            cb.closest('.folder-card').style.border = '';
-            cb.style.accentColor = '';
-            cb.style.filter = '';
-          });
-        }
-        document.querySelectorAll('.folder-card .folder-link').forEach(a => {
-          a.style.pointerEvents = this.checked ? 'none' : '';
-          a.style.opacity = this.checked ? '0.5' : '1';
-        });
-        updateFolderState();
-      });
-
-      rightContainer.appendChild(bulkContainer);
-      headerActions.appendChild(rightContainer);
-    }
-
-    // Add checkboxes to folder cards, initially hidden
-    document.querySelectorAll('.folder-card').forEach(card => {
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
-      checkbox.style.width = '25px';
-      checkbox.style.height = '25px';
-      checkbox.style.display = 'none'; // Hide initially
-      checkbox.style.position = 'absolute';
-      checkbox.style.bottom = '10px';
-      checkbox.style.left = '10px';
-      checkbox.style.zIndex = '10';
-      card.appendChild(checkbox);
-    });
-
     // Initial toggle to set button state
     updateFolderState();
-
-    document.querySelectorAll('.folder-card input[type="checkbox"]').forEach(cb => {
-      cb.addEventListener('change', updateFolderState);
-    });
-
-    document.querySelector('.delete-selected-btn')?.addEventListener('click', () => {
-      selectedForms = Array.from(document.querySelectorAll('.folder-card input[type="checkbox"]:checked'))
-        .map(cb => cb.closest('.folder-card').querySelector('.delete-form'))
-        .filter(Boolean);
-      if (selectedForms.length === 0) return alert('No folders selected.');
-      openModal(`Are you sure you want to delete ${selectedForms.length} selected folder${selectedForms.length > 1 ? 's' : ''}?`);
-    });
   }
 
   // === Snapshot page checkboxes ===
   if (isSnapshotsPage) {
-    // Add checkboxes and bulk delete button for snapshots
-    const headerActions = document.querySelector('.header-actions');
-    if (headerActions) {
-      headerActions.style.display = 'flex';
-      headerActions.style.justifyContent = 'space-between';
-      headerActions.style.alignItems = 'flex-start';
-
-      const rightContainer = document.createElement('div');
-      rightContainer.style.display = 'flex';
-      rightContainer.style.flexDirection = 'column';
-      rightContainer.style.alignItems = 'flex-end';
-
-      const backLink = headerActions.querySelector('.back-link');
-      if (backLink) {
-        rightContainer.appendChild(backLink);
-      }
-
-      const bulkContainer = document.createElement('div');
-      bulkContainer.style.display = 'flex';
-      bulkContainer.style.flexDirection = 'column';
-      bulkContainer.style.alignItems = 'flex-end';
-      bulkContainer.style.marginTop = '5px';
-
-      const selectAllCheckbox = document.createElement('input');
-      selectAllCheckbox.type = 'checkbox';
-      selectAllCheckbox.id = 'select-all-snapshots';
-      selectAllCheckbox.style.width = '25px';
-      selectAllCheckbox.style.height = '25px';
-      selectAllCheckbox.style.marginTop = '5px';
-      selectAllCheckbox.style.display = 'none'; // Hidden initially
-      const selectAllLabel = document.createElement('label');
-      selectAllLabel.htmlFor = 'select-all-snapshots';
-      selectAllLabel.textContent = 'Select All';
-      selectAllLabel.style.fontSize = '14px';
-      selectAllLabel.style.marginTop = '5px';
-      selectAllLabel.style.display = 'none'; // Hidden initially
-      bulkContainer.appendChild(selectAllLabel);
-      bulkContainer.appendChild(selectAllCheckbox);
-
-      // Bind select all checkbox
-      selectAllCheckbox.addEventListener('change', function() {
-        const allCbs = document.querySelectorAll('.snapshot-card input[type="checkbox"]');
-        allCbs.forEach(cb => cb.checked = this.checked);
-        if (this.checked) {
-          allCbs.forEach(cb => {
-            cb.closest('.snapshot-card')
-            cb.style.filter = 'hue-rotate(120deg)';
-          });
-        } else {
-          allCbs.forEach(cb => {
-            cb.closest('.snapshot-card').style.border = '';
-            cb.style.accentColor = '';
-            cb.style.filter = '';
-          });
-        }
-        updateSnapshotState();
-      });
-
-      rightContainer.appendChild(bulkContainer);
-      headerActions.appendChild(rightContainer);
-    }
-
-    // Add checkboxes to snapshot cards
-    document.querySelectorAll('.snapshot-card').forEach(card => {
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
-      checkbox.style.width = '25px';
-      checkbox.style.height = '25px';
-      checkbox.style.marginRight = '1px';
-      checkbox.style.verticalAlign = 'middle';
-      checkbox.style.display = 'none'; // Hide initially
-      card.insertBefore(checkbox, card.firstChild);
-    });
-
     // Initial toggle to set button state
     updateSnapshotState();
-
-    document.querySelectorAll('.snapshot-card input[type="checkbox"]').forEach(cb => {
-      cb.addEventListener('change', function() {
-        if (this.checked) {
-          this.closest('.snapshot-card')
-          this.style.filter = 'hue-rotate(120deg)';
-        } else {
-          this.closest('.snapshot-card').style.border = '';
-          this.style.accentColor = '';
-          this.style.filter = '';
-        }
-        updateSnapshotState();
-      });
-    });
-
-    document.querySelector('.delete-selected-btn')?.addEventListener('click', () => {
-      selectedForms = Array.from(document.querySelectorAll('.snapshot-card input[type="checkbox"]:checked'))
-        .map(cb => cb.closest('.snapshot-card').querySelector('.delete-form'))
-        .filter(Boolean);
-      if (selectedForms.length === 0) return alert('No snapshots selected.');
-      openModal(`Are you sure you want to delete ${selectedForms.length} selected snapshot${selectedForms.length > 1 ? 's' : ''}?`);
-    });
   }
 
   // === Search + thumbnails ===
@@ -489,135 +290,115 @@ document.addEventListener('DOMContentLoaded', function () {
     const overlay = document.querySelector('.loading-overlay');
     if (overlay) overlay.classList.add('hidden');
   }, 500);
-// --- Handle folder interactions (single, double, ctrl, right-click) --- //
 
-const folderCards = document.querySelectorAll(".folder-card");
+  // --- Handle folder interactions (single, double, ctrl, right-click) --- //
 
-// If you track whether select mode is active
-let selectModeActive = false;
+  const folderCards = document.querySelectorAll(".folder-card");
 
-// Helper: Update state (optional function, you can define your own)
-function updateFolderState() {
-  const selectedCount = document.querySelectorAll('.folder-card.selected').length;
-  console.log(`Selected folders: ${selectedCount}`);
-}
+  folderCards.forEach(card => {
+    const folderLinkDiv = card.querySelector(".folder-link");
+    const folderName = folderLinkDiv?.dataset?.folder;
 
-folderCards.forEach(card => {
-  const folderLinkDiv = card.querySelector(".folder-link");
-  const folderName = folderLinkDiv?.dataset?.folder;
+    const openFolder = () => {
+      if (!folderName) return;
+      window.location.href = `/records/folder/${encodeURIComponent(folderName)}`;
+    };
 
-  const openFolder = () => {
-    if (!folderName) return;
-    window.location.href = `/records/folder/${encodeURIComponent(folderName)}`;
-  };
+    // Ignore click if it's on a button, menu, or input inside the card
+    const isClickOnControl = (target) => {
+      return !!target.closest("button, input, .folder-menu-btn, .folder-menu-dropdown");
+    };
 
-  // Ignore click if it's on a button, menu, or input inside the card
-  const isClickOnControl = (target) => {
-    return !!target.closest("button, input, .folder-menu-btn, .folder-menu-dropdown");
-  };
+    // --- Single click (select or toggle) ---
+    card.addEventListener("click", (e) => {
+      if (isClickOnControl(e.target)) return;
 
-  // --- Single click (select or toggle) ---
-  card.addEventListener("click", (e) => {
-    if (isClickOnControl(e.target)) return;
-
-    // Ctrl or Cmd pressed → multi-select toggle
-    if (e.ctrlKey || e.metaKey) {
-      e.preventDefault();
-      card.classList.toggle("selected");
-      const cb = card.querySelector('input[type="checkbox"], .select-indicator');
-      if (cb) cb.checked = card.classList.contains("selected");
-      updateFolderState();
-      return;
-    }
-
-    // If select mode is active, toggle
-    if (selectModeActive) {
-      e.preventDefault();
-      card.classList.toggle("selected");
-      const cb = card.querySelector('input[type="checkbox"], .select-indicator');
-      if (cb) cb.checked = card.classList.contains("selected");
-      updateFolderState();
-      return;
-    }
-
-    // Normal single click: clear other selections, select this only
-    document.querySelectorAll('.folder-card.selected').forEach(c => {
-      if (c !== card) {
-        c.classList.remove('selected');
-        const cb = c.querySelector('input[type="checkbox"], .select-indicator');
-        if (cb) cb.checked = false;
+      // Ctrl or Cmd pressed → multi-select toggle
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        card.classList.toggle("selected");
+        updateFolderState();
+        return;
       }
+
+      // If select mode is active, toggle
+      if (selectModeActive) {
+        e.preventDefault();
+        card.classList.toggle("selected");
+        updateFolderState();
+        return;
+      }
+
+      // Normal single click: clear other selections, select this only
+      document.querySelectorAll('.folder-card.selected').forEach(c => {
+        if (c !== card) {
+          c.classList.remove('selected');
+        }
+      });
+
+      card.classList.add("selected");
+      updateFolderState();
     });
 
-    card.classList.add("selected");
-    const cb = card.querySelector('input[type="checkbox"], .select-indicator');
-    if (cb) cb.checked = true;
-    updateFolderState();
-  });
+    // --- SORT MENU FUNCTIONALITY ---
 
+    document.querySelectorAll('.sort-option').forEach(option => {
+      option.addEventListener('click', () => {
+        const sortType = option.dataset.sort;
+        const grid = document.querySelector('.records-grid');
+        if (!grid) return;
 
-  // --- SORT MENU FUNCTIONALITY ---
+        // Get all folder cards
+        const folders = Array.from(grid.querySelectorAll('.folder-card'));
 
-document.querySelectorAll('.sort-option').forEach(option => {
-  option.addEventListener('click', () => {
-    const sortType = option.dataset.sort;
-    const grid = document.querySelector('.records-grid');
-    if (!grid) return;
+        // Sort logic
+        let sortedFolders = [];
+        if (sortType === 'name') {
+          sortedFolders = folders.sort((a, b) => {
+            const nameA = a.querySelector('.folder-name').textContent.trim().toLowerCase();
+            const nameB = b.querySelector('.folder-name').textContent.trim().toLowerCase();
+            return nameA.localeCompare(nameB);
+          });
+        }
+        else if (sortType === 'date') {
+          // Requires Flask to include folder.created_at
+          sortedFolders = folders.sort((a, b) => {
+            const dateA = new Date(a.dataset.createdAt || 0);
+            const dateB = new Date(b.dataset.createdAt || 0);
+            return dateB - dateA; // newest first
+          });
+        }
+        else if (sortType === 'count') {
+          sortedFolders = folders.sort((a, b) => {
+            const countA = parseInt(a.querySelector('.folder-count').textContent) || 0;
+            const countB = parseInt(b.querySelector('.folder-count').textContent) || 0;
+            return countB - countA; // highest first
+          });
+        }
 
-    // Get all folder cards
-    const folders = Array.from(grid.querySelectorAll('.folder-card'));
+        // Re-append sorted elements to the grid
+        sortedFolders.forEach(folder => grid.appendChild(folder));
 
-    // Sort logic
-    let sortedFolders = [];
-    if (sortType === 'name') {
-      sortedFolders = folders.sort((a, b) => {
-        const nameA = a.querySelector('.folder-name').textContent.trim().toLowerCase();
-        const nameB = b.querySelector('.folder-name').textContent.trim().toLowerCase();
-        return nameA.localeCompare(nameB);
+        // Close dropdown after sort
+        document.querySelector('.sort-dropdown')?.classList.remove('active');
       });
-    } 
-    else if (sortType === 'date') {
-      // Requires Flask to include folder.created_at
-      sortedFolders = folders.sort((a, b) => {
-        const dateA = new Date(a.dataset.createdAt || 0);
-        const dateB = new Date(b.dataset.createdAt || 0);
-        return dateB - dateA; // newest first
-      });
-    } 
-    else if (sortType === 'count') {
-      sortedFolders = folders.sort((a, b) => {
-        const countA = parseInt(a.querySelector('.folder-count').textContent) || 0;
-        const countB = parseInt(b.querySelector('.folder-count').textContent) || 0;
-        return countB - countA; // highest first
-      });
-    }
+    });
 
-    // Re-append sorted elements to the grid
-    sortedFolders.forEach(folder => grid.appendChild(folder));
+    // --- Double-click → open folder ---
+    card.addEventListener("dblclick", (e) => {
+      if (isClickOnControl(e.target)) return;
+      e.preventDefault();
+      openFolder();
+    });
 
-    // Close dropdown after sort
-    document.querySelector('.sort-dropdown')?.classList.remove('active');
+    // --- Right-click (context) → toggle selection ---
+    card.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      if (isClickOnControl(e.target)) return;
+      card.classList.toggle("selected");
+      updateFolderState();
+    });
   });
-});
-
-
-  // --- Double-click → open folder ---
-  card.addEventListener("dblclick", (e) => {
-    if (isClickOnControl(e.target)) return;
-    openFolder();
-  });
-
-  // --- Right-click (context) → toggle selection ---
-  card.addEventListener("contextmenu", (e) => {
-    e.preventDefault();
-    if (isClickOnControl(e.target)) return;
-    card.classList.toggle("selected");
-    const cb = card.querySelector('input[type="checkbox"], .select-indicator');
-    if (cb) cb.checked = card.classList.contains("selected");
-    updateFolderState();
-  });
-});
-
 
   // Sort and header menu toggle
   const sortDropdown = document.querySelector('.sort-dropdown');
@@ -645,61 +426,37 @@ document.querySelectorAll('.sort-option').forEach(option => {
       e.stopPropagation();
       const text = this.textContent.trim().toLowerCase();
       if (text === 'select') {
-        // Show checkboxes for all cards and activate select mode
+        // Toggle select mode
         if (isFoldersPage) {
-          selectModeActive = true;
-          document.querySelectorAll('.folder-card input[type="checkbox"]').forEach(cb => cb.style.display = 'inline');
+          selectModeActive = !selectModeActive;
           updateFolderState();
         } else if (isSnapshotsPage) {
-          snapshotSelectModeActive = true;
-          document.querySelectorAll('.snapshot-card input[type="checkbox"]').forEach(cb => cb.style.display = 'inline');
+          snapshotSelectModeActive = !snapshotSelectModeActive;
           updateSnapshotState();
         }
         // Close dropdown
         headerMenuContainer.classList.remove('active');
       } else if (text === 'select all') {
         if (isFoldersPage) {
-          const checkboxes = document.querySelectorAll('.folder-card input[type="checkbox"]');
-          const allChecked = Array.from(checkboxes).every(cb => cb.checked);
-          if (allChecked) {
-            // Uncheck all, keep checkboxes visible
-            checkboxes.forEach(cb => {
-              cb.checked = false;
-              cb.style.display = 'inline';
-              cb.closest('.folder-card').style.border = '';
-              cb.style.accentColor = '';
-              cb.style.filter = '';
-            });
+          const cards = document.querySelectorAll('.folder-card');
+          const allSelected = Array.from(cards).every(card => card.classList.contains('selected'));
+          if (allSelected) {
+            // Deselect all
+            cards.forEach(card => card.classList.remove('selected'));
           } else {
-            // Check all, show checkboxes, apply styles
-            checkboxes.forEach(cb => {
-              cb.checked = true;
-              cb.style.display = 'inline';
-              cb.closest('.folder-card')
-              cb.style.filter = 'hue-rotate(120deg)';
-            });
+            // Select all
+            cards.forEach(card => card.classList.add('selected'));
           }
           updateFolderState();
         } else if (isSnapshotsPage) {
-          const checkboxes = document.querySelectorAll('.snapshot-card input[type="checkbox"]');
-          const allChecked = Array.from(checkboxes).every(cb => cb.checked);
-          if (allChecked) {
-            // Uncheck all, keep checkboxes visible
-            checkboxes.forEach(cb => {
-              cb.checked = false;
-              cb.style.display = 'inline';
-              cb.closest('.snapshot-card').style.border = '';
-              cb.style.accentColor = '';
-              cb.style.filter = '';
-            });
+          const cards = document.querySelectorAll('.snapshot-card');
+          const allSelected = Array.from(cards).every(card => card.classList.contains('selected'));
+          if (allSelected) {
+            // Deselect all
+            cards.forEach(card => card.classList.remove('selected'));
           } else {
-            // Check all, show checkboxes, apply styles
-            checkboxes.forEach(cb => {
-              cb.checked = true;
-              cb.style.display = 'inline';
-              cb.closest('.snapshot-card')
-              cb.style.filter = 'hue-rotate(120deg)';
-            });
+            // Select all
+            cards.forEach(card => card.classList.add('selected'));
           }
           updateSnapshotState();
         }
@@ -781,16 +538,73 @@ document.addEventListener('click', function(e) {
 
 // Make entire snapshot card clickable to open snapshot
 document.querySelectorAll('.snapshot-card').forEach(card => {
-  card.addEventListener('click', e => {
-    // If in select mode, don't navigate
-    if (snapshotSelectModeActive) return;
-    // If click is on menu button or dropdown, don't navigate
-    if (e.target.closest('.snapshot-menu-container')) return;
-    // Else, find the link and navigate
-    const link = card.querySelector('.snapshot-link');
+  const link = card.querySelector('.snapshot-link');
+
+  const openSnapshot = () => {
     if (link) {
       window.location.href = link.href;
     }
+  };
+
+  // Ignore click if it's on a button, menu, or input inside the card
+  const isClickOnControl = (target) => {
+    return !!target.closest("button, input, .snapshot-menu-btn, .snapshot-menu-dropdown");
+  };
+
+  // --- Single click (select or toggle) ---
+  card.addEventListener('click', e => {
+    if (isClickOnControl(e.target)) return;
+
+    // Ctrl or Cmd pressed → multi-select toggle
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      card.classList.toggle("selected");
+      const cb = card.querySelector('input[type="checkbox"]');
+      if (cb) cb.checked = card.classList.contains("selected");
+      updateSnapshotState();
+      return;
+    }
+
+    // If select mode is active, toggle
+    if (snapshotSelectModeActive) {
+      e.preventDefault();
+      card.classList.toggle("selected");
+      const cb = card.querySelector('input[type="checkbox"]');
+      if (cb) cb.checked = card.classList.contains("selected");
+      updateSnapshotState();
+      return;
+    }
+
+    // Normal single click: clear other selections, select this only
+    document.querySelectorAll('.snapshot-card.selected').forEach(c => {
+      if (c !== card) {
+        c.classList.remove('selected');
+        const cb = c.querySelector('input[type="checkbox"]');
+        if (cb) cb.checked = false;
+      }
+    });
+
+    card.classList.add("selected");
+    const cb = card.querySelector('input[type="checkbox"]');
+    if (cb) cb.checked = true;
+    updateSnapshotState();
+  });
+
+  // --- Double-click → open snapshot ---
+  card.addEventListener("dblclick", (e) => {
+    if (isClickOnControl(e.target)) return;
+    e.preventDefault();
+    openSnapshot();
+  });
+
+  // --- Right-click (context) → toggle selection ---
+  card.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+    if (isClickOnControl(e.target)) return;
+    card.classList.toggle("selected");
+    const cb = card.querySelector('input[type="checkbox"]');
+    if (cb) cb.checked = card.classList.contains("selected");
+    updateSnapshotState();
   });
 });
 
@@ -805,14 +619,7 @@ document.querySelectorAll('.header-menu-item').forEach(item => {
       const isSnapshotsPage = document.querySelectorAll('.snapshot-card').length > 0;
 
       // Collect selected cards
-      let selectedCards = [];
-      if (isFoldersPage) {
-        selectedCards = Array.from(document.querySelectorAll('.folder-card input[type="checkbox"]:checked'))
-          .map(cb => cb.closest('.folder-card'));
-      } else if (isSnapshotsPage) {
-        selectedCards = Array.from(document.querySelectorAll('.snapshot-card input[type="checkbox"]:checked'))
-          .map(cb => cb.closest('.snapshot-card'));
-      }
+      let selectedCards = Array.from(document.querySelectorAll('.folder-card.selected, .snapshot-card.selected'));
 
       if (selectedCards.length === 0) {
         alert('No items selected.');
@@ -827,7 +634,7 @@ document.querySelectorAll('.header-menu-item').forEach(item => {
       const closeBtn = modal.querySelector('.close');
 
       modal.querySelector('p').textContent = `Are you sure you want to delete ${selectedCards.length} selected item${selectedCards.length > 1 ? 's' : ''}?`;
-      modal.style.display = 'block';
+      modal.style.display = 'flex';
       modal.style.zIndex = '1000';
 
       const handleConfirm = async () => {

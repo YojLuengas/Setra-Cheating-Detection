@@ -107,7 +107,7 @@ function showTemporaryStatus(message, duration = 3000) {
   statusDiv.style.fontWeight = "bold";
 
   setTimeout(() => {
-    statusDiv.textContent = "No cheating detected";
+    statusDiv.textContent = "No possible cheating detected";
     statusDiv.style.color = "#222";
     statusDiv.style.fontWeight = "normal";
   }, duration);
@@ -120,10 +120,10 @@ async function sendLoop(videoElement) {
       const frameB64 = captureFrame(videoElement);
       if (frameB64 && frameB64.length > 100) {  // Basic check for valid data URL
         emitFrame(frameB64);
-        video.src = frameB64;
       }
     }
-    await new Promise(r => setTimeout(r, 250));
+    // Increased frequency to ~20 FPS to reduce lag (100ms -> 50ms)
+    await new Promise(r => setTimeout(r, 50));
   }
 }
 

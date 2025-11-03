@@ -2,6 +2,17 @@
 {% block title %}Login{% endblock %}
 
 {% block content %}
+<!-- Flash Messages -->
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ 'danger' if category == 'danger' else 'warning' }} fade show" role="alert">
+        <i class="fa fa-exclamation-triangle"></i> {{ message }}
+      </div>
+    {% endfor %}
+  {% endif %}
+{% endwith %}
+
 <div class="login-container">
   <div class="login-card text-center">
     
@@ -37,4 +48,15 @@
     </form>
   </div>
 </div>
+
+<script>
+  // Auto-dismiss flash messages after 3 seconds
+  setTimeout(function() {
+    const alerts = document.querySelectorAll('.alert');
+    alerts.forEach(function(alert) {
+      const bsAlert = new bootstrap.Alert(alert);
+      bsAlert.close();
+    });
+  }, 3000); // 3 seconds
+</script>
 {% endblock %}

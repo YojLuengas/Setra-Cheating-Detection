@@ -89,7 +89,8 @@ examNextBtn.addEventListener("click", (e) => {
   let allFilled = true;
 
   inputs.forEach((input) => {
-    const card = input.closest(".card");
+    const card = input.closest(".setup-card");
+    if (!card) return;
     const statusEl = card.querySelector(".field-status") || document.createElement("small");
     statusEl.className = "field-status";
 
@@ -97,12 +98,10 @@ examNextBtn.addEventListener("click", (e) => {
       allFilled = false;
       card.classList.add("error-glow", "shake");
       input.style.border = "2px solid red";
-      statusEl.textContent = "❌ Not filled";
       statusEl.style.color = "red";
     } else {
       card.classList.remove("error-glow");
       input.style.border = "2px solid limegreen";
-      statusEl.textContent = "✅ Filled";
       statusEl.style.color = "limegreen";
     }
 
@@ -355,6 +354,27 @@ async function stopAssessment() {
 
   setAssessmentActive(false);
   try { await fetch("/stop-assessment", { method: "POST" }); } catch {}
+
+  // Clear notifications UI and related storage
+  const notifications = document.getElementById('notifications');
+  if (notifications) {
+    notifications.innerHTML = '';
+    let noAlertsMsg = document.getElementById("no-alerts-msg");
+    if (!noAlertsMsg) {
+      noAlertsMsg = document.createElement("p");
+      noAlertsMsg.id = "no-alerts-msg";
+      noAlertsMsg.textContent = "No alerts yet";
+      notifications.appendChild(noAlertsMsg);
+    }
+  }
+  // Reset badge
+  const badge = document.getElementById("alert-badge");
+  if (badge) {
+    badge.style.display = "none";
+  }
+  // Clear sessionStorage for notifications
+  sessionStorage.removeItem("seenSnapshots");
+  sessionStorage.removeItem("notifications");
 
   const cameraContainer = document.querySelector(".camera-container");
   if (cameraContainer) cameraContainer.style.display = "none";
