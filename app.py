@@ -8,7 +8,7 @@ import numpy as np
 from PIL import Image
 from datetime import datetime
 from functools import wraps
-from threading import Lock
+from threading import Lock, Thread
 
 from flask import (
     Flask,
@@ -72,7 +72,7 @@ stable_cheating = False
 frame_lock = Lock()
 
 # Throttling / timing controls to reduce CPU / GPU load and UI lag
-PROCESS_INTERVAL = 0.45        # seconds between heavy processing runs (≈2.2 FPS)
+PROCESS_INTERVAL = 0.2         # seconds between heavy processing runs (≈5 FPS)
 OUT_IMG_MAX = 640             # send this max width for annotated frames
 _last_processed_time = 0.0
 
@@ -107,6 +107,18 @@ def save_image_to_disk(img_bgr, snap_id=None, jpeg_quality=85):
     _, buffer = cv2.imencode('.jpg', img_bgr, [int(cv2.IMWRITE_JPEG_QUALITY), jpeg_quality])
     img_b64 = base64.b64encode(buffer).decode('utf-8')
     return img_b64
+
+def async_db_insert(snap_id, timestamp, epoch_now, img_b64_small, assessment_session_id, user_id):
+    try:
+        # Create a new cursor for the thread
+        thread_cursor = db.cursor(buffered=True)
+        thread_cursor.execute("INSERT INTO detections (id, timestamp, epoch, image_path, assessment_session_id, user_id) VALUES (%s, %s, %s, %s, %s, %s)",
+                              (snap_id, timestamp, epoch_now, img_b64_small, assessment_session_id, user_id))
+        db.commit()
+        thread_cursor.close()
+    except Exception:
+        db.rollback()
+        logger.exception("Async DB insert error for snapshot")
 
 
 
@@ -444,7 +456,7 @@ def handle_frame(message):
         # Run YOLO on the small image
         try:
             # keep imgsz similar to our small width for efficiency
-            results = yolo_model.predict(small, imgsz=min(640, OUT_IMG_MAX), conf=0.40, verbose=False)
+            results = yolo_model.predict(small, imgsz=320, conf=0.40, verbose=False)
         except Exception as e:
             logger.exception("YOLO prediction error: %s", e)
             results = []
@@ -515,19 +527,14 @@ def handle_frame(message):
             snapshot = {"id": snap_id, "image_path": img_b64_small, "timestamp": timestamp.strftime("%Y-%m-%d %I:%M:%S %p"), "epoch": epoch_now}
             all_snapshots.append(snapshot)
             notified_snapshots.append(snapshot)
-            try:
-                cursor.execute("INSERT INTO detections (id, timestamp, epoch, image_path, assessment_session_id, user_id) VALUES (%s, %s, %s, %s, %s, %s)",
-                               (snap_id, timestamp, epoch_now, img_b64_small, assessment_session_id, session["user_id"]))
-                db.commit()
-            except Exception:
-                db.rollback()
-                logger.exception("DB insert error for snapshot")
+            # Start async DB insert
+            Thread(target=async_db_insert, args=(snap_id, timestamp, epoch_now, img_b64_small, assessment_session_id, session["user_id"])).start()
             now_dt = datetime.now()
             socketio.emit("cheating_notification", {"message": "Possible Cheating detected", "time": now_dt.strftime("%I:%M %p"), "timestamp": now_dt.strftime("%Y-%m-%d %I:%M:%S %p"), "url": f"/cheating/{snap_id}"})
             last_cheating_notification_time = time.time()
 
         # Prepare and emit annotated frame back to client (small image to reduce latency)
-        out_b64 = cv2_to_b64(annotated, jpeg_quality=60)
+        out_b64 = cv2_to_b64(annotated, jpeg_quality=50)
         if out_b64:
             emit("response_frame", {"image": out_b64, "cheating": cheating_in_frame})
     finally:
