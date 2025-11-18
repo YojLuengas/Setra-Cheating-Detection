@@ -11,7 +11,8 @@ const confirmSubmit = document.getElementById("confirm-submit");
 const video = document.getElementById("camera-preview");
 const cameraStatus = document.getElementById("camera-status");
 const internetStatus = document.getElementById("internet-status");
-const cameraSelect = document.getElementById("camera-select");
+const cameraContainer = document.getElementById("camera-container");
+let cameraSelects = [];
 
 const cameraToggleBtn = document.getElementById("camera-toggle-btn");
 const cameraOverlay = document.getElementById("camera-overlay");
@@ -137,9 +138,8 @@ systemCheckNext.addEventListener("click", () => {
   document.getElementById("confirm-subject").textContent = document.getElementById("subject").value;
   document.getElementById("confirm-exam-type").textContent = document.getElementById("exam-type").value;
   document.getElementById("confirm-datetime").textContent = document.getElementById("exam-datetime").value;
-  document.getElementById("confirm-camera").textContent = cameraSelect.value
-    ? cameraSelect.options[cameraSelect.selectedIndex].text
-    : "";
+  const selectedCameras = cameraSelects.map(select => select.options[select.selectedIndex]?.text || "").filter(text => text);
+  document.getElementById("confirm-camera").textContent = selectedCameras.join(", ");
 });
 
 confirmBack.addEventListener("click", () => {
@@ -172,12 +172,13 @@ document.getElementById("modal-yes").addEventListener("click", async () => {
 
   setAssessmentActive(true);
 
+  const selectedCameras = cameraSelects.map(select => select.value).filter(value => value);
   const payload = {
     course: document.getElementById("course").value,
     subject: document.getElementById("subject").value,
     exam_type: document.getElementById("exam-type").value,
     exam_datetime: document.getElementById("exam-datetime").value,
-    camera: cameraSelect.value
+    cameras: selectedCameras
   };
 
   try {
@@ -230,8 +231,8 @@ cameraToggleBtn.addEventListener("click", async () => {
 
   if (isOff) {
     try {
-      const constraints = cameraSelect.value
-        ? { video: { deviceId: { exact: cameraSelect.value } } }
+      const constraints = cameraSelects[0].value
+        ? { video: { deviceId: { exact: cameraSelects[0].value } } }
         : { video: true };
 
       cameraStream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -288,25 +289,87 @@ function stopCamera() {
 async function loadCameras() {
   try {
     const devices = await navigator.mediaDevices.enumerateDevices();
-    cameraSelect.innerHTML = "";
-    let count = 1;
-    devices.forEach(device => {
-      if (device.kind === "videoinput") {
-        const option = document.createElement("option");
-        option.value = device.deviceId;
-        option.textContent = device.label || `Camera ${count++}`;
-        cameraSelect.appendChild(option);
+    cameraSelects.forEach(select => {
+      select.innerHTML = "";
+      let count = 1;
+      devices.forEach(device => {
+        if (device.kind === "videoinput") {
+          const option = document.createElement("option");
+          option.value = device.deviceId;
+          option.textContent = device.label || `Camera ${count++}`;
+          select.appendChild(option);
+        }
+      });
+
+      if (devices.length > 0 && !select.value) {
+        select.value = devices[0].deviceId;
       }
     });
-
-    if (devices.length > 0 && !cameraSelect.value) {
-      cameraSelect.value = devices[0].deviceId;
-    }
   } catch (err) {
     console.error("Error listing cameras:", err);
   }
 }
 loadCameras();
+
+// ------------------ Add Camera Functionality ------------------
+const addCameraBtn = document.getElementById("add-camera-btn");
+const removeCameraBtn = document.getElementById("remove-camera-btn");
+
+function addCameraSelect() {
+  if (cameraSelects.length >= 2) {
+    alert("Maximum of 2 cameras allowed.");
+    return;
+  }
+
+  const cameraContainer = document.getElementById("camera-container");
+  const select = document.createElement("select");
+  select.className = "camera-select";
+  select.required = true;
+  select.id = `camera-select-${cameraSelects.length}`;
+
+  cameraContainer.appendChild(select);
+  cameraSelects.push(select);
+
+  // Load cameras into the new select
+  loadCameras();
+
+  updateButtons();
+}
+
+function removeCameraSelect() {
+  if (cameraSelects.length <= 1) {
+    alert("At least 1 camera is required.");
+    return;
+  }
+
+  const cameraContainer = document.getElementById("camera-container");
+  const lastSelect = cameraSelects.pop();
+  cameraContainer.removeChild(lastSelect);
+
+  updateButtons();
+}
+
+function updateButtons() {
+  if (cameraSelects.length >= 2) {
+    addCameraBtn.disabled = true;
+    addCameraBtn.textContent = "Max 2 Cameras";
+  } else {
+    addCameraBtn.disabled = false;
+    addCameraBtn.textContent = "Add Camera";
+  }
+
+  if (cameraSelects.length <= 1) {
+    removeCameraBtn.disabled = true;
+  } else {
+    removeCameraBtn.disabled = false;
+  }
+}
+
+addCameraBtn.addEventListener("click", addCameraSelect);
+removeCameraBtn.addEventListener("click", removeCameraSelect);
+
+// Initialize with one camera select
+addCameraSelect();
 
 
 // --- Check Internet Connectivity ---

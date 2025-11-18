@@ -14,7 +14,7 @@ CREATE TABLE `assessment_sessions` (
   `subject` varchar(255) DEFAULT NULL,
   `exam_type` varchar(255) DEFAULT NULL,
   `exam_datetime` datetime DEFAULT NULL,
-  `camera` varchar(255) DEFAULT NULL,
+  `camera` TEXT DEFAULT NULL,
   `created_at` datetime DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 

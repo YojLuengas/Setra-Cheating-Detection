@@ -9,6 +9,7 @@ from PIL import Image
 from datetime import datetime
 from functools import wraps
 from threading import Lock, Thread
+import json
 
 from flask import (
     Flask,
@@ -65,16 +66,16 @@ yolo_model = YOLO("models/best.pt")
 # ---------- Globals & Locks ----------
 all_snapshots = []
 notified_snapshots = []
-last_cheating_notification_time = 0
-consecutive_cheating_frames = 0
-consecutive_non_cheating_frames = 0
-stable_cheating = False
+last_cheating_notification_time = {}  # per camera
+consecutive_cheating_frames = {}
+consecutive_non_cheating_frames = {}
+stable_cheating = {}
 frame_lock = Lock()
 
 # Throttling / timing controls to reduce CPU / GPU load and UI lag
 PROCESS_INTERVAL = 0.2         # seconds between heavy processing runs (≈5 FPS)
 OUT_IMG_MAX = 640             # send this max width for annotated frames
-_last_processed_time = 0.0
+_last_processed_time = {}  # per camera
 
 # ---------- Helpers ----------
 def b64_to_cv2(data_b64):
@@ -364,7 +365,7 @@ def create_assessment_session():
                 data.get("subject"),
                 data.get("exam_type"),
                 data.get("exam_datetime"),
-                data.get("camera"),
+                json.dumps(data.get("cameras", [])),
                 datetime.now(),
             ),
         )
@@ -375,10 +376,11 @@ def create_assessment_session():
             (assessment_session_id, session["user_id"], folder_name, datetime.now())
         )
         db.commit()
-        global all_snapshots, notified_snapshots, last_cheating_notification_time
+        global all_snapshots, notified_snapshots, last_cheating_notification_time, _last_processed_time
         all_snapshots = []
         notified_snapshots = []
-        last_cheating_notification_time = 0
+        last_cheating_notification_time = {}
+        _last_processed_time = {}
         session["assessment_session_id"] = assessment_session_id
         return jsonify({"success": True, "message": "Assessment session created successfully!"})
     except Exception as e:
@@ -421,23 +423,30 @@ def handle_frame(message):
     send a smaller JPEG to clients to reduce latency.
     """
     global all_snapshots, notified_snapshots, last_cheating_notification_time
-    global _last_processed_time, _last_face_time
+    global _last_processed_time
 
     # Quick-drop if someone else is processing
     if not frame_lock.acquire(blocking=False):
         return
 
     try:
-        now = time.time()
-        # Throttle heavy processing to avoid backlog / lag
-        if now - _last_processed_time < PROCESS_INTERVAL:
-            return
-
-        _last_processed_time = now
-
         img_b64 = message.get("image")
+        camera_index = message.get("camera", 0)  # Default to 0 if not provided
         if not img_b64:
             return
+
+        # Initialize per-camera variables if not present
+        if camera_index not in _last_processed_time:
+            _last_processed_time[camera_index] = 0.0
+        if camera_index not in last_cheating_notification_time:
+            last_cheating_notification_time[camera_index] = 0
+
+        now = time.time()
+        # Throttle heavy processing to avoid backlog / lag per camera
+        if now - _last_processed_time[camera_index] < PROCESS_INTERVAL:
+            return
+
+        _last_processed_time[camera_index] = now
 
         frame = b64_to_cv2(img_b64)
         if frame is None:
@@ -456,7 +465,7 @@ def handle_frame(message):
         # Run YOLO on the small image
         try:
             # keep imgsz similar to our small width for efficiency
-            results = yolo_model.predict(small, imgsz=320, conf=0.40, verbose=False)
+            results = yolo_model.predict(small, imgsz=364, conf=0.40, verbose=False)
         except Exception as e:
             logger.exception("YOLO prediction error: %s", e)
             results = []
@@ -495,28 +504,38 @@ def handle_frame(message):
                     except Exception:
                         label = str(cls)
 
-                    # xyxy in small image coords -> map back to small image (we annotate small)
+                    # xyxy in small image coords
                     x1, y1, x2, y2 = [int(v) for v in xyxy[:4]]
                     detections.append((label, conf, (x1, y1, x2, y2)))
                 except Exception:
                     logger.exception("Failed parsing detection box; skipping.")
                     continue
 
-        # Annotate on the small image (faster than annotating full resolution)
-        annotated = small.copy()
+        # Annotate on the original frame for visibility
+        annotated = frame.copy()
+        scale = small_w / original_w
         for label, conf, (x1, y1, x2, y2) in detections:
+            x1_orig = int(x1 / scale)
+            y1_orig = int(y1 / scale)
+            x2_orig = int(x2 / scale)
+            y2_orig = int(y2 / scale)
             color = (0, 0, 255) if str(label).lower() == "cheating" else (0, 255, 0)
-            cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
-            cv2.putText(annotated, f"{label} {conf:.2f}", (x1, max(y1 - 8, 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+            cv2.rectangle(annotated, (x1_orig, y1_orig), (x2_orig, y2_orig), color, 3)
+            cv2.putText(annotated, f"{label} {conf:.2f}", (x1_orig, max(y1_orig - 8, 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 3)
             if str(label).lower() == "cheating":
                 cheating_in_frame = True
 
-        status_text = "OK"
-        color_txt = (0, 255, 0)
-        cv2.putText(annotated, status_text, (10, annotated.shape[0] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color_txt, 2)
+        # Add status text
+        if cheating_in_frame:
+            status_text = "CHEATING DETECTED"
+            color_txt = (0, 0, 255)
+        else:
+            status_text = "OK"
+            color_txt = (0, 255, 0)
+        cv2.putText(annotated, status_text, (10, annotated.shape[0] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color_txt, 3)
 
-        # Save snapshot & DB insert (rate-limit snapshot writes)
-        if cheating_in_frame and time.time() - last_cheating_notification_time >= 2:
+        # Save snapshot & DB insert (rate-limit snapshot writes per camera)
+        if cheating_in_frame and time.time() - last_cheating_notification_time[camera_index] >= 2:
             snap_id = str(uuid.uuid4())
             # save a smaller base64 string (annotated small)
             _, buf = cv2.imencode(".jpg", annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
@@ -530,13 +549,13 @@ def handle_frame(message):
             # Start async DB insert
             Thread(target=async_db_insert, args=(snap_id, timestamp, epoch_now, img_b64_small, assessment_session_id, session["user_id"])).start()
             now_dt = datetime.now()
-            socketio.emit("cheating_notification", {"message": "Possible Cheating detected", "time": now_dt.strftime("%I:%M %p"), "timestamp": now_dt.strftime("%Y-%m-%d %I:%M:%S %p"), "url": f"/cheating/{snap_id}"})
-            last_cheating_notification_time = time.time()
+            socketio.emit("cheating_notification", {"message": f"Possible Cheating detected on Camera {camera_index}", "time": now_dt.strftime("%I:%M %p"), "timestamp": now_dt.strftime("%Y-%m-%d %I:%M:%S %p"), "url": f"/cheating/{snap_id}"})
+            last_cheating_notification_time[camera_index] = time.time()
 
         # Prepare and emit annotated frame back to client (small image to reduce latency)
         out_b64 = cv2_to_b64(annotated, jpeg_quality=50)
         if out_b64:
-            emit("response_frame", {"image": out_b64, "cheating": cheating_in_frame})
+            emit("response_frame", {"image": out_b64, "cheating": cheating_in_frame, "camera": camera_index})
     finally:
         try:
             frame_lock.release()
