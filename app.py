@@ -27,6 +27,7 @@ from flask_socketio import SocketIO, emit
 import mysql.connector
 
 from ultralytics import YOLO
+import mediapipe as mp
 import bcrypt
 import logging
 
@@ -43,6 +44,7 @@ DB_CONFIG = {
 # ---------- App / DB / Logging ----------
 app = Flask(__name__)
 app.secret_key = "replace_this_with_a_strong_random_secret"  # change this
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0  # Disable caching for static files to enable cache busting
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
 logging.basicConfig(level=logging.INFO)
@@ -60,6 +62,9 @@ except Exception as e:
 # Update path as required
 yolo_model = YOLO("models/best.pt")
 
+# Initialize MediaPipe Face Mesh
+face_mesh = mp.solutions.face_mesh.FaceMesh(max_num_faces=1, refine_landmarks=True, min_detection_confidence=0.5, min_tracking_confidence=0.5)
+
 
 
 # ---------- Globals & Locks ----------
@@ -72,8 +77,8 @@ stable_cheating = False
 frame_lock = Lock()
 
 # Throttling / timing controls to reduce CPU / GPU load and UI lag
-PROCESS_INTERVAL = 0.45        # seconds between heavy processing runs (≈2.2 FPS)
-OUT_IMG_MAX = 640             # send this max width for annotated frames
+PROCESS_INTERVAL = 0.50       # seconds between heavy processing runs (≈10 FPS)
+OUT_IMG_MAX = 608            # send this max width for annotated frames
 _last_processed_time = 0.0
 
 # ---------- Helpers ----------
@@ -107,6 +112,34 @@ def save_image_to_disk(img_bgr, snap_id=None, jpeg_quality=85):
     _, buffer = cv2.imencode('.jpg', img_bgr, [int(cv2.IMWRITE_JPEG_QUALITY), jpeg_quality])
     img_b64 = base64.b64encode(buffer).decode('utf-8')
     return img_b64
+
+def estimate_head_rotation(image_rgb, face_landmarks):
+    """Estimate head yaw (rotation) from face landmarks."""
+    h, w, _ = image_rgb.shape
+    try:
+        lmk = face_landmarks.landmark
+        left_x = lmk[33].x * w
+        right_x = lmk[263].x * w
+        nose_x = lmk[1].x * w
+        yaw = (nose_x - (left_x + right_x) / 2) / w
+        return float(yaw)
+    except Exception:
+        return 0.0
+
+# Binary image processing
+def process_binary_image(binary_data):
+    """Convert binary image data to BGR numpy array."""
+    try:
+        # Convert bytes to numpy array
+        nparr = np.frombuffer(binary_data, np.uint8)
+        # Decode as JPEG
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        if img is None:
+            return None
+        return img
+    except Exception as e:
+        logger.exception("process_binary_image error: %s", e)
+        return None
 
 
 
@@ -423,11 +456,16 @@ def handle_frame(message):
 
         _last_processed_time = now
 
-        img_b64 = message.get("image")
-        if not img_b64:
-            return
+        # Expect binary data directly
+        if isinstance(message, bytes):
+            frame = process_binary_image(message)
+        else:
+            # If not binary, assume base64 string for backward compatibility
+            img_b64 = message
+            if not img_b64:
+                return
+            frame = b64_to_cv2(img_b64)
 
-        frame = b64_to_cv2(img_b64)
         if frame is None:
             return
 
@@ -444,7 +482,7 @@ def handle_frame(message):
         # Run YOLO on the small image
         try:
             # keep imgsz similar to our small width for efficiency
-            results = yolo_model.predict(small, imgsz=min(640, OUT_IMG_MAX), conf=0.40, verbose=False)
+            results = yolo_model.predict(small, imgsz=min(608, OUT_IMG_MAX), conf=0.50, verbose=False)
         except Exception as e:
             logger.exception("YOLO prediction error: %s", e)
             results = []
@@ -495,13 +533,19 @@ def handle_frame(message):
         for label, conf, (x1, y1, x2, y2) in detections:
             color = (0, 0, 255) if str(label).lower() == "cheating" else (0, 255, 0)
             cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
-            cv2.putText(annotated, f"{label} {conf:.2f}", (x1, max(y1 - 8, 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
             if str(label).lower() == "cheating":
                 cheating_in_frame = True
 
-        status_text = "OK"
-        color_txt = (0, 255, 0)
-        cv2.putText(annotated, status_text, (10, annotated.shape[0] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color_txt, 2)
+        # MediaPipe face mesh processing for head rotation
+        small_rgb = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
+        results = face_mesh.process(small_rgb)
+        yaw_deg = 0.0
+        if results.multi_face_landmarks:
+            for face_landmarks in results.multi_face_landmarks:
+                yaw = estimate_head_rotation(small_rgb, face_landmarks)
+                yaw_deg = yaw * 180 / 3.14159  # Convert to degrees
+                if abs(yaw_deg) > 25:
+                    cheating_in_frame = True
 
         # Save snapshot & DB insert (rate-limit snapshot writes)
         if cheating_in_frame and time.time() - last_cheating_notification_time >= 2:
