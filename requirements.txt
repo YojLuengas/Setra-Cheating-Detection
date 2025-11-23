@@ -2,11 +2,11 @@ flask
 flask-socketio
 python-socketio
 eventlet
-opencv-python
+opencv-python-headless==4.7.0.72
 numpy
 torch
 ultralytics
-mediapipe
+mediapipe==0.9.0
 Pillow
 Bcrypt
 gunicorn
