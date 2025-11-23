@@ -10,3 +10,4 @@ mediapipe
 Pillow
 Bcrypt
 gunicorn
+supabase-py

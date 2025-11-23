@@ -115,23 +115,15 @@ function showTemporaryStatus(message, duration = 3000) {
 
 
 async function sendLoop(videoElement) {
-  const DETECTION_INTERVAL = 150; // ~6 FPS detection
-  let lastDetectionTime = 0;
-
   while (sending) {
     if (videoElement.readyState >= 2 && videoElement.videoWidth > 0) {
-      const now = Date.now();
-
-      if (now - lastDetectionTime > DETECTION_INTERVAL) {
-        const frameBuffer = await captureFrame(videoElement);
-        if (frameBuffer && frameBuffer.byteLength > 100) {  // Basic check for valid binary data
-          emitFrame(frameBuffer);
-        }
-        lastDetectionTime = now;
+      const frameBuffer = await captureFrame(videoElement);
+      if (frameBuffer && frameBuffer.byteLength > 100) {  // Basic check for valid binary data
+        emitFrame(frameBuffer);
       }
     }
-    // Keep video smooth, check every 33ms (~30 FPS)
-    await new Promise(r => setTimeout(r, 33));
+    // Increased frequency to ~30 FPS to reduce lag (100ms -> 33ms)
+    await new Promise(r => setTimeout(r, 150));
   }
 }
 

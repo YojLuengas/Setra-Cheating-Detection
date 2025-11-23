@@ -33,19 +33,17 @@ import logging
 
 # ---------- Config ----------
 
-import os
-
 DB_CONFIG = {
-    "host": os.getenv("DB_HOST", "localhost"),
-    "user": os.getenv("DB_USER", "root"),
-    "password": os.getenv("DB_PASSWORD", ""),
-    "database": os.getenv("DB_NAME", "sentra_db"),
+    "host": "localhost",
+    "user": "root",
+    "password": "",
+    "database": "sentra_db",
     "charset": "utf8mb4",
 }
 
 # ---------- App / DB / Logging ----------
 app = Flask(__name__)
-app.secret_key = os.getenv("SECRET_KEY", "replace_this_with_a_strong_random_secret")  # change this
+app.secret_key = "replace_this_with_a_strong_random_secret"  # change this
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0  # Disable caching for static files to enable cache busting
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
