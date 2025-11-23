@@ -4,32 +4,65 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>{% block title %}Sentra App{% endblock %}</title>
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo/Lsentra2.png') }}">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
-<body>
-<nav class="navbar navbar-expand-lg navbar-light bg-light">
-  <div class="container">
-    <a class="navbar-brand" href="{{ url_for('home') }}">Sentra</a>
-    <div class="collapse navbar-collapse">
+<body class="{% if show_sidebar %}dashboard-body{% endif %}">
+<div class="d-flex">
+  {% if show_sidebar %}
+  <!-- Admin Sidebar -->
+  <aside class="admin-sidebar">
+    <div class="sidebar-header">
+      <h4 class="fw-bold text-primary">
+        <i class="fa-solid fa-user-shield me-2"></i>Admin
+      </h4>
     </div>
-  </div>
-</nav>
 
-<div class="container mt-4">
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-      {% for category, msg in messages %}
-        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-          {{ msg }}
-          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-      {% endfor %}
-    {% endif %}
-  {% endwith %}
+    <div class="sidebar-section">
+      <p class="sidebar-label">MAIN</p>
+      <ul class="nav flex-column">
+        <li class="nav-item">
+          <a href="{{ url_for('admin_page') }}" class="nav-link {% if request.endpoint == 'admin_page' %}active{% endif %}">
+            <i class="fa-solid fa-gauge"></i> Dashboard
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="{{ url_for('add_user') }}" class="nav-link {% if request.endpoint == 'add_user' %}active{% endif %}">
+            <i class="fa-solid fa-user-plus"></i> Add User
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="{{ url_for('list_users') }}" class="nav-link {% if request.endpoint == 'list_users' %}active{% endif %}">
+            <i class="fa-solid fa-users-gear"></i> Manage Users
+          </a>
+        </li>
+      </ul>
 
-  {% block content %}{% endblock %}
+      <p class="sidebar-label">ACCOUNT</p>
+      <ul class="nav flex-column">
+        <li class="nav-item">
+          <a href="{{ url_for('logout') }}" class="nav-link text-danger">
+            <i class="fa-solid fa-right-from-bracket"></i> Logout
+          </a>
+        </li>
+      </ul>
+    </div>
+  </aside>
+  {% endif %}
+
+  <!-- Main Content -->
+  <main class="flex-grow-1 p-4">
+    {% block content %}{% endblock %}
+  </main>
 </div>
 
+<!-- Bootstrap JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+<!-- Page-specific scripts -->
+{% block scripts %}{% endblock %}
+
 </body>
 </html>

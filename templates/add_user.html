@@ -2,24 +2,39 @@
 {% block title %}Add User{% endblock %}
 
 {% block content %}
-<!-- Back Button -->
-<a href="{{ url_for('admin_page') }}" class="btn btn-secondary mb-3">⬅ Back to Dashboard</a>
-<h2>Add New User</h2>
-<form method="POST" action="{{ url_for('add_user') }}">
-      <div class="mb-3">
-    <label>Name</label>
-    <input name="name" class="form-control" required>
-  </div>
-  <div class="mb-3">
-    <label>Username</label>
-    <input name="username" class="form-control" required>
-  </div>
-  <div class="mb-3">
-    <label>Password</label>
-    <input name="password" type="password" class="form-control" required>
-  </div>
-  <div class="mb-3">
-  </div>
-  <button type="submit" class="btn btn-success">Add User</button>
-</form>
+<div class="card shadow-lg border-0 rounded-4 p-4">
+  <h2 class="mb-4 text-primary">
+    <i class="fa-solid fa-user-plus"></i> Add New User
+  </h2>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div class="alert alert-{{ category }} flash-message">{{ message }}</div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <form method="POST" action="{{ url_for('add_user') }}">
+    <div class="mb-3">
+      <label class="form-label">Name</label>
+      <input name="name" class="form-control" required>
+    </div>
+    <div class="mb-3">
+      <label class="form-label">Username</label>
+      <input name="username" class="form-control" required>
+    </div>
+    <div class="mb-3">
+      <label class="form-label">Password</label>
+      <input name="password" type="password" class="form-control" required>
+    </div>
+    <button type="submit" class="btn btn-success btn-lg rounded-pill">
+      <i class="fa-solid fa-check"></i> Add User
+    </button>
+  </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='add_user.js') }}"></script>
 {% endblock %}

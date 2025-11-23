@@ -1,11 +1,7 @@
-import { initSocket, emitFrame } from "./socket.js";
+import { initSocket, emitFrame, disconnectSocket } from "./socket.js";
 
-const video = document.getElementById("video-frame");
+let video, startBtn, stopBtn, statusDiv, cameraList;
 const canvas = document.createElement("canvas");
-const startBtn = document.getElementById("start-btn");
-const stopBtn = document.getElementById("stop-btn");
-const statusDiv = document.getElementById("cheating-status");
-const cameraList = document.getElementById("camera-select");
 
 let stream;
 let sending = false;
@@ -24,58 +20,82 @@ function setBlackScreen() {
 }
 
 async function getCameras() {
-  const devices = await navigator.mediaDevices.enumerateDevices();
-  if (!cameraList) return;
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    if (!cameraList) return;
 
-  cameraList.innerHTML = "";
-  devices.forEach((device, idx) => {
-    if (device.kind === "videoinput") {
-      const option = document.createElement("option");
-      option.value = device.deviceId;
-      option.text = device.label || `Camera ${idx + 1}`;
-      cameraList.appendChild(option);
+    cameraList.innerHTML = "";
+    devices.forEach((device, idx) => {
+      if (device.kind === "videoinput") {
+        const option = document.createElement("option");
+        option.value = device.deviceId;
+        option.text = device.label || `Camera ${idx + 1}`;
+        cameraList.appendChild(option);
+      }
+    });
+
+    if (devices.length > 0 && !currentDeviceId) {
+      currentDeviceId = devices.find(d => d.kind === "videoinput").deviceId;
+      cameraList.value = currentDeviceId;
     }
-  });
-
-  if (devices.length > 0 && !currentDeviceId) {
-    currentDeviceId = devices.find(d => d.kind === "videoinput").deviceId;
-    cameraList.value = currentDeviceId;
+  } catch (err) {
+    console.error('Error listing cameras:', err);
   }
 }
 
 async function startCamera() {
-  initSocket(video, statusDiv);
+  stopCamera(); // Stop any previous camera before starting new
+  try {
+    initSocket(video, statusDiv);
 
-  stream = await navigator.mediaDevices.getUserMedia({
-    video: currentDeviceId ? { deviceId: { exact: currentDeviceId } } : { width: 960, height: 720 },
-    audio: false
-  });
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        deviceId: currentDeviceId ? { exact: currentDeviceId } : undefined,
+        width: 800,
+        height: 720
+      },
+      audio: false
+    });
 
-  vid = document.createElement("video");
-  vid.style.display = "none";
-  document.body.appendChild(vid);
-  vid.srcObject = stream;
-  await vid.play();
+    vid = document.createElement("video");
+    vid.style.display = "none";
+    vid.muted = true;
+    document.body.appendChild(vid);
+    vid.srcObject = stream;
+    await vid.play();
 
-  sending = true;
-  sendLoop(vid);
+    sending = true;
+    sendLoop(vid);
 
-  // Show temporary status instead of notification
-  showTemporaryStatus("Camera started");
+    // Show temporary status instead of notification
+    showTemporaryStatus("Camera started");
+  } catch (err) {
+    console.error('Error starting camera:', err);
+    showTemporaryStatus('Error starting camera: ' + err.message);
+  }
 }
 
 function stopCamera() {
   sending = false;
   if (stream) {
-    stream.getTracks().forEach(t => t.stop());
+    try {
+      stream.getTracks().forEach(track => {
+        try { track.stop(); } catch (e) { console.warn("Error stopping track:", e); }
+      });
+    } catch (e) { console.warn("Error stopping stream:", e); }
     stream = null;
   }
   if (vid) {
-    vid.srcObject = null;
-    vid.remove();
+    try {
+      vid.srcObject = null;
+      vid.remove();
+    } catch (e) { console.warn("Error removing vid:", e); }
     vid = null;
   }
   setBlackScreen();
+
+  // Close socket connection to ensure new session on reconnect
+  disconnectSocket();
 
   showTemporaryStatus("Camera stopped");
 }
@@ -87,7 +107,7 @@ function showTemporaryStatus(message, duration = 3000) {
   statusDiv.style.fontWeight = "bold";
 
   setTimeout(() => {
-    statusDiv.textContent = "No cheating detected";
+    statusDiv.textContent = "No possible cheating detected";
     statusDiv.style.color = "#222";
     statusDiv.style.fontWeight = "normal";
   }, duration);
@@ -96,40 +116,63 @@ function showTemporaryStatus(message, duration = 3000) {
 
 async function sendLoop(videoElement) {
   while (sending) {
-    if (videoElement.readyState >= 2) {
-      const frameB64 = captureFrame(videoElement);
-      emitFrame(frameB64);
+    if (videoElement.readyState >= 2 && videoElement.videoWidth > 0) {
+      const frameBuffer = await captureFrame(videoElement);
+      if (frameBuffer && frameBuffer.byteLength > 100) {  // Basic check for valid binary data
+        emitFrame(frameBuffer);
+      }
     }
-    await new Promise(r => setTimeout(r, 250));
+    // Increased frequency to ~30 FPS to reduce lag (100ms -> 33ms)
+    await new Promise(r => setTimeout(r, 150));
   }
 }
 
 function captureFrame(videoElement) {
-  canvas.width = videoElement.videoWidth;
-  canvas.height = videoElement.videoHeight;
-  const ctx = canvas.getContext("2d");
-  ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
-  return canvas.toDataURL("image/jpeg", 0.6);
-}
-
-//Dropdown change = switch camera automatically
-if (cameraList) {
-  cameraList.addEventListener("change", async () => {
-    currentDeviceId = cameraList.value;
-    if (sending) {
-      stopCamera();
-      await startCamera();
-    }
+  return new Promise((resolve) => {
+    canvas.width = 800;
+    canvas.height = 720;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(videoElement, 0, 0, 800, 720);
+    canvas.toBlob((blob) => {
+      if (blob) {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result); // ArrayBuffer
+        reader.readAsArrayBuffer(blob);
+      } else {
+        resolve(null);
+      }
+    }, 'image/jpeg', 0.6);
   });
 }
 
-if (startBtn && stopBtn) {
-  window.onload = () => {
-    setBlackScreen();
-    getCameras();
-  };
-  startBtn.onclick = startCamera;
-  stopBtn.onclick = stopCamera;
-}
+document.addEventListener("DOMContentLoaded", () => {
+  video = document.getElementById("video-frame");
+  startBtn = document.getElementById("start-btn");
+  stopBtn = document.getElementById("stop-btn");
+  statusDiv = document.getElementById("cheating-status");
+  cameraList = document.getElementById("camera-select");
 
+  setBlackScreen();
+  getCameras();
+
+  //Dropdown change = switch camera automatically
+  if (cameraList) {
+    cameraList.addEventListener("change", async () => {
+      currentDeviceId = cameraList.value;
+      if (sending) {
+        stopCamera();
+        await startCamera();
+      }
+    });
+  }
+
+  if (startBtn) {
+    startBtn.onclick = startCamera;
+  }
+  if (stopBtn) {
+    stopBtn.onclick = stopCamera;
+  }
+});
+
+window.stopCamera = stopCamera;
 export { getCameras, startCamera, stopCamera };

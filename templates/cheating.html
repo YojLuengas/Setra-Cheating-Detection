@@ -3,8 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <title>Cheating Detected</title>
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo/Lsentra2.png') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-  
+
   <!-- Socket.IO -->
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 
@@ -15,14 +16,15 @@
 </head>
 <body>
   <div class="cheating-message">
-    <h1>Cheating Detected!</h1>
+    <h1>Possible Cheating Detected!</h1>
     <p id="snapshot-timestamp">
       {% if timestamp %}Snapshot at: {{ timestamp }}{% endif %}
     </p>
 
     <!-- Snapshot -->
-    <img src="/cheating_snapshot/{{ snapshot_id }}" 
-         alt="Cheating Snapshot" 
+    <img id="cheating-snapshot-img"
+         src="{{ url_for('cheating_snapshot', snap_id=snapshot_id) }}"
+         alt="Cheating Snapshot"
          class="snapshot-img">
 
     <!-- Timeline -->
@@ -48,5 +50,22 @@
       </div>
     </div>
   </div>
+
+  <!-- Add this script block at the end of <body> in cheating.html -->
+  <script>
+  document.addEventListener("DOMContentLoaded", function() {
+    const img = document.getElementById("cheating-snapshot-img");
+    if (!img) return;
+    // Fetch the snapshot endpoint which returns base64 or data-url text
+    fetch(img.src)
+      .then(response => response.text())
+      .then(data => {
+        if (!data) return;
+        // If server already returns a data URI use it, otherwise prefix as JPEG base64
+        img.src = data.startsWith("data:") ? data : ("data:image/jpeg;base64," + data);
+      })
+      .catch(err => console.warn("Failed to fetch initial snapshot:", err));
+  });
+  </script>
 </body>
 </html>
