@@ -79,9 +79,9 @@ function initSocket(video, statusDiv) {
 }
 
 // Function to send a frame
-function emitFrame(frameB64) {
+function emitFrame(frameBuffer) {
   if (socket && socket.connected) {
-    socket.emit("frame", { image: frameB64 });
+    socket.emit("frame", frameBuffer);
   }
 }
 
