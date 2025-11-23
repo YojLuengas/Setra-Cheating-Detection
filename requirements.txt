@@ -6,7 +6,6 @@ opencv-python-headless==4.7.0.72
 numpy
 torch
 ultralytics
-mediapipe==0.9.0
 Pillow
 Bcrypt
 gunicorn
