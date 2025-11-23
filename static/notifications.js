@@ -28,8 +28,19 @@ function updateBadge() {
   }
 }
 
-// --- Append a notification ---
-function appendNotification(data) {
+// Throttle appending notifications to once every 2 seconds
+let lastNotificationTime = 0;
+const NOTIFICATION_INTERVAL = 2000; // 2 seconds
+
+// Variable to keep a queue of notifications received during throttle interval
+let notificationQueue = [];
+
+const processNotificationQueue = () => {
+  if (notificationQueue.length === 0) return;
+
+  // Process the oldest notification in the queue
+  const data = notificationQueue.shift();
+
   const noAlertsMsg = document.getElementById("no-alerts-msg");
   if (noAlertsMsg) noAlertsMsg.style.display = "none";
 
@@ -186,6 +197,16 @@ function appendNotification(data) {
   }
 
   if (notifications) notifications.prepend(li);
+};
+
+function appendNotification(data) {
+  const now = Date.now();
+  if (now - lastNotificationTime > NOTIFICATION_INTERVAL) {
+    lastNotificationTime = now;
+    processNotificationQueue();
+    processNotificationQueue = null;
+  }
+  notificationQueue.push(data);
 }
 
 // --- Restore notifications on page load ---

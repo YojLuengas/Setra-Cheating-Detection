@@ -27,22 +27,26 @@ from flask_socketio import SocketIO, emit
 import mysql.connector
 
 from ultralytics import YOLO
+import mediapipe as mp
 import bcrypt
 import logging
 
 # ---------- Config ----------
 
+import os
+
 DB_CONFIG = {
-    "host": "localhost",
-    "user": "root",
-    "password": "",
-    "database": "sentra_db",
+    "host": os.getenv("DB_HOST", "localhost"),
+    "user": os.getenv("DB_USER", "root"),
+    "password": os.getenv("DB_PASSWORD", ""),
+    "database": os.getenv("DB_NAME", "sentra_db"),
     "charset": "utf8mb4",
 }
 
 # ---------- App / DB / Logging ----------
 app = Flask(__name__)
-app.secret_key = "replace_this_with_a_strong_random_secret"  # change this
+app.secret_key = os.getenv("SECRET_KEY", "replace_this_with_a_strong_random_secret")  # change this
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0  # Disable caching for static files to enable cache busting
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
 logging.basicConfig(level=logging.INFO)
@@ -60,6 +64,9 @@ except Exception as e:
 # Update path as required
 yolo_model = YOLO("models/best.pt")
 
+# Initialize MediaPipe Face Mesh
+face_mesh = mp.solutions.face_mesh.FaceMesh(max_num_faces=1, refine_landmarks=True, min_detection_confidence=0.5, min_tracking_confidence=0.5)
+
 
 
 # ---------- Globals & Locks ----------
@@ -72,8 +79,8 @@ stable_cheating = False
 frame_lock = Lock()
 
 # Throttling / timing controls to reduce CPU / GPU load and UI lag
-PROCESS_INTERVAL = 0.45        # seconds between heavy processing runs (≈2.2 FPS)
-OUT_IMG_MAX = 640             # send this max width for annotated frames
+PROCESS_INTERVAL = 0.50       # seconds between heavy processing runs (≈10 FPS)
+OUT_IMG_MAX = 640            # send this max width for annotated frames
 _last_processed_time = 0.0
 
 # ---------- Helpers ----------
@@ -107,6 +114,34 @@ def save_image_to_disk(img_bgr, snap_id=None, jpeg_quality=85):
     _, buffer = cv2.imencode('.jpg', img_bgr, [int(cv2.IMWRITE_JPEG_QUALITY), jpeg_quality])
     img_b64 = base64.b64encode(buffer).decode('utf-8')
     return img_b64
+
+def estimate_head_rotation(image_rgb, face_landmarks):
+    """Estimate head yaw (rotation) from face landmarks."""
+    h, w, _ = image_rgb.shape
+    try:
+        lmk = face_landmarks.landmark
+        left_x = lmk[33].x * w
+        right_x = lmk[263].x * w
+        nose_x = lmk[1].x * w
+        yaw = (nose_x - (left_x + right_x) / 2) / w
+        return float(yaw)
+    except Exception:
+        return 0.0
+
+# Binary image processing
+def process_binary_image(binary_data):
+    """Convert binary image data to BGR numpy array."""
+    try:
+        # Convert bytes to numpy array
+        nparr = np.frombuffer(binary_data, np.uint8)
+        # Decode as JPEG
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        if img is None:
+            return None
+        return img
+    except Exception as e:
+        logger.exception("process_binary_image error: %s", e)
+        return None
 
 
 
@@ -357,11 +392,8 @@ def create_assessment_session():
             ),
         )
         assessment_session_id = cursor.lastrowid
-        folder_name = f"{data.get('course', '').replace(' ', '_')}_{data.get('subject', '').replace(' ', '_')}_{data.get('exam_type', '').replace(' ', '_')}_{str(uuid.uuid4())[:8]}"
-        cursor.execute(
-            "INSERT INTO records (assessment_session_id, user_id, folder_name, created_at) VALUES (%s, %s, %s, %s)",
-            (assessment_session_id, session["user_id"], folder_name, datetime.now())
-        )
+        # Removed immediate creation of records entry here to delay until finish
+
         db.commit()
         global all_snapshots, notified_snapshots, last_cheating_notification_time
         all_snapshots = []
@@ -381,7 +413,58 @@ def stop_assessment():
     Called by the frontend when user stops an assessment.
     Emits a refresh_notifications event and clears the session assessment ID.
     """
+    global all_snapshots, notified_snapshots, last_cheating_notification_time
     try:
+        # Insert all accumulated snapshots into detections and create records entry
+
+        assessment_session_id = session.get("assessment_session_id")
+        if not assessment_session_id:
+            return jsonify({"success": False, "error": "No active assessment session."}), 400
+
+        # Fetch all assessment session details for records table
+        cursor.execute("SELECT user_id, course, subject, exam_type, exam_datetime, camera FROM assessment_sessions WHERE id = %s", (assessment_session_id,))
+        session_data = cursor.fetchone()
+        if not session_data:
+            return jsonify({"success": False, "error": "Invalid assessment session."}), 400
+
+        user_id, course, subject, exam_type, exam_datetime, camera = session_data
+
+        # Create folder_name similarly to create_assessment_session
+        folder_name = f"{(course or '').replace(' ', '_')}_{(subject or '').replace(' ', '_')}_{(exam_type or '').replace(' ', '_')}_{str(uuid.uuid4())[:8]}"
+
+        try:
+            # Insert into records table
+            cursor.execute(
+                "INSERT INTO records (assessment_session_id, user_id, folder_name, created_at) VALUES (%s, %s, %s, %s)",
+                (assessment_session_id, user_id, folder_name, datetime.now())
+            )
+
+            # Insert accumulated snapshots into detections
+            for snapshot in all_snapshots:
+                cursor.execute(
+                    "INSERT INTO detections (id, timestamp, epoch, image_path, assessment_session_id, user_id) VALUES (%s, %s, %s, %s, %s, %s)",
+                    (
+                        snapshot["id"],
+                        datetime.strptime(snapshot["timestamp"], "%Y-%m-%d %I:%M:%S %p"),
+                        snapshot["epoch"],
+                        snapshot["image_path"],
+                        assessment_session_id,
+                        user_id
+                    )
+                )
+
+            db.commit()
+
+            # Clear the accumulated snapshots
+            all_snapshots = []
+            notified_snapshots = []
+            last_cheating_notification_time = 0
+
+        except Exception as e:
+            db.rollback()
+            logger.exception("stop_assessment DB insert error: %s", e)
+            return jsonify({"success": False, "error": "Failed to save assessment data"}), 500
+
         # Clear the assessment session ID from the session
         session.pop("assessment_session_id", None)
 
@@ -423,11 +506,16 @@ def handle_frame(message):
 
         _last_processed_time = now
 
-        img_b64 = message.get("image")
-        if not img_b64:
-            return
+        # Expect binary data directly
+        if isinstance(message, bytes):
+            frame = process_binary_image(message)
+        else:
+            # If not binary, assume base64 string for backward compatibility
+            img_b64 = message
+            if not img_b64:
+                return
+            frame = b64_to_cv2(img_b64)
 
-        frame = b64_to_cv2(img_b64)
         if frame is None:
             return
 
@@ -444,7 +532,7 @@ def handle_frame(message):
         # Run YOLO on the small image
         try:
             # keep imgsz similar to our small width for efficiency
-            results = yolo_model.predict(small, imgsz=min(640, OUT_IMG_MAX), conf=0.40, verbose=False)
+            results = yolo_model.predict(small, imgsz=min(640, OUT_IMG_MAX), conf=0.50, verbose=False)
         except Exception as e:
             logger.exception("YOLO prediction error: %s", e)
             results = []
@@ -495,15 +583,21 @@ def handle_frame(message):
         for label, conf, (x1, y1, x2, y2) in detections:
             color = (0, 0, 255) if str(label).lower() == "cheating" else (0, 255, 0)
             cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
-            cv2.putText(annotated, f"{label} {conf:.2f}", (x1, max(y1 - 8, 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
             if str(label).lower() == "cheating":
                 cheating_in_frame = True
 
-        status_text = "OK"
-        color_txt = (0, 255, 0)
-        cv2.putText(annotated, status_text, (10, annotated.shape[0] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color_txt, 2)
+        # MediaPipe face mesh processing for head rotation
+        small_rgb = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
+        results = face_mesh.process(small_rgb)
+        yaw_deg = 0.0
+        if results.multi_face_landmarks:
+            for face_landmarks in results.multi_face_landmarks:
+                yaw = estimate_head_rotation(small_rgb, face_landmarks)
+                yaw_deg = yaw * 180 / 3.14159  # Convert to degrees
+                if abs(yaw_deg) > 25:
+                    cheating_in_frame = True
 
-        # Save snapshot & DB insert (rate-limit snapshot writes)
+        # Save snapshot & accumulate in memory; do NOT save to DB during assessment
         if cheating_in_frame and time.time() - last_cheating_notification_time >= 2:
             snap_id = str(uuid.uuid4())
             # save a smaller base64 string (annotated small)
@@ -511,17 +605,11 @@ def handle_frame(message):
             img_b64_small = base64.b64encode(buf).decode("utf-8")
             timestamp = datetime.now()
             epoch_now = time.time()
-            assessment_session_id = session.get("assessment_session_id")
             snapshot = {"id": snap_id, "image_path": img_b64_small, "timestamp": timestamp.strftime("%Y-%m-%d %I:%M:%S %p"), "epoch": epoch_now}
             all_snapshots.append(snapshot)
             notified_snapshots.append(snapshot)
-            try:
-                cursor.execute("INSERT INTO detections (id, timestamp, epoch, image_path, assessment_session_id, user_id) VALUES (%s, %s, %s, %s, %s, %s)",
-                               (snap_id, timestamp, epoch_now, img_b64_small, assessment_session_id, session["user_id"]))
-                db.commit()
-            except Exception:
-                db.rollback()
-                logger.exception("DB insert error for snapshot")
+            # removed DB insert for snapshot here; defer to stop_assessment
+
             now_dt = datetime.now()
             socketio.emit("cheating_notification", {"message": "Possible Cheating detected", "time": now_dt.strftime("%I:%M %p"), "timestamp": now_dt.strftime("%Y-%m-%d %I:%M:%S %p"), "url": f"/cheating/{snap_id}"})
             last_cheating_notification_time = time.time()
@@ -546,17 +634,27 @@ def home():
 @login_required
 def cheating(snap_id):
     try:
+        # Try DB first
         cursor.execute("SELECT id, timestamp, assessment_session_id FROM detections WHERE id = %s AND user_id = %s", (snap_id, session["user_id"]))
         row = cursor.fetchone()
-        if not row:
-            return "Snapshot not found", 404
+        if row:
+            snap_id, ts, assessment_session_id = row
 
-        snap_id, ts, assessment_session_id = row
+            cursor.execute("SELECT id, timestamp, epoch FROM detections WHERE assessment_session_id = %s ORDER BY epoch DESC", (assessment_session_id,))
+            cheating_snapshots = [{"id": r[0], "timestamp": r[1], "epoch": r[2]} for r in cursor.fetchall()]
 
-        cursor.execute("SELECT id, timestamp, epoch FROM detections WHERE assessment_session_id = %s ORDER BY epoch DESC", (assessment_session_id,))
-        cheating_snapshots = [{"id": r[0], "timestamp": r[1], "epoch": r[2]} for r in cursor.fetchall()]
+            return render_template("cheating.html", snapshot_id=snap_id, timestamp=ts, cheating_snapshots=cheating_snapshots)
 
-        return render_template("cheating.html", snapshot_id=snap_id, timestamp=ts, cheating_snapshots=cheating_snapshots)
+        # Fallback: check in-memory snapshots collected during active assessment
+        for s in all_snapshots:
+            if s.get("id") == snap_id:
+                ts_str = s.get("timestamp")
+                # Build a minimal cheating_snapshots list from in-memory data (most recent first)
+                cheating_snapshots = [{"id": x["id"], "timestamp": x["timestamp"], "epoch": x.get("epoch", 0)} for x in reversed(all_snapshots)]
+                return render_template("cheating.html", snapshot_id=snap_id, timestamp=ts_str, cheating_snapshots=cheating_snapshots)
+
+        # Not found anywhere
+        return "Snapshot not found", 404
     except Exception as e:
         logger.exception("cheating page error: %s", e)
         return "Internal server error", 500
@@ -564,20 +662,30 @@ def cheating(snap_id):
 @app.route("/cheating_snapshot/<snap_id>")
 @login_required
 def cheating_snapshot(snap_id):
-    cursor.execute("SELECT image_path FROM detections WHERE id = %s AND user_id = %s", (snap_id, session["user_id"]))
-    row = cursor.fetchone()
-    if row and row[0]:
-        image_path = row[0]
-        if not os.path.isabs(image_path):
-            image_path = os.path.join(os.getcwd(), image_path)
-        # Check if it's a file path (old snapshots) or base64 (new snapshots)
-        if os.path.isfile(image_path):
-            # Serve the file from disk
-            return send_file(image_path, mimetype='image/jpeg')
-        else:
-            # Treat as base64 data
-            return f'data:image/jpeg;base64,{row[0]}'
-    return "Snapshot not found", 404
+    try:
+        cursor.execute("SELECT image_path FROM detections WHERE id = %s AND user_id = %s", (snap_id, session["user_id"]))
+        row = cursor.fetchone()
+        if row and row[0]:
+            image_path = row[0]
+            if not os.path.isabs(image_path):
+                image_path = os.path.join(os.getcwd(), image_path)
+            # Check if it's a file path (old snapshots) or base64 (new snapshots)
+            if os.path.isfile(image_path):
+                # Serve the file from disk
+                return send_file(image_path, mimetype='image/jpeg')
+            else:
+                # Treat as base64 data
+                return f'data:image/jpeg;base64,{row[0]}'
+
+        # Fallback to in-memory snapshots (during active assessment)
+        for s in all_snapshots:
+            if s.get("id") == snap_id and s.get("image_path"):
+                return f'data:image/jpeg;base64,{s["image_path"]}'
+
+        return "Snapshot not found", 404
+    except Exception as e:
+        logger.exception("cheating_snapshot error: %s", e)
+        return "Internal server error", 500
 
 @app.route("/records")
 @login_required

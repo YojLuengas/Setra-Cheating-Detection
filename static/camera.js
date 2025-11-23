@@ -115,24 +115,42 @@ function showTemporaryStatus(message, duration = 3000) {
 
 
 async function sendLoop(videoElement) {
+  const DETECTION_INTERVAL = 150; // ~6 FPS detection
+  let lastDetectionTime = 0;
+
   while (sending) {
     if (videoElement.readyState >= 2 && videoElement.videoWidth > 0) {
-      const frameB64 = captureFrame(videoElement);
-      if (frameB64 && frameB64.length > 100) {  // Basic check for valid data URL
-        emitFrame(frameB64);
+      const now = Date.now();
+
+      if (now - lastDetectionTime > DETECTION_INTERVAL) {
+        const frameBuffer = await captureFrame(videoElement);
+        if (frameBuffer && frameBuffer.byteLength > 100) {  // Basic check for valid binary data
+          emitFrame(frameBuffer);
+        }
+        lastDetectionTime = now;
       }
     }
-    // Increased frequency to ~20 FPS to reduce lag (100ms -> 50ms)
-    await new Promise(r => setTimeout(r, 50));
+    // Keep video smooth, check every 33ms (~30 FPS)
+    await new Promise(r => setTimeout(r, 33));
   }
 }
 
 function captureFrame(videoElement) {
-  canvas.width = 800;
-  canvas.height = 720;
-  const ctx = canvas.getContext("2d");
-  ctx.drawImage(videoElement, 0, 0, 800, 720);
-  return canvas.toDataURL("image/jpeg", 0.6);
+  return new Promise((resolve) => {
+    canvas.width = 800;
+    canvas.height = 720;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(videoElement, 0, 0, 800, 720);
+    canvas.toBlob((blob) => {
+      if (blob) {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result); // ArrayBuffer
+        reader.readAsArrayBuffer(blob);
+      } else {
+        resolve(null);
+      }
+    }, 'image/jpeg', 0.6);
+  });
 }
 
 document.addEventListener("DOMContentLoaded", () => {

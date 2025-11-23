@@ -115,7 +115,7 @@ examNextBtn.addEventListener("click", (e) => {
   if (allFilled) {
     examSetup.style.display = "none";
     systemCheck.style.display = "flex";
-    checkInternetConnectivity();
+    checkInternetStatus();
   }
 });
 
