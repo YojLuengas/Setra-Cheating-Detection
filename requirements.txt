@@ -9,4 +9,4 @@ ultralytics
 Pillow
 Bcrypt
 gunicorn
-supabase-py
+
