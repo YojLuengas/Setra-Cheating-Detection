@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: setra-cheating-detection
+    env: python
+    region: oregon
+    buildCommand: |
+      pip install --upgrade pip
+      pip install -r requirements.txt
+    startCommand: gunicorn -k eventlet -w 1 --bind 0.0.0.0:$PORT --timeout 120 app:app
+    healthCheckPath: /health
+    plan: starter
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "False"
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: MYSQL_HOST
+        value: switchback.proxy.rlwy.net
+      - key: MYSQL_PORT
+        value: "57978"
+      - key: MYSQL_USER
+        value: root
+      - key: MYSQL_PASSWORD
+        value: PLbCUQpgMuuLSPqHNQhSWUIbbJKXrpzp
+      - key: MYSQL_DATABASE
+        value: railway

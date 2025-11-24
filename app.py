@@ -65,6 +65,7 @@ app.secret_key = "replace_this_with_a_strong_random_secret"  # change this
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0  # Disable caching for static files to enable cache busting
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
+# Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -1036,10 +1037,16 @@ def health_check():
         db_status = "healthy"
     except Exception as e:
         db_status = f"unhealthy: {str(e)}"
+        logger.warning(f"Database health check failed: {e}")
     
     return jsonify({
         'status': 'healthy',
         'database': db_status,
-        'port': os.environ.get('PORT', 'not-set'),
-        'timestamp': datetime.now().isoformat()
+        'timestamp': datetime.now().isoformat(),
+        'port': os.environ.get('PORT', 'not-set')
     }), 200
+
+# Remove or comment out the if __name__ == '__main__' block for production
+# This is handled by gunicorn instead
+# if __name__ == '__main__':
+#     socketio.run(app, host='0.0.0.0', port=5000)
