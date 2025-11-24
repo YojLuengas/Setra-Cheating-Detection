@@ -48,18 +48,17 @@ DB_CONFIG = {
 app = Flask(__name__)
 
 # Production configuration
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'fallback-secret-key')
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'docker-fallback-secret-key')
 app.config['DEBUG'] = os.environ.get('DEBUG', 'False').lower() == 'true'
 
-# Database configuration for production
-db_config = {
-    'host': os.environ.get('MYSQL_HOST'),
-    'port': int(os.environ.get('MYSQL_PORT', 3306)),
-    'user': os.environ.get('MYSQL_USER'),
-    'password': os.environ.get('MYSQL_PASSWORD'),
-    'database': os.environ.get('MYSQL_DATABASE'),
-    'ssl_disabled': False,
-    'autocommit': True
+# Database configuration - Docker environment
+DB_CONFIG = {
+    "host": os.environ.get("MYSQL_HOST", "localhost"),
+    "user": os.environ.get("MYSQL_USER", "root"), 
+    "password": os.environ.get("MYSQL_PASSWORD", ""),
+    "database": os.environ.get("MYSQL_DATABASE", "railway"),
+    "port": int(os.environ.get("MYSQL_PORT", 3306)),
+    "charset": "utf8mb4",
 }
 
 app.secret_key = "replace_this_with_a_strong_random_secret"  # change this
@@ -1018,8 +1017,22 @@ def debug_recent_detections():
         return jsonify({"error": str(e)})
 
 # ---------- Run ----------
-if __name__ == "__main__":
-    host = "0.0.0.0"
-    port = 5000
-    logger.info("🚀 Server running at: http://127.0.0.1:%s", port)
-    socketio.run(app, host=host, port=port, debug=True)
+@app.route('/health')
+def health_check():
+    try:
+        # Test database connection
+        cursor.execute("SELECT 1")
+        db_status = "healthy"
+    except:
+        db_status = "unhealthy"
+    
+    return jsonify({
+        'status': 'healthy',
+        'database': db_status,
+        'timestamp': datetime.now().isoformat(),
+        'version': '1.0.0'
+    })
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 8000))
+    socketio.run(app, host='0.0.0.0', port=port, debug=app.config['DEBUG'])
