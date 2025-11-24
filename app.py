@@ -10,6 +10,7 @@ from datetime import datetime
 from functools import wraps
 from threading import Lock
 import logging
+import sys
 
 from flask import (
     Flask,
@@ -27,6 +28,9 @@ from flask import (
 from flask_socketio import SocketIO, emit
 import mysql.connector
 import bcrypt
+
+print(f"Python version: {sys.version}")
+print("Starting Flask application...")
 
 # Try to import ML libraries, but handle if they're not available
 try:
@@ -268,5 +272,10 @@ def logout():
     session.clear()
     return redirect(url_for("login"))
 
-# Remove the if __name__ == '__main__' block for production
-# This is handled by gunicorn
+# Error handling
+if __name__ == "__main__":
+    try:
+        app.run(host='0.0.0.0', port=8000, debug=False)
+    except Exception as e:
+        print(f"Error starting app: {e}")
+        raise
