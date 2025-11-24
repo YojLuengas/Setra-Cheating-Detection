@@ -1,12 +1,24 @@
 version: "3.8"
+
 services:
   app:
     build: .
-    image: setra-cheating:latest
-    env_file:
-      - .env
     ports:
       - "8000:8000"
-    restart: unless-stopped
+    environment:
+      - SECRET_KEY=your-local-secret-key-for-testing
+      - DEBUG=False
+      - MYSQL_HOST=switchback.proxy.rlwy.net
+      - MYSQL_PORT=57978
+      - MYSQL_USER=root
+      - MYSQL_PASSWORD=PLbCUQpgMuuLSPqHNQhSWUIbbJKXrpzp
+      - MYSQL_DATABASE=railway
     volumes:
-      - ./:/app   # optional for live editing in dev; remove in prod
+      - ./uploads:/app/uploads
+      - ./models:/app/models
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

@@ -1,11 +1,48 @@
+# Python
 __pycache__
 *.pyc
 *.pyo
 *.pyd
+.Python
 env/
-.venv/
 venv/
-node_modules/
-models/best.pt
-*.log
+.venv/
+.env*
+*.egg-info/
+
+# Git
 .git
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Node modules
+node_modules/
+
+# Build files
+build/
+dist/
+
+# Large model files (download at runtime instead)
+models/*.pt
+models/*.onnx
+
+# Uploads (will be created at runtime)
+uploads/*
+
+# Development files
+docker-compose.yml
+README.md
+.dockerignore
