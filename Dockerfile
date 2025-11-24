@@ -20,8 +20,31 @@ RUN pip install --upgrade pip && \
 COPY . .
 RUN mkdir -p uploads models
 
-# Use a startup script that handles the PORT variable
-RUN echo '#!/bin/bash\nPORT=${PORT:-8000}\necho "Starting on port $PORT"\nexec gunicorn -k eventlet -w 1 --bind 0.0.0.0:$PORT app:app' > /start.sh
+# Create a more detailed startup script with error handling
+RUN echo '#!/bin/bash
+set -e
+PORT=${PORT:-8000}
+echo "=== Starting Setra Cheating Detection ==="
+echo "PORT: $PORT"
+echo "PYTHONPATH: $PYTHONPATH"
+echo "Working directory: $(pwd)"
+echo "Files in directory:"
+ls -la
+echo "=== Testing Python import ==="
+python -c "
+try:
+    import app
+    print(\"✅ App import successful\")
+except Exception as e:
+    print(f\"❌ App import failed: {e}\")
+    import traceback
+    traceback.print_exc()
+    exit(1)
+"
+echo "=== Starting gunicorn ==="
+exec gunicorn -k eventlet -w 1 --bind 0.0.0.0:$PORT --log-level debug --error-logfile - --access-logfile - app:app
+' > /start.sh
+
 RUN chmod +x /start.sh
 
 EXPOSE 8000

@@ -1,4 +1,5 @@
 import os
+import sys
 import io
 import base64
 import time
@@ -1043,3 +1044,67 @@ def health_check():
         'port': os.environ.get('PORT', 'not-set'),
         'timestamp': datetime.now().isoformat()
     }), 200
+
+# ImportError handling
+try:
+    # Your existing imports
+    from datetime import datetime
+    # Add any other imports you have
+    print("✅ All imports successful")
+except Exception as e:
+    print(f"❌ Import error: {e}")
+    sys.exit(1)
+
+# Initialize Flask app
+app = Flask(__name__)
+
+# Configuration with error handling
+try:
+    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'fallback-secret-key')
+    app.config['DEBUG'] = os.environ.get('DEBUG', 'False').lower() == 'true'
+    
+    # Initialize SocketIO
+    socketio = SocketIO(app, cors_allowed_origins="*")
+    
+    print("✅ Flask app initialized successfully")
+except Exception as e:
+    print(f"❌ Flask initialization error: {e}")
+    sys.exit(1)
+
+# Database configuration with error handling
+try:
+    DB_CONFIG = {
+        "host": os.environ.get("MYSQL_HOST", "localhost"),
+        "user": os.environ.get("MYSQL_USER", "root"), 
+        "password": os.environ.get("MYSQL_PASSWORD", ""),
+        "database": os.environ.get("MYSQL_DATABASE", "railway"),
+        "port": int(os.environ.get("MYSQL_PORT", 3306)),
+        "charset": "utf8mb4",
+    }
+    print("✅ Database config loaded")
+except Exception as e:
+    print(f"❌ Database config error: {e}")
+    # Don't exit here, let the app start without DB for debugging
+
+# Simple health check endpoint
+@app.route('/health')
+def health_check():
+    return jsonify({
+        'status': 'healthy',
+        'port': os.environ.get('PORT', 'not-set'),
+        'timestamp': datetime.now().isoformat()
+    }), 200
+
+@app.route('/')
+def index():
+    return jsonify({
+        'message': 'Setra Cheating Detection API',
+        'status': 'running'
+    })
+
+# ... rest of your routes ...
+
+# Make sure this is at the end and only for development
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    socketio.run(app, host='0.0.0.0', port=port, debug=app.config['DEBUG'])
