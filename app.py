@@ -426,72 +426,55 @@ def create_assessment_session():
 @app.route("/stop-assessment", methods=["POST"])
 @login_required
 def stop_assessment():
-    """
-    Called by the frontend when user stops an assessment.
-    Emits a refresh_notifications event and clears the session assessment ID.
-    """
     global all_snapshots, notified_snapshots, last_cheating_notification_time
+    
     try:
-        # Insert all accumulated snapshots into detections and create records entry
-
         assessment_session_id = session.get("assessment_session_id")
         if not assessment_session_id:
             return jsonify({"success": False, "error": "No active assessment session."}), 400
 
-        # Fetch all assessment session details for records table
-        cursor.execute("SELECT user_id, course, subject, exam_type, exam_datetime, camera FROM assessment_sessions WHERE id = %s", (assessment_session_id,))
+        # Fetch assessment session details
+        cursor.execute("SELECT user_id, course, subject, exam_type, exam_datetime FROM assessment_sessions WHERE id = %s", (assessment_session_id,))
         session_data = cursor.fetchone()
         if not session_data:
             return jsonify({"success": False, "error": "Invalid assessment session."}), 400
 
-        user_id, course, subject, exam_type, exam_datetime, camera = session_data
+        user_id, course, subject, exam_type, exam_datetime = session_data
 
-        # Create folder_name similarly to create_assessment_session
+        # Create folder_name
         folder_name = f"{(course or '').replace(' ', '_')}_{(subject or '').replace(' ', '_')}_{(exam_type or '').replace(' ', '_')}_{str(uuid.uuid4())[:8]}"
 
-        try:
-            # Insert into records table
-            cursor.execute(
-                "INSERT INTO records (assessment_session_id, user_id, folder_name, created_at) VALUES (%s, %s, %s, %s)",
-                (assessment_session_id, user_id, folder_name, datetime.now())
-            )
+        # Check if there are any detections for this session
+        cursor.execute("SELECT COUNT(*) FROM detections WHERE assessment_session_id = %s", (assessment_session_id,))
+        detection_count = cursor.fetchone()[0]
 
-            # Insert accumulated snapshots into detections
-            for snapshot in all_snapshots:
+        # Only create records entry if there are detections
+        if detection_count > 0:
+            try:
                 cursor.execute(
-                    "INSERT INTO detections (id, timestamp, epoch, image_path, assessment_session_id, user_id) VALUES (%s, %s, %s, %s, %s, %s)",
-                    (
-                        snapshot["id"],
-                        datetime.strptime(snapshot["timestamp"], "%Y-%m-%d %I:%M:%S %p"),
-                        snapshot["epoch"],
-                        snapshot["image_path"],
-                        assessment_session_id,
-                        user_id
-                    )
+                    "INSERT INTO records (assessment_session_id, user_id, folder_name, created_at) VALUES (%s, %s, %s, %s)",
+                    (assessment_session_id, user_id, folder_name, datetime.now())
                 )
+                db.commit()
+                logger.info(f"✅ Created records entry for session {assessment_session_id} with {detection_count} detections")
+            except Exception as e:
+                db.rollback()
+                logger.exception("Failed to create records entry: %s", e)
+                return jsonify({"success": False, "error": "Failed to save records"}), 500
+        else:
+            logger.info(f"ℹ️ No detections found for session {assessment_session_id}, skipping records creation")
 
-            db.commit()
-
-            # Clear the accumulated snapshots
-            all_snapshots = []
-            notified_snapshots = []
-            last_cheating_notification_time = 0
-
-        except Exception as e:
-            db.rollback()
-            logger.exception("stop_assessment DB insert error: %s", e)
-            return jsonify({"success": False, "error": "Failed to save assessment data"}), 500
-
-        # Clear the assessment session ID from the session
+        # Clear session and memory
         session.pop("assessment_session_id", None)
+        all_snapshots = []
+        notified_snapshots = []
+        last_cheating_notification_time = 0
 
-        # Notify connected clients to refresh notifications / records view
-        try:
-            socketio.emit("refresh_notifications", {"msg": "assessment_stopped"})
-        except Exception as e:
-            logger.exception("socket emit failed: %s", e)
-
-        return jsonify({"success": True})
+        # Notify clients
+        socketio.emit("refresh_notifications", {"msg": "assessment_stopped"})
+        
+        return jsonify({"success": True, "detections_saved": detection_count})
+        
     except Exception as e:
         logger.exception("stop_assessment error: %s", e)
         return jsonify({"success": False, "error": str(e)}), 500
@@ -509,15 +492,13 @@ def handle_frame(message):
     send a smaller JPEG to clients to reduce latency.
     """
     global all_snapshots, notified_snapshots, last_cheating_notification_time
-    global _last_processed_time, _last_face_time
+    global _last_processed_time
 
-    # Quick-drop if someone else is processing
     if not frame_lock.acquire(blocking=False):
         return
 
     try:
         now = time.time()
-        # Throttle heavy processing to avoid backlog / lag
         if now - _last_processed_time < PROCESS_INTERVAL:
             return
 
@@ -614,21 +595,54 @@ def handle_frame(message):
                 if abs(yaw_deg) > 25:
                     cheating_in_frame = True
 
-        # Save snapshot & accumulate in memory; do NOT save to DB during assessment
+        # Save snapshot & save to DB immediately
         if cheating_in_frame and time.time() - last_cheating_notification_time >= 2:
             snap_id = str(uuid.uuid4())
-            # save a smaller base64 string (annotated small)
             _, buf = cv2.imencode(".jpg", annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
             img_b64_small = base64.b64encode(buf).decode("utf-8")
             timestamp = datetime.now()
             epoch_now = time.time()
-            snapshot = {"id": snap_id, "image_path": img_b64_small, "timestamp": timestamp.strftime("%Y-%m-%d %I:%M:%S %p"), "epoch": epoch_now}
+            
+            # Create snapshot object
+            snapshot = {
+                "id": snap_id, 
+                "image_path": img_b64_small, 
+                "timestamp": timestamp.strftime("%Y-%m-%d %I:%M:%S %p"), 
+                "epoch": epoch_now
+            }
+            
+            # Add to memory
             all_snapshots.append(snapshot)
             notified_snapshots.append(snapshot)
-            # removed DB insert for snapshot here; defer to stop_assessment
-
-            now_dt = datetime.now()
-            socketio.emit("cheating_notification", {"message": "Possible Cheating detected", "time": now_dt.strftime("%I:%M %p"), "timestamp": now_dt.strftime("%Y-%m-%d %I:%M:%S %p"), "url": f"/cheating/{snap_id}"})
+            
+            # SAVE TO DATABASE IMMEDIATELY
+            assessment_session_id = session.get("assessment_session_id")
+            if assessment_session_id:
+                try:
+                    cursor.execute(
+                        "INSERT INTO detections (id, timestamp, epoch, image_path, assessment_session_id, user_id) VALUES (%s, %s, %s, %s, %s, %s)",
+                        (
+                            snap_id,
+                            timestamp,
+                            epoch_now,
+                            img_b64_small,
+                            assessment_session_id,
+                            session["user_id"]
+                        )
+                    )
+                    db.commit()
+                    logger.info(f"✅ Snapshot {snap_id} saved to database immediately")
+                except Exception as e:
+                    db.rollback()
+                    logger.exception(f"❌ Failed to save snapshot {snap_id} to database: %s", e)
+            
+            # Emit notification
+            socketio.emit("cheating_notification", {
+                "message": "Possible Cheating detected", 
+                "time": timestamp.strftime("%I:%M %p"), 
+                "timestamp": timestamp.strftime("%Y-%m-%d %I:%M:%S %p"), 
+                "url": f"/cheating/{snap_id}"
+            })
             last_cheating_notification_time = time.time()
 
         # Prepare and emit annotated frame back to client (small image to reduce latency)
@@ -949,6 +963,59 @@ def delete_notification(snap_id):
         db.rollback()
         logger.exception("delete_notification error: %s", e)
         return jsonify({"success": False, "error": str(e)}), 500
+
+# ---------- Debug routes ----------
+@app.route("/debug/snapshots")
+@login_required
+def debug_snapshots():
+    """Debug endpoint to see current snapshots in memory and database"""
+    assessment_session_id = session.get("assessment_session_id")
+    
+    # Memory snapshots
+    memory_count = len(all_snapshots)
+    
+    # Database snapshots
+    db_count = 0
+    if assessment_session_id:
+        try:
+            cursor.execute("SELECT COUNT(*) FROM detections WHERE assessment_session_id = %s", (assessment_session_id,))
+            db_count = cursor.fetchone()[0]
+        except Exception as e:
+            logger.exception("Debug query failed: %s", e)
+    
+    return jsonify({
+        "assessment_session_id": assessment_session_id,
+        "memory_snapshots": memory_count,
+        "database_snapshots": db_count,
+        "memory_snapshots_list": [{"id": s["id"], "timestamp": s["timestamp"]} for s in all_snapshots]
+    })
+
+@app.route("/debug/recent-detections")
+@login_required
+def debug_recent_detections():
+    """Show recent detections from database"""
+    try:
+        cursor.execute("""
+            SELECT id, timestamp, assessment_session_id, user_id 
+            FROM detections 
+            WHERE user_id = %s 
+            ORDER BY timestamp DESC 
+            LIMIT 10
+        """, (session["user_id"],))
+        
+        detections = []
+        for row in cursor.fetchall():
+            detections.append({
+                "id": row[0],
+                "timestamp": str(row[1]),
+                "assessment_session_id": row[2],
+                "user_id": row[3]
+            })
+        
+        return jsonify({"recent_detections": detections})
+    except Exception as e:
+        logger.exception("Debug recent detections failed: %s", e)
+        return jsonify({"error": str(e)})
 
 # ---------- Run ----------
 if __name__ == "__main__":
