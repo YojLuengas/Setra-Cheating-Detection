@@ -92,14 +92,22 @@ face_mesh = None
 # Try to load YOLO model
 if YOLO_AVAILABLE:
     try:
-        model_path = "models/best.pt"
-        if os.path.exists(model_path):
-            yolo_model = YOLO(model_path)
-            logger.info("✅ YOLO model loaded successfully")
-        else:
-            logger.warning(f"⚠️ YOLO model not found at {model_path}")
+        import torch
+        # Add safe globals for ultralytics
+        torch.serialization.add_safe_globals([
+            'ultralytics.nn.tasks.DetectionModel',
+            'ultralytics.nn.modules.Conv',
+            'ultralytics.nn.modules.C2f',
+            'ultralytics.nn.modules.SPPF',
+            'ultralytics.nn.modules.Detect'
+        ])
+        
+        yolo_model = YOLO('yolov8n.pt')
+        logger.info("✅ YOLO model loaded successfully")
     except Exception as e:
         logger.error(f"❌ Failed to load YOLO model: {e}")
+        yolo_model = None
+        YOLO_AVAILABLE = False
 
 # Try to initialize MediaPipe
 if MEDIAPIPE_AVAILABLE:
