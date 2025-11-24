@@ -4,14 +4,9 @@ FROM python:3.10-slim
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies
+# Install only essential system packages
 RUN apt-get update && apt-get install -y \
-    libgl1-mesa-glx \
-    libglib2.0-0 \
-    libsm6 \
-    libxext6 \
-    libxrender-dev \
-    libgomp1 \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Set environment variables
@@ -30,14 +25,10 @@ RUN pip install --no-cache-dir --upgrade pip && \
 COPY . .
 
 # Create necessary directories
-RUN mkdir -p uploads models static/css static/js
+RUN mkdir -p uploads models
 
 # Expose port
 EXPOSE 8000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
-
 # Start command
-CMD ["gunicorn", "-k", "eventlet", "-w", "1", "--bind", "0.0.0.0:8000", "--timeout", "120", "app:app"]
+CMD ["gunicorn", "-k", "eventlet", "-w", "1", "--bind", "0.0.0.0:8000", "app:app"]
