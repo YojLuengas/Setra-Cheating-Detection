@@ -266,15 +266,37 @@ def login_required(f):
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        # Simple test login for now
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
         
-        if username == "admin" and password == "admin":
-            session.update({"user_id": 1, "username": username, "role": "admin"})
-            return redirect(url_for("home"))
+        if not cursor:
+            # Fallback for testing
+            if username == "admin" and password == "admin":
+                session.update({"user_id": 1, "username": username, "role": "admin"})
+                if username == "admin":
+                    return redirect(url_for("admin_page"))
+                return redirect(url_for("home"))
+            else:
+                flash("Invalid credentials or database unavailable", "danger")
         else:
-            flash("Invalid credentials. Try admin/admin", "danger")
+            try:
+                cursor.execute("SELECT id, username, password_hash, role FROM users WHERE username = %s", (username,))
+                user = cursor.fetchone()
+                
+                if user and bcrypt.checkpw(password.encode('utf-8'), user[2].encode('utf-8')):
+                    session.update({
+                        "user_id": user[0], 
+                        "username": user[1], 
+                        "role": user[3]
+                    })
+                    if user[3] == "admin":
+                        return redirect(url_for("admin_page"))
+                    return redirect(url_for("home"))
+                else:
+                    flash("Invalid credentials", "danger")
+            except Exception as e:
+                logger.error(f"Login error: {e}")
+                flash("Login error", "danger")
     
     return render_template("login.html") if os.path.exists("templates/login.html") else "Login page not found"
 
@@ -283,10 +305,111 @@ def logout():
     session.clear()
     return redirect(url_for("login"))
 
+# Add these missing routes after your existing routes:
+
+@app.route("/admin")
+@login_required
+def admin_page():
+    if not cursor:
+        return "Database not available", 500
+    
+    try:
+        cursor.execute("SELECT COUNT(*) FROM users")
+        total_users = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT COUNT(*) FROM users WHERE status = 'Active'")
+        active_users = cursor.fetchone()[0]
+        
+        inactive_users = total_users - active_users
+        
+        cursor.execute("SELECT username, role, status FROM users LIMIT 5")
+        users_preview = cursor.fetchall()
+        
+        return render_template("admin.html", 
+                             total_users=total_users,
+                             active_users=active_users, 
+                             inactive_users=inactive_users,
+                             users_preview=users_preview,
+                             show_sidebar=True)
+    except Exception as e:
+        logger.error(f"Admin page error: {e}")
+        return "Database error", 500
+
+@app.route("/add_user", methods=["GET", "POST"])
+@login_required
+def add_user():
+    if request.method == "POST":
+        if not cursor:
+            flash("Database not available", "danger")
+            return redirect(url_for("add_user"))
+        
+        try:
+            name = request.form.get("name")
+            username = request.form.get("username")
+            password = request.form.get("password")
+            
+            # Hash password
+            hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+            
+            cursor.execute(
+                "INSERT INTO users (name, username, password_hash, role, status, created_by) VALUES (%s, %s, %s, %s, %s, %s)",
+                (name, username, hashed.decode('utf-8'), 'user', 'Active', session.get('username'))
+            )
+            db.commit()
+            
+            flash("User added successfully!", "success")
+            return redirect(url_for("list_users"))
+            
+        except mysql.connector.IntegrityError:
+            flash("Username already exists!", "danger")
+        except Exception as e:
+            flash(f"Error adding user: {str(e)}", "danger")
+    
+    return render_template("add_user.html", show_sidebar=True)
+
+@app.route("/list_users")
+@login_required
+def list_users():
+    if not cursor:
+        return "Database not available", 500
+    
+    try:
+        cursor.execute("SELECT id, name, username, role, status FROM users ORDER BY created_at DESC")
+        users = cursor.fetchall()
+        return render_template("list_users.html", users=users, show_sidebar=True)
+    except Exception as e:
+        logger.error(f"List users error: {e}")
+        return "Database error", 500
+
+@app.route("/records")
+@login_required
+def records():
+    return render_template("records.html")
+
+@app.route("/records/<folder_name>")
+@login_required
+def records_folder(folder_name):
+    return render_template("records_folder.html", folder_name=folder_name, snapshots=[])
+
+@app.route("/cheating/<snap_id>")
+@login_required
+def cheating(snap_id):
+    return render_template("cheating.html", 
+                         snapshot_id=snap_id, 
+                         timestamp="N/A",
+                         cheating_snapshots=[])
+
+@app.route("/cheating_snapshot/<snap_id>")
+@login_required
+def cheating_snapshot(snap_id):
+    # Return a placeholder image for now
+    return "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCdABmX/9k="
+
 # Error handling
 if __name__ == "__main__":
+    port = int(os.environ.get('PORT', 8000))
     try:
-        app.run(host='0.0.0.0', port=8000, debug=False)
+        socketio.run(app, host='0.0.0.0', port=port, debug=False)
     except Exception as e:
         print(f"Error starting app: {e}")
         raise

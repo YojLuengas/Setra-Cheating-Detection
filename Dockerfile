@@ -26,8 +26,8 @@ RUN pip install --upgrade pip && \
 COPY . .
 RUN mkdir -p uploads models templates static
 
-# Use a startup script that handles the PORT variable
-RUN echo '#!/bin/bash\nPORT=${PORT:-8000}\necho "Starting on port $PORT"\nexec gunicorn -k eventlet -w 1 --bind 0.0.0.0:$PORT app:app' > /start.sh
+# Use a startup script that properly handles eventlet
+RUN echo '#!/bin/bash\nPORT=${PORT:-8000}\necho "Starting on port $PORT"\nexec python app.py' > /start.sh
 RUN chmod +x /start.sh
 
 EXPOSE 8000
