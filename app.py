@@ -36,11 +36,11 @@ import logging
 import os
 
 DB_CONFIG = {
-    "host": os.getenv("DB_HOST", "mysql-0mzw.railway.internal"),
+    "host": os.getenv("DB_HOST", "interchange.proxy.rlwy.net"),
     "user": os.getenv("DB_USER", "root"),
     "password": os.getenv("DB_PASSWORD", "nIFYDtNDvbljNWTwvZjhfYJhANoGlkCR"),
     "database": os.getenv("DB_NAME", "railway"),
-    "port": int(os.getenv("DB_PORT", 3306)),
+    "port": int(os.getenv("DB_PORT", 50465)),
     "charset": "utf8mb4",
 }
 
@@ -934,43 +934,9 @@ def delete_notification(snap_id):
         logger.exception("delete_notification error: %s", e)
         return jsonify({"success": False, "error": str(e)}), 500
 
-# ---------- Table creation ----------
-def create_tables():
-    """Create database tables if they don't exist"""
-    try:
-        with get_cursor() as cursor:
-            # Create detections table
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS detections (
-                    id VARCHAR(128) PRIMARY KEY,
-                    timestamp DATETIME NOT NULL,
-                    epoch DOUBLE NOT NULL,
-                    image_path LONGTEXT,
-                    assessment_session_id VARCHAR(128),
-                    user_id VARCHAR(128),
-                    INDEX idx_assessment_session (assessment_session_id),
-                    INDEX idx_user (user_id),
-                    INDEX idx_timestamp (timestamp)
-                ) CHARACTER SET utf8mb4
-            """)
-            
-            # Create users table (if needed)
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS users (
-                    id VARCHAR(128) PRIMARY KEY,
-                    username VARCHAR(255) UNIQUE NOT NULL,
-                    password_hash VARCHAR(255) NOT NULL,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-                ) CHARACTER SET utf8mb4
-            """)
-            
-            print("✓ Database tables created successfully")
-            
-    except Exception as e:
-        print(f"✗ Failed to create tables: {e}")
-        logger.exception("Table creation error")
-
-# Add this call when your app starts (find the existing startup code)
+# ---------- Run ----------
 if __name__ == "__main__":
-    create_tables()  # Create tables on first run
-    socketio.run(app, host="0.0.0.0", port=5000, debug=True)
+    host = "0.0.0.0"
+    port = 5000
+    logger.info("🚀 Server running at: http://127.0.0.1:%s", port)
+    socketio.run(app, host=host, port=port, debug=True)
