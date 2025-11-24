@@ -16,17 +16,9 @@ COPY requirements.txt .
 RUN pip install --upgrade pip && \
     pip install -r requirements.txt
 
-# Install additional packages needed for your app
-RUN pip install --no-cache-dir \
-    opencv-python-headless \
-    mediapipe \
-    torch \
-    torchvision \
-    ultralytics
-
 # Copy application
 COPY . .
-RUN mkdir -p uploads models
+RUN mkdir -p uploads models templates static
 
 # Use a startup script that handles the PORT variable
 RUN echo '#!/bin/bash\nPORT=${PORT:-8000}\necho "Starting on port $PORT"\nexec gunicorn -k eventlet -w 1 --bind 0.0.0.0:$PORT app:app' > /start.sh
