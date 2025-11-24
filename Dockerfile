@@ -11,10 +11,29 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy and install requirements
+# Copy requirements (without PyTorch)
 COPY requirements.txt .
+
+# Install packages without PyTorch first
 RUN pip install --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install flask==2.3.3 \
+    flask-socketio==5.3.6 \
+    python-socketio==5.8.0 \
+    eventlet==0.33.3 \
+    gunicorn==21.2.0 \
+    mysql-connector-python==8.1.0 \
+    python-dotenv==1.0.0 \
+    bcrypt==4.0.1 \
+    requests==2.31.0 \
+    numpy==1.24.3 \
+    Pillow==10.0.0 \
+    opencv-python-headless==4.7.0.72
+
+# Install PyTorch CPU version separately
+RUN pip install torch==2.0.1+cpu torchvision==0.15.2+cpu -f https://download.pytorch.org/whl/torch_stable.html
+
+# Install ultralytics after PyTorch
+RUN pip install ultralytics==8.0.181
 
 # Copy application
 COPY . .
