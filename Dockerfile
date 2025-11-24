@@ -1,40 +1,31 @@
 # Use Python 3.10 slim for compatibility with mediapipe/opencv wheels
 FROM python:3.10-slim
 
-# Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
-ENV DEBIAN_FRONTEND=noninteractive
 
 WORKDIR /app
 
-# Install system dependencies with better error handling
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        curl \
-        ca-certificates \
-        && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install Python dependencies
+# Copy and install requirements
 COPY requirements.txt .
-
-# Install pip packages
-RUN pip install --no-cache-dir --upgrade pip && \
+RUN pip install --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
+# Copy application
 COPY . .
+RUN mkdir -p uploads models
 
-# Create directories
-RUN mkdir -p uploads models static/css static/js
-
+# Expose port (Render will set PORT dynamically)
 EXPOSE 8000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+# Health check - use a fallback port for health check
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
+    CMD curl -f http://localhost:${PORT:-8000}/health || exit 1
 
-# Run with gunicorn + eventlet (SocketIO)
-CMD ["gunicorn", "-k", "eventlet", "-w", "1", "--bind", "0.0.0.0:$PORT", "app:app"]
+# Use shell form to allow environment variable expansion
+CMD gunicorn -k eventlet -w 1 --bind 0.0.0.0:$PORT app:app
