@@ -10,4 +10,6 @@ gunicorn==21.2.0
 mysql-connector-python==8.1.0
 python-dotenv==1.0.0
 requests==2.31.0
+ultralytics==8.0.181
+mediapipe==0.10.7
 
