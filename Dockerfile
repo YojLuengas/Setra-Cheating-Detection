@@ -20,12 +20,10 @@ RUN pip install --upgrade pip && \
 COPY . .
 RUN mkdir -p uploads models
 
-# Expose port (Render will set PORT dynamically)
+# Use a startup script that handles the PORT variable
+RUN echo '#!/bin/bash\nPORT=${PORT:-8000}\necho "Starting on port $PORT"\nexec gunicorn -k eventlet -w 1 --bind 0.0.0.0:$PORT app:app' > /start.sh
+RUN chmod +x /start.sh
+
 EXPOSE 8000
 
-# Health check - use a fallback port for health check
-HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
-    CMD curl -f http://localhost:${PORT:-8000}/health || exit 1
-
-# Use shell form to allow environment variable expansion
-CMD gunicorn -k eventlet -w 1 --bind 0.0.0.0:$PORT app:app
+CMD ["/start.sh"]

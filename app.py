@@ -1043,11 +1043,3 @@ def health_check():
         'port': os.environ.get('PORT', 'not-set'),
         'timestamp': datetime.now().isoformat()
     }), 200
-
-if __name__ == '__main__':
-    # Use PORT environment variable (required by Render)
-    port = int(os.environ.get('PORT', 8000))
-    host = '0.0.0.0'  # Required for Render
-    
-    # Start the app with SocketIO
-    socketio.run(app, host=host, port=port, debug=app.config['DEBUG'])
