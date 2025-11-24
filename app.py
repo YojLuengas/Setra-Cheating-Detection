@@ -1016,23 +1016,38 @@ def debug_recent_detections():
         logger.exception("Debug recent detections failed: %s", e)
         return jsonify({"error": str(e)})
 
+@app.route('/debug/config')
+def debug_config():
+    return jsonify({
+        'PORT': os.environ.get('PORT', 'not-set'),
+        'HOST': '0.0.0.0',
+        'DEBUG': app.config['DEBUG'],
+        'SECRET_KEY_SET': bool(app.config.get('SECRET_KEY')),
+        'DB_HOST': os.environ.get('MYSQL_HOST', 'not-set')
+    })
+
 # ---------- Run ----------
 @app.route('/health')
 def health_check():
+    """Health check endpoint required by Render"""
     try:
         # Test database connection
         cursor.execute("SELECT 1")
         db_status = "healthy"
-    except:
-        db_status = "unhealthy"
+    except Exception as e:
+        db_status = f"unhealthy: {str(e)}"
     
     return jsonify({
         'status': 'healthy',
         'database': db_status,
-        'timestamp': datetime.now().isoformat(),
-        'version': '1.0.0'
-    })
+        'port': os.environ.get('PORT', 'not-set'),
+        'timestamp': datetime.now().isoformat()
+    }), 200
 
 if __name__ == '__main__':
+    # Use PORT environment variable (required by Render)
     port = int(os.environ.get('PORT', 8000))
-    socketio.run(app, host='0.0.0.0', port=port, debug=app.config['DEBUG'])
+    host = '0.0.0.0'  # Required for Render
+    
+    # Start the app with SocketIO
+    socketio.run(app, host=host, port=port, debug=app.config['DEBUG'])
