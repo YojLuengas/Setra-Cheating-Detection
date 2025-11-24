@@ -1,0 +1,15 @@
+{
+  "name": "setra-cheating-detection",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "migrate": "node scripts/migrate.js up",
+    "migrate:rollback": "node scripts/migrate.js rollback",
+    "db:setup": "node scripts/migrate.js up"
+  },
+  "dependencies": {
+    "dotenv": "^16.6.1",
+    "mysql2": "^3.15.3"
+  }
+}

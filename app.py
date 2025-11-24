@@ -36,16 +36,32 @@ import logging
 import os
 
 DB_CONFIG = {
-    "host": os.getenv("DB_HOST", "interchange.proxy.rlwy.net"),
+    "host": os.getenv("DB_HOST", "switchback.proxy.rlwy.net"),
     "user": os.getenv("DB_USER", "root"),
-    "password": os.getenv("DB_PASSWORD", "nIFYDtNDvbljNWTwvZjhfYJhANoGlkCR"),
+    "password": os.getenv("DB_PASSWORD", "PLbCUQpgMuuLSPqHNQhSWUIbbJKXrpzp"),
     "database": os.getenv("DB_NAME", "railway"),
-    "port": int(os.getenv("DB_PORT", 50465)),
+    "port": int(os.getenv("DB_PORT", 57978)),
     "charset": "utf8mb4",
 }
 
 # ---------- App / DB / Logging ----------
 app = Flask(__name__)
+
+# Production configuration
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'fallback-secret-key')
+app.config['DEBUG'] = os.environ.get('DEBUG', 'False').lower() == 'true'
+
+# Database configuration for production
+db_config = {
+    'host': os.environ.get('MYSQL_HOST'),
+    'port': int(os.environ.get('MYSQL_PORT', 3306)),
+    'user': os.environ.get('MYSQL_USER'),
+    'password': os.environ.get('MYSQL_PASSWORD'),
+    'database': os.environ.get('MYSQL_DATABASE'),
+    'ssl_disabled': False,
+    'autocommit': True
+}
+
 app.secret_key = "replace_this_with_a_strong_random_secret"  # change this
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0  # Disable caching for static files to enable cache busting
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
