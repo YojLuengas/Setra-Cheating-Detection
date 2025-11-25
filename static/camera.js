@@ -257,6 +257,28 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 });
 
+// Add to camera.js for debugging
+function debugCameraInfo() {
+    console.log('Navigator.mediaDevices available:', !!navigator.mediaDevices);
+    console.log('getUserMedia available:', !!navigator.mediaDevices?.getUserMedia);
+    console.log('Location protocol:', window.location.protocol);
+    console.log('Is secure context:', window.isSecureContext);
+    
+    if (navigator.mediaDevices) {
+        navigator.mediaDevices.enumerateDevices()
+            .then(devices => {
+                console.log('Available devices:', devices.length);
+                devices.forEach((device, index) => {
+                    console.log(`Device ${index}:`, device.kind, device.label || 'No label');
+                });
+            })
+            .catch(err => console.error('Error enumerating devices:', err));
+    }
+}
+
+// Call this function to debug
+// debugCameraInfo();
+
 // Export functions for global access
 window.stopCamera = stopCamera;
 window.getCameras = getCameras;

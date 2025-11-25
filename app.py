@@ -709,29 +709,36 @@ def records():
         
         user_id = session["user_id"]
         
-        # Fixed query - include all selected columns in GROUP BY or use aggregation
+        # Updated query to get proper folder data with counts
         query = """
-        SELECT 
-            folder_name,
-            created_at,
-            detection_count,
-            record_id
-        FROM (
-            SELECT 
-                r.folder_name,
-                r.created_at,
-                (SELECT COUNT(*) FROM detections d WHERE d.assessment_session_id = r.assessment_session_id) as detection_count,
-                r.id as record_id,
-                ROW_NUMBER() OVER (PARTITION BY r.folder_name ORDER BY r.created_at DESC) as rn
-            FROM records r 
-            WHERE r.user_id = %s
-        ) ranked
-        WHERE rn = 1
-        ORDER BY created_at DESC
+        SELECT DISTINCT
+            r.folder_name,
+            r.created_at,
+            r.assessment_session_id,
+            r.id as record_id,
+            (SELECT COUNT(*) FROM detections d WHERE d.assessment_session_id = r.assessment_session_id) as detection_count
+        FROM records r 
+        WHERE r.user_id = %s 
+        ORDER BY r.created_at DESC
         """
         
         cursor.execute(query, (user_id,))
-        folders = cursor.fetchall()
+        raw_folders = cursor.fetchall()
+        
+        # Format the data properly for the template
+        folders = []
+        for row in raw_folders:
+            folder_name, created_at, assessment_session_id, record_id, detection_count = row
+            
+            # Create a proper folder object
+            folder = {
+                'folder_name': folder_name or f"Session_{assessment_session_id}",
+                'created_at': created_at.strftime('%Y-%m-%d %H:%M:%S') if created_at else 'Unknown',
+                'detection_count': detection_count or 0,
+                'assessment_session_id': assessment_session_id,
+                'record_id': record_id
+            }
+            folders.append(folder)
         
         return render_template("records.html", folders=folders)
         
@@ -955,6 +962,35 @@ def force_https():
     if os.environ.get('RENDER'):
         if not request.is_secure and request.headers.get('X-Forwarded-Proto') != 'https':
             return redirect(request.url.replace('http://', 'https://'))
+
+# ---------- Debug Routes ----------
+@app.route("/debug/records")
+@login_required
+def debug_records():
+    """Debug route to check what's in the database"""
+    try:
+        user_id = session["user_id"]
+        
+        # Check records table
+        cursor.execute("SELECT * FROM records WHERE user_id = %s", (user_id,))
+        records_data = cursor.fetchall()
+        
+        # Check assessment_sessions table
+        cursor.execute("SELECT * FROM assessment_sessions WHERE user_id = %s", (user_id,))
+        sessions_data = cursor.fetchall()
+        
+        # Check detections table
+        cursor.execute("SELECT COUNT(*) as count, assessment_session_id FROM detections WHERE user_id = %s GROUP BY assessment_session_id", (user_id,))
+        detections_data = cursor.fetchall()
+        
+        return jsonify({
+            "records": records_data,
+            "sessions": sessions_data,
+            "detections": detections_data
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)})
 
 # ---------- Run ----------
 if __name__ == "__main__":

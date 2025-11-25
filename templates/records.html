@@ -48,24 +48,26 @@
 
     {% if folders %}
     <div class="records-grid">
-      {% for f in folders %}
-      <!-- Updated folder-card -->
-      <div class="folder-card" 
-           data-created-at="{{ f.created_at }}" 
-           data-count="{{ f.count }}">
-        <form class="delete-form" method="post" action="{{ url_for('delete_record', folder_name=f.folder_name) }}" style="display: none;"></form>
-
-        <div class="folder-content">
-          <a href="{{ url_for('records_folder', folder_name=f.folder_name) }}" class="folder-link" data-folder="{{ f.folder_name }}">
-            {% if f.first_image %}
-              <img src="{{ f.first_image }}" alt="thumbnail" class="folder-thumb">
-            {% else %}
-              <div class="folder-icon">📁</div>
-            {% endif %}
-            <div class="folder-name">{{ f.display_title }}</div>
-            <div class="folder-count">{{ f.count }} snapshot{{ 's' if f.count|int != 1 else '' }}</div>
-          </a>
+      {% for folder in folders %}
+      <div class="folder-card" data-created-at="{{ folder.created_at }}">
+        <div class="folder-link" data-folder="{{ folder.folder_name }}">
+          <div class="folder-icon">📁</div>
+          <div class="folder-info">
+            <div class="folder-name">{{ folder.folder_name }}</div>
+            <div class="folder-meta">
+              <span class="folder-count">{{ folder.detection_count }} snapshots</span>
+              <span class="folder-date">{{ folder.created_at }}</span>
+            </div>
+          </div>
         </div>
+        
+        <!-- Delete button -->
+        <a href="{{ url_for('delete_record', folder_name=folder.folder_name) }}" 
+           class="folder-delete-btn" 
+           data-folder-name="{{ folder.folder_name }}"
+           onclick="return false;">
+          <button type="button" class="delete-btn">🗑️</button>
+        </a>
       </div>
       {% endfor %}
     </div>
