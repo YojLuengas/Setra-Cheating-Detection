@@ -16,21 +16,136 @@
   {% endwith %}
 
   <form method="POST" action="{{ url_for('add_user') }}">
+
     <div class="mb-3">
       <label class="form-label">Name</label>
       <input name="name" class="form-control" required>
     </div>
+
     <div class="mb-3">
       <label class="form-label">Username</label>
       <input name="username" class="form-control" required>
     </div>
+
     <div class="mb-3">
       <label class="form-label">Password</label>
       <input name="password" type="password" class="form-control" required>
     </div>
+
+   <div class="mb-3">
+  <label class="form-label fw-bold">Subjects</label>
+
+  <div class="border rounded p-3" style="max-height: 300px; overflow-y: auto;">
+
+    <!-- FIRST YEAR – 1st Semester -->
+    <label class="fw-bold mt-2 d-block">FIRST YEAR – 1st Semester</label>
+    <div class="ms-3">
+      <label><input type="checkbox" name="subjects[]" value="CC 101 - Introduction to Computing"> CC 101 - Introduction to Computing</label><br>
+      <label><input type="checkbox" name="subjects[]" value="CC 102 - Computer Programming 1"> CC 102 - Computer Programming 1</label><br>
+      <label><input type="checkbox" name="subjects[]" value="ESocSciPhil - Gender and Society"> ESocSciPhil - Gender and Society</label><br>
+      <label><input type="checkbox" name="subjects[]" value="Hist 101 - Readings in Philippine History"> Hist 101 - Readings in Philippine History</label><br>
+      <label><input type="checkbox" name="subjects[]" value="Homeroom - Personal Growth and Development"> Homeroom - Personal Growth and Development</label><br>
+      <label><input type="checkbox" name="subjects[]" value="Hum 101 - Art Appreciation"> Hum 101 - Art Appreciation</label><br>
+      <label><input type="checkbox" name="subjects[]" value="PE 101 - Physical Education 1"> PE 101 - Physical Education 1</label><br>
+      <label><input type="checkbox" name="subjects[]" value="ReEd 101 - Faith and Reason"> ReEd 101 - Faith and Reason</label><br>
+      <label><input type="checkbox" name="subjects[]" value="Rizal 101 - Life and Works of Rizal"> Rizal 101 - Life and Works of Rizal</label><br>
+      <label><input type="checkbox" name="subjects[]" value="SciTech 101 - Science, Technology and Society"> SciTech 101 - Science, Technology and Society</label><br>
+    </div>
+
+    <!-- FIRST YEAR – 2nd Semester -->
+    <label class="fw-bold mt-3 d-block">FIRST YEAR – 2nd Semester</label>
+    <div class="ms-3">
+      <label><input type="checkbox" name="subjects[]" value="CC 103 - Computer Programming 2"> CC 103 - Computer Programming 2</label><br>
+      <label><input type="checkbox" name="subjects[]" value="Comm 101 - Purposive Communication"> Comm 101 - Purposive Communication</label><br>
+      <label><input type="checkbox" name="subjects[]" value="EMST - Environmental Science"> EMST - Environmental Science</label><br>
+      <label><input type="checkbox" name="subjects[]" value="Ethics 101 - Ethics"> Ethics 101 - Ethics</label><br>
+      <label><input type="checkbox" name="subjects[]" value="GenPsych 101 - Understanding the Self"> GenPsych 101 - Understanding the Self</label><br>
+      <label><input type="checkbox" name="subjects[]" value="HCI 101 - Intro to Human Computer Interaction"> HCI 101 - Intro to Human Computer Interaction</label><br>
+      <label><input type="checkbox" name="subjects[]" value="MS 101 - Discrete Mathematics"> MS 101 - Discrete Mathematics</label><br>
+      <label><input type="checkbox" name="subjects[]" value="PE 102 - Physical Education 2"> PE 102 - Physical Education 2</label><br>
+      <label><input type="checkbox" name="subjects[]" value="ReEd 102 - God Among Us"> ReEd 102 - God Among Us</label><br>
+    </div>
+
+    <!-- SECOND YEAR – 1st Semester -->
+    <label class="fw-bold mt-3 d-block">SECOND YEAR – 1st Semester</label>
+    <div class="ms-3">
+      <label><input type="checkbox" name="subjects[]" value="ADV 101 - IT Elective 1"> ADV 101 - IT Elective 1</label><br>
+      <label><input type="checkbox" name="subjects[]" value="CC 104 - Data Structures and Algorithms"> CC 104 - Data Structures and Algorithms</label><br>
+      <label><input type="checkbox" name="subjects[]" value="IPT 101 - Integrative Programming & Technologies 1"> IPT 101 - Integrative Programming & Technologies 1</label><br>
+      <label><input type="checkbox" name="subjects[]" value="Math 101 - Mathematics in the Modern World"> Math 101 - Mathematics in the Modern World</label><br>
+      <label><input type="checkbox" name="subjects[]" value="NSTP 201 - NSTP 1"> NSTP 201 - NSTP 1</label><br>
+      <label><input type="checkbox" name="subjects[]" value="PE 203 - Physical Education 3"> PE 203 - Physical Education 3</label><br>
+      <label><input type="checkbox" name="subjects[]" value="ReEd 203 - The Catholic Church"> ReEd 203 - The Catholic Church</label><br>
+      <label><input type="checkbox" name="subjects[]" value="SocSci 201 - The Contemporary World"> SocSci 201 - The Contemporary World</label><br>
+    </div>
+
+    <!-- SECOND YEAR – 2nd Semester -->
+    <label class="fw-bold mt-3 d-block">SECOND YEAR – 2nd Semester</label>
+    <div class="ms-3">
+      <label><input type="checkbox" name="subjects[]" value="ADV 102 - IT Elective 2"> ADV 102 - IT Elective 2</label><br>
+      <label><input type="checkbox" name="subjects[]" value="CC 105 - Information Management 1"> CC 105 - Information Management 1</label><br>
+      <label><input type="checkbox" name="subjects[]" value="EA&H - Reading Visual Arts"> EA&H - Reading Visual Arts</label><br>
+      <label><input type="checkbox" name="subjects[]" value="MS 102 - Quantitative Methods"> MS 102 - Quantitative Methods</label><br>
+      <label><input type="checkbox" name="subjects[]" value="NET 101 - Networking 1"> NET 101 - Networking 1</label><br>
+      <label><input type="checkbox" name="subjects[]" value="NSTP 202 - NSTP 2"> NSTP 202 - NSTP 2</label><br>
+      <label><input type="checkbox" name="subjects[]" value="PE 204 - Physical Education 4"> PE 204 - Physical Education 4</label><br>
+      <label><input type="checkbox" name="subjects[]" value="PF 101 - Computer Programming 3"> PF 101 - Computer Programming 3</label><br>
+      <label><input type="checkbox" name="subjects[]" value="ReEd 204 - Liturgy & Sacraments"> ReEd 204 - Liturgy & Sacraments</label><br>
+    </div>
+
+    <!-- THIRD YEAR – 1st Semester -->
+    <label class="fw-bold mt-3 d-block">THIRD YEAR – 1st Semester</label>
+    <div class="ms-3">
+      <label><input type="checkbox" name="subjects[]" value="ADV 103 - IT Elective 3"> ADV 103 - IT Elective 3</label><br>
+      <label><input type="checkbox" name="subjects[]" value="IM 101 - Database Systems 1"> IM 101 - Database Systems 1</label><br>
+      <label><input type="checkbox" name="subjects[]" value="IPT 102 - Integrative Programming & Technologies 2"> IPT 102 - Integrative Programming & Technologies 2</label><br>
+      <label><input type="checkbox" name="subjects[]" value="NET 102 - Networking 2"> NET 102 - Networking 2</label><br>
+      <label><input type="checkbox" name="subjects[]" value="PT 101 - Platform Technologies"> PT 101 - Platform Technologies</label><br>
+      <label><input type="checkbox" name="subjects[]" value="ReEd 305 - Christian Morality"> ReEd 305 - Christian Morality</label><br>
+      <label><input type="checkbox" name="subjects[]" value="SIA 101 - Systems Integration & Architecture 1"> SIA 101 - Systems Integration & Architecture 1</label><br>
+    </div>
+
+    <!-- THIRD YEAR – 2nd Semester -->
+    <label class="fw-bold mt-3 d-block">THIRD YEAR – 2nd Semester</label>
+    <div class="ms-3">
+      <label><input type="checkbox" name="subjects[]" value="CC 106 - App Dev & Emerging Technologies"> CC 106 - App Dev & Emerging Technologies</label><br>
+      <label><input type="checkbox" name="subjects[]" value="HCI 102 - Human Computer Interaction 2"> HCI 102 - Human Computer Interaction 2</label><br>
+      <label><input type="checkbox" name="subjects[]" value="IAS 101 - Information Assurance & Security 1"> IAS 101 - Information Assurance & Security 1</label><br>
+      <label><input type="checkbox" name="subjects[]" value="IM 102 - Advanced Database Systems"> IM 102 - Advanced Database Systems</label><br>
+      <label><input type="checkbox" name="subjects[]" value="ReEd 306 - Christian Prayer & Vocation"> ReEd 306 - Christian Prayer & Vocation</label><br>
+      <label><input type="checkbox" name="subjects[]" value="SP 101 - Social & Professional Issues"> SP 101 - Social & Professional Issues</label><br>
+      <label><input type="checkbox" name="subjects[]" value="WS 101 - Web Systems and Technologies"> WS 101 - Web Systems and Technologies</label><br>
+    </div>
+
+    <!-- THIRD YEAR – Summer -->
+    <label class="fw-bold mt-3 d-block">THIRD YEAR – Summer</label>
+    <div class="ms-3">
+      <label><input type="checkbox" name="subjects[]" value="CAP 101 - Capstone Project 1"> CAP 101 - Capstone Project 1</label><br>
+      <label><input type="checkbox" name="subjects[]" value="IAS 102 - Information Assurance & Security 2"> IAS 102 - Information Assurance & Security 2</label><br>
+    </div>
+
+    <!-- FOURTH YEAR – 1st Semester -->
+    <label class="fw-bold mt-3 d-block">FOURTH YEAR – 1st Semester</label>
+    <div class="ms-3">
+      <label><input type="checkbox" name="subjects[]" value="ADV 104 - IT Elective 4"> ADV 104 - IT Elective 4</label><br>
+      <label><input type="checkbox" name="subjects[]" value="CAP 102 - Capstone Project 2"> CAP 102 - Capstone Project 2</label><br>
+      <label><input type="checkbox" name="subjects[]" value="SA 101 - Systems Administration & Maintenance"> SA 101 - Systems Administration & Maintenance</label><br>
+    </div>
+
+    <!-- FOURTH YEAR – 2nd Semester -->
+    <label class="fw-bold mt-3 d-block">FOURTH YEAR – 2nd Semester</label>
+    <div class="ms-3">
+      <label><input type="checkbox" name="subjects[]" value="PR 101 - Practicum (486 hours)"> PR 101 - Practicum (486 hours)</label><br>
+    </div>
+
+  </div>
+</div>
+
+
     <button type="submit" class="btn btn-success btn-lg rounded-pill">
       <i class="fa-solid fa-check"></i> Add User
     </button>
+
   </form>
 </div>
 {% endblock %}

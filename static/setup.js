@@ -81,6 +81,23 @@ function updateCameraButton() {
   }
 }
 
+document.addEventListener("DOMContentLoaded", () => {
+    fetch("/api/get_user_subjects")
+        .then(res => res.json())
+        .then(data => {
+            const subjectSelect = document.getElementById("subject");
+
+            if (data.success) {
+                data.subjects.forEach(sub => {
+                    let option = document.createElement("option");
+                    option.value = sub;
+                    option.textContent = sub;
+                    subjectSelect.appendChild(option);
+                });
+            }
+        });
+});
+
 
 // ------------------ Input Validation ------------------
 examNextBtn.addEventListener("click", (e) => {

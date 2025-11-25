@@ -228,6 +228,10 @@ def add_user():
         username = request.form["username"]
         password = request.form["password"]
 
+        # NEW: get all selected subjects (as list)
+        subjects_list = request.form.getlist("subjects[]")
+        subjects_str = ", ".join(subjects_list) if subjects_list else ""
+
         try:
             # Check if username already exists
             cursor.execute("SELECT id FROM users WHERE username=%s", (username,))
@@ -235,22 +239,29 @@ def add_user():
                 flash("Username already exists!", "danger")
             else:
                 hashed_pw = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode()
+
                 cursor.execute(
-                    "INSERT INTO users (name, username, password_hash, status, created_by) VALUES (%s, %s, %s, 'Active', %s)",
-                    (name, username, hashed_pw, session.get("username")),
+                    """
+                    INSERT INTO users 
+                        (name, username, password_hash, status, created_by, subjects)
+                    VALUES 
+                        (%s, %s, %s, 'Active', %s, %s)
+                    """,
+                    (name, username, hashed_pw, session.get("username"), subjects_str),
                 )
+
                 db.commit()
                 flash(f"User '{username}' added successfully!", "success")
+
         except Exception as e:
             db.rollback()
             logger.exception("add_user DB error: %s", e)
             flash("Unable to add user.", "danger")
 
-        # Redirect after POST so flash messages show on a fresh GET
+        # Redirect after POST so flash messages show on GET
         return redirect(url_for("add_user"))
 
     return render_template("add_user.html", show_sidebar=True)
-
 
 @app.route("/admin/reset_password/<int:user_id>", methods=["POST"])
 @login_required
@@ -365,14 +376,37 @@ def admin_dashboard():
         users_preview=users_preview
     )
 
-# ---------- Assessment session ----------
 @app.route("/assessment-session", methods=["POST"])
 @login_required
 def create_assessment_session():
-    # Ensure any previous assessment session is cleared
+    # Clear previous session
     session.pop("assessment_session_id", None)
+
     data = request.get_json(silent=True) or {}
+
+    # Clean input values
+    subject = (data.get("subject") or "").strip()
+    course = (data.get("course") or "").strip()
+
     try:
+        # --- Validate subject belongs to the logged-in user ---
+        cursor.execute("SELECT subjects FROM users WHERE id = %s", (session["user_id"],))
+        row = cursor.fetchone()
+
+        if not row:
+            return jsonify({"success": False, "error": "User not found"}), 400
+
+        # Use dictionary cursor value
+        subjects_raw = row["subjects"] or ""
+
+        # Convert "Math, English, Sci" → ["Math", "English", "Sci"]
+        valid_subjects = [s.strip() for s in subjects_raw.split(",") if s.strip()]
+
+        # Check if selected subject is valid for the user
+        if subject not in valid_subjects:
+            return jsonify({"success": False, "error": "Invalid subject"}), 400
+
+        # --- Insert assessment session ---
         cursor.execute(
             """
             INSERT INTO assessment_sessions
@@ -381,27 +415,47 @@ def create_assessment_session():
             """,
             (
                 session["user_id"],
-                data.get("course"),
-                data.get("subject"),
+                course,
+                subject,
                 data.get("exam_type"),
                 data.get("exam_datetime"),
                 data.get("camera"),
                 datetime.now(),
             ),
         )
+
         assessment_session_id = cursor.lastrowid
-        folder_name = f"{data.get('course', '').replace(' ', '_')}_{data.get('subject', '').replace(' ', '_')}_{data.get('exam_type', '').replace(' ', '_')}_{str(uuid.uuid4())[:8]}"
+
+        # --- Create folder name safely ---
+        folder_name = (
+            f"{course.replace(' ', '_')}_"
+            f"{subject.replace(' ', '_')}_"
+            f"{data.get('exam_type','').replace(' ','_')}_"
+            f"{str(uuid.uuid4())[:8]}"
+        )
+
         cursor.execute(
-            "INSERT INTO records (assessment_session_id, user_id, folder_name, created_at) VALUES (%s, %s, %s, %s)",
+            """
+            INSERT INTO records
+                (assessment_session_id, user_id, folder_name, created_at)
+            VALUES (%s, %s, %s, %s)
+            """,
             (assessment_session_id, session["user_id"], folder_name, datetime.now())
         )
+
         db.commit()
+
+        # Reset global snapshot trackers
         global all_snapshots, notified_snapshots, last_cheating_notification_time
         all_snapshots = []
         notified_snapshots = []
         last_cheating_notification_time = 0
+
+        # Store active session
         session["assessment_session_id"] = assessment_session_id
+
         return jsonify({"success": True, "message": "Assessment session created successfully!"})
+
     except Exception as e:
         db.rollback()
         logger.exception("create_assessment_session error: %s", e)
@@ -428,6 +482,20 @@ def stop_assessment():
     except Exception as e:
         logger.exception("stop_assessment error: %s", e)
         return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route("/api/get_user_subjects")
+@login_required
+def get_user_subjects():
+    cursor.execute("SELECT subjects FROM users WHERE id=%s", (session["user_id"],))
+    row = cursor.fetchone()
+
+    if not row:
+        return jsonify({"success": False, "subjects": []})
+
+    subjects_raw = row[0] or ""
+    subjects = [s.strip() for s in subjects_raw.split(",") if s.strip()]
+
+    return jsonify({"success": True, "subjects": subjects})
 
 # ---------- SocketIO frame handler ----------
 @socketio.on("connect")
