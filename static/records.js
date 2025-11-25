@@ -300,27 +300,18 @@ document.addEventListener('DOMContentLoaded', function () {
     const folderName = folderLinkDiv?.dataset?.folder;
 
     const openFolder = () => {
-      if (!folderName) {
-        console.error('No folder name found');
-        return;
-      }
-      console.log('Opening folder:', folderName);
+      if (!folderName) return;
       window.location.href = `/records/folder/${encodeURIComponent(folderName)}`;
     };
 
     // Ignore click if it's on a button, menu, or input inside the card
     const isClickOnControl = (target) => {
-      return !!target.closest("button, input, .folder-menu-btn, .folder-menu-dropdown, .delete-btn, .folder-delete-btn");
+      return !!target.closest("button, input, .folder-menu-btn, .folder-menu-dropdown");
     };
 
     // --- Single click (select or toggle) ---
     card.addEventListener("click", (e) => {
-      if (isClickOnControl(e.target)) {
-        console.log('Clicked on control, ignoring');
-        return;
-      }
-
-      console.log('Card clicked, folder name:', folderName);
+      if (isClickOnControl(e.target)) return;
 
       // Ctrl or Cmd pressed → multi-select toggle
       if (e.ctrlKey || e.metaKey) {
@@ -349,11 +340,54 @@ document.addEventListener('DOMContentLoaded', function () {
       updateFolderState();
     });
 
+    // --- SORT MENU FUNCTIONALITY ---
+
+    document.querySelectorAll('.sort-option').forEach(option => {
+      option.addEventListener('click', () => {
+        const sortType = option.dataset.sort;
+        const grid = document.querySelector('.records-grid');
+        if (!grid) return;
+
+        // Get all folder cards
+        const folders = Array.from(grid.querySelectorAll('.folder-card'));
+
+        // Sort logic
+        let sortedFolders = [];
+        if (sortType === 'name') {
+          sortedFolders = folders.sort((a, b) => {
+            const nameA = a.querySelector('.folder-name').textContent.trim().toLowerCase();
+            const nameB = b.querySelector('.folder-name').textContent.trim().toLowerCase();
+            return nameA.localeCompare(nameB);
+          });
+        }
+        else if (sortType === 'date') {
+          // Requires Flask to include folder.created_at
+          sortedFolders = folders.sort((a, b) => {
+            const dateA = new Date(a.dataset.createdAt || 0);
+            const dateB = new Date(b.dataset.createdAt || 0);
+            return dateB - dateA; // newest first
+          });
+        }
+        else if (sortType === 'count') {
+          sortedFolders = folders.sort((a, b) => {
+            const countA = parseInt(a.querySelector('.folder-count').textContent) || 0;
+            const countB = parseInt(b.querySelector('.folder-count').textContent) || 0;
+            return countB - countA; // highest first
+          });
+        }
+
+        // Re-append sorted elements to the grid
+        sortedFolders.forEach(folder => grid.appendChild(folder));
+
+        // Close dropdown after sort
+        document.querySelector('.sort-dropdown')?.classList.remove('active');
+      });
+    });
+
     // --- Double-click → open folder ---
     card.addEventListener("dblclick", (e) => {
       if (isClickOnControl(e.target)) return;
       e.preventDefault();
-      console.log('Double-click detected, opening folder');
       openFolder();
     });
 
@@ -364,18 +398,6 @@ document.addEventListener('DOMContentLoaded', function () {
       card.classList.toggle("selected");
       updateFolderState();
     });
-
-    // --- Make folder name clickable ---
-    const folderNameElement = card.querySelector('.folder-name');
-    if (folderNameElement) {
-      folderNameElement.style.cursor = 'pointer';
-      folderNameElement.addEventListener('click', (e) => {
-        if (!isClickOnControl(e.target)) {
-          e.stopPropagation();
-          openFolder();
-        }
-      });
-    }
   });
 
   // Sort and header menu toggle
