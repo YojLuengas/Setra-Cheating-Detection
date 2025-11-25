@@ -122,7 +122,7 @@ if YOLO_AVAILABLE:
         except Exception as model_error:
             logger.warning(f"⚠️ Custom model failed: {model_error}, trying default model")
             try:
-                yolo_model = YOLO("yolov8n.pt")  # Default model
+                yolo_model = YOLO("models/best.pt")  # Default model
                 logger.info("✅ Default YOLO model loaded successfully")
             except Exception as default_error:
                 logger.error(f"❌ Default model also failed: {default_error}")
