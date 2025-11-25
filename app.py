@@ -949,6 +949,13 @@ def delete_notification(snap_id):
         logger.exception("delete_notification error: %s", e)
         return jsonify({"success": False, "error": str(e)}), 500
 
+@app.before_request
+def force_https():
+    # Force HTTPS in production (Render)
+    if os.environ.get('RENDER'):
+        if not request.is_secure and request.headers.get('X-Forwarded-Proto') != 'https':
+            return redirect(request.url.replace('http://', 'https://'))
+
 # ---------- Run ----------
 if __name__ == "__main__":
     host = "0.0.0.0"

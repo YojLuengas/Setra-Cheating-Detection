@@ -1,4 +1,5 @@
-import { initSocket, emitFrame, disconnectSocket } from "./socket.js";
+// Remove import statements for production compatibility
+// import { initSocket, emitFrame, disconnectSocket } from "./socket.js";
 
 let video, startBtn, stopBtn, statusDiv, cameraList;
 const canvas = document.createElement("canvas");
@@ -7,6 +8,63 @@ let stream;
 let sending = false;
 let currentDeviceId = null;
 let vid;
+let socket = null;
+
+// Initialize socket connection
+function initSocket(videoElement, statusElement) {
+    if (socket && socket.connected) {
+        return;
+    }
+    
+    socket = io();
+    
+    socket.on('connect', function() {
+        console.log('Connected to server');
+        if (statusElement) {
+            statusElement.textContent = 'Connected - Ready to monitor';
+        }
+    });
+    
+    socket.on('response_frame', function(data) {
+        if (videoElement && data.image) {
+            videoElement.src = data.image;
+        }
+        if (statusElement) {
+            statusElement.textContent = data.cheating ? 
+                'Possible cheating detected!' : 
+                'No possible cheating detected';
+            statusElement.style.color = data.cheating ? '#dc3545' : '#28a745';
+        }
+    });
+    
+    socket.on('cheating_notification', function(data) {
+        console.log('Cheating detected:', data);
+        // Handle notification
+        if (window.addNotification) {
+            window.addNotification(data);
+        }
+    });
+    
+    socket.on('disconnect', function() {
+        console.log('Disconnected from server');
+        if (statusElement) {
+            statusElement.textContent = 'Disconnected';
+        }
+    });
+}
+
+function emitFrame(frameBuffer) {
+    if (socket && socket.connected && frameBuffer) {
+        socket.emit('frame', frameBuffer);
+    }
+}
+
+function disconnectSocket() {
+    if (socket) {
+        socket.disconnect();
+        socket = null;
+    }
+}
 
 function setBlackScreen() {
   if (!video) return;
@@ -21,25 +79,46 @@ function setBlackScreen() {
 
 async function getCameras() {
   try {
+    // Request camera permission first
+    const tempStream = await navigator.mediaDevices.getUserMedia({ video: true });
+    tempStream.getTracks().forEach(track => track.stop());
+    
     const devices = await navigator.mediaDevices.enumerateDevices();
     if (!cameraList) return;
 
     cameraList.innerHTML = "";
+    
+    // Add default option
+    const defaultOption = document.createElement("option");
+    defaultOption.value = "";
+    defaultOption.text = "Select Camera";
+    cameraList.appendChild(defaultOption);
+    
+    let cameraCount = 0;
     devices.forEach((device, idx) => {
       if (device.kind === "videoinput") {
         const option = document.createElement("option");
         option.value = device.deviceId;
-        option.text = device.label || `Camera ${idx + 1}`;
+        option.text = device.label || `Camera ${cameraCount + 1}`;
         cameraList.appendChild(option);
+        cameraCount++;
       }
     });
 
-    if (devices.length > 0 && !currentDeviceId) {
-      currentDeviceId = devices.find(d => d.kind === "videoinput").deviceId;
-      cameraList.value = currentDeviceId;
+    if (cameraCount > 0 && !currentDeviceId) {
+      const firstCamera = devices.find(d => d.kind === "videoinput");
+      if (firstCamera) {
+        currentDeviceId = firstCamera.deviceId;
+        cameraList.value = currentDeviceId;
+      }
     }
+    
+    console.log(`Found ${cameraCount} cameras`);
   } catch (err) {
     console.error('Error listing cameras:', err);
+    if (cameraList) {
+      cameraList.innerHTML = '<option value="">Camera access denied</option>';
+    }
   }
 }
 
@@ -48,14 +127,19 @@ async function startCamera() {
   try {
     initSocket(video, statusDiv);
 
-    stream = await navigator.mediaDevices.getUserMedia({
+    const constraints = {
       video: {
-        deviceId: currentDeviceId ? { exact: currentDeviceId } : undefined,
-        width: 800,
-        height: 720
+        width: { ideal: 800 },
+        height: { ideal: 720 }
       },
       audio: false
-    });
+    };
+    
+    if (currentDeviceId) {
+      constraints.video.deviceId = { exact: currentDeviceId };
+    }
+
+    stream = await navigator.mediaDevices.getUserMedia(constraints);
 
     vid = document.createElement("video");
     vid.style.display = "none";
@@ -67,7 +151,6 @@ async function startCamera() {
     sending = true;
     sendLoop(vid);
 
-    // Show temporary status instead of notification
     showTemporaryStatus("Camera started");
   } catch (err) {
     console.error('Error starting camera:', err);
@@ -93,36 +176,32 @@ function stopCamera() {
     vid = null;
   }
   setBlackScreen();
-
-  // Close socket connection to ensure new session on reconnect
   disconnectSocket();
-
   showTemporaryStatus("Camera stopped");
 }
 
-//helper: show text for a few seconds
 function showTemporaryStatus(message, duration = 3000) {
-  statusDiv.textContent = message;
-  statusDiv.style.color = "#222";
-  statusDiv.style.fontWeight = "bold";
-
-  setTimeout(() => {
-    statusDiv.textContent = "No possible cheating detected";
+  if (statusDiv) {
+    statusDiv.textContent = message;
     statusDiv.style.color = "#222";
-    statusDiv.style.fontWeight = "normal";
-  }, duration);
-}
+    statusDiv.style.fontWeight = "bold";
 
+    setTimeout(() => {
+      statusDiv.textContent = "No possible cheating detected";
+      statusDiv.style.color = "#222";
+      statusDiv.style.fontWeight = "normal";
+    }, duration);
+  }
+}
 
 async function sendLoop(videoElement) {
   while (sending) {
     if (videoElement.readyState >= 2 && videoElement.videoWidth > 0) {
       const frameBuffer = await captureFrame(videoElement);
-      if (frameBuffer && frameBuffer.byteLength > 100) {  // Basic check for valid binary data
+      if (frameBuffer && frameBuffer.byteLength > 100) {
         emitFrame(frameBuffer);
       }
     }
-    // Increased frequency to ~30 FPS to reduce lag (100ms -> 33ms)
     await new Promise(r => setTimeout(r, 150));
   }
 }
@@ -136,7 +215,7 @@ function captureFrame(videoElement) {
     canvas.toBlob((blob) => {
       if (blob) {
         const reader = new FileReader();
-        reader.onload = () => resolve(reader.result); // ArrayBuffer
+        reader.onload = () => resolve(reader.result);
         reader.readAsArrayBuffer(blob);
       } else {
         resolve(null);
@@ -153,14 +232,18 @@ document.addEventListener("DOMContentLoaded", () => {
   cameraList = document.getElementById("camera-select");
 
   setBlackScreen();
-  getCameras();
+  
+  // Wait a bit before getting cameras to ensure page is fully loaded
+  setTimeout(() => {
+    getCameras();
+  }, 1000);
 
-  //Dropdown change = switch camera automatically
   if (cameraList) {
     cameraList.addEventListener("change", async () => {
       currentDeviceId = cameraList.value;
       if (sending) {
         stopCamera();
+        await new Promise(r => setTimeout(r, 500)); // Small delay
         await startCamera();
       }
     });
@@ -174,5 +257,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 });
 
+// Export functions for global access
 window.stopCamera = stopCamera;
-export { getCameras, startCamera, stopCamera };
+window.getCameras = getCameras;
+window.startCamera = startCamera;
