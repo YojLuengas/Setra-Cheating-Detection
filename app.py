@@ -88,10 +88,13 @@ logger = logging.getLogger(__name__)
 try:
     db = mysql.connector.connect(**DB_CONFIG)
     cursor = db.cursor(buffered=True)
+    
+    # Set SQL mode to be less strict
+    cursor.execute("SET sql_mode = 'STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO'")
+    
     logger.info(f"✅ Connected to database: {DB_CONFIG['host']}:{DB_CONFIG['port']}")
 except Exception as e:
     logger.error(f"❌ Database connection failed: {e}")
-    # Don't exit - let the app start without DB for health checks
     db = None
     cursor = None
 
@@ -112,7 +115,7 @@ if YOLO_AVAILABLE:
             'ultralytics.nn.modules.Detect'
         ])
         
-        yolo_model = YOLO('yolov8n.pt')
+        yolo_model = YOLO("models/best.pt")
         logger.info("✅ YOLO model loaded successfully")
     except Exception as e:
         logger.error(f"❌ Failed to load YOLO model: {e}")
@@ -144,7 +147,7 @@ frame_lock = Lock()
 
 # Throttling / timing controls to reduce CPU / GPU load and UI lag
 PROCESS_INTERVAL = 0.50       # seconds between heavy processing runs (≈10 FPS)
-OUT_IMG_MAX = 608            # send this max width for annotated frames
+OUT_IMG_MAX = 640            # send this max width for annotated frames
 _last_processed_time = 0.0
 
 # ---------- Helpers ----------
@@ -399,37 +402,44 @@ def activate_user(user_id):
 @app.route("/admin/dashboard")
 @login_required
 def admin_dashboard():
-    if session.get("role") != "admin":
-        flash("Access denied!", "danger")
-        return redirect(url_for("home"))
-
     try:
-        # Summary counts
-        cursor.execute("SELECT COUNT(*) FROM users")
+        if cursor is None:
+            flash("Database connection not available", "error")
+            return redirect(url_for("admin_page"))
+        
+        # Fix dashboard queries
+        # Users count
+        cursor.execute("SELECT COUNT(*) as total FROM users")
         total_users = cursor.fetchone()[0]
-
-        cursor.execute("SELECT COUNT(*) FROM users WHERE status='Active'")
-        active_users = cursor.fetchone()[0]
-
-        cursor.execute("SELECT COUNT(*) FROM users WHERE status='Inactive'")
-        inactive_users = cursor.fetchone()[0]
-
-        # Recent users preview (include status here)
-        cursor.execute("SELECT username, role, status FROM users ORDER BY id DESC LIMIT 5")
-        users_preview = cursor.fetchall()
-
+        
+        # Active sessions count  
+        cursor.execute("SELECT COUNT(*) as active FROM assessment_sessions WHERE DATE(created_at) = CURDATE()")
+        active_sessions = cursor.fetchone()[0]
+        
+        # Recent detections with proper grouping
+        cursor.execute("""
+            SELECT 
+                u.username,
+                COUNT(d.id) as detection_count,
+                MAX(d.timestamp) as last_detection
+            FROM detections d 
+            JOIN users u ON d.user_id = u.id 
+            WHERE DATE(d.timestamp) = CURDATE()
+            GROUP BY u.id, u.username
+            ORDER BY last_detection DESC 
+            LIMIT 10
+        """)
+        recent_detections = cursor.fetchall()
+        
+        return render_template("admin_dashboard.html", 
+                             total_users=total_users,
+                             active_sessions=active_sessions, 
+                             recent_detections=recent_detections)
+                             
     except Exception as e:
-        logger.exception("admin_dashboard error: %s", e)
-        total_users = active_users = inactive_users = 0
-        users_preview = []
-
-    return render_template(
-        "admin_dashboard.html",
-        total_users=total_users,
-        active_users=active_users,
-        inactive_users=inactive_users,
-        users_preview=users_preview
-    )
+        logger.error(f"Admin dashboard error: {e}")
+        flash("Error loading dashboard", "error")
+        return redirect(url_for("admin_page"))
 
 # ---------- Assessment session ----------
 @app.route("/assessment-session", methods=["POST"])
@@ -548,7 +558,7 @@ def handle_frame(message):
         # Run YOLO on the small image
         try:
             # keep imgsz similar to our small width for efficiency
-            results = yolo_model.predict(small, imgsz=min(608, OUT_IMG_MAX), conf=0.50, verbose=False)
+            results = yolo_model.predict(small, imgsz=min(640, OUT_IMG_MAX), conf=0.50, verbose=False)
         except Exception as e:
             logger.exception("YOLO prediction error: %s", e)
             results = []
@@ -692,39 +702,43 @@ def cheating_snapshot(snap_id):
 @app.route("/records")
 @login_required
 def records():
-    """
-    Show folders with counts and first snapshot thumbnail.
-    """
     try:
-        cursor.execute("""
-            SELECT r.folder_name, as_.course, as_.subject, as_.exam_type, as_.exam_datetime, COUNT(d.id) as cnt, r.created_at,
-                   (SELECT d2.image_path FROM detections d2 WHERE d2.assessment_session_id = r.assessment_session_id ORDER BY d2.timestamp ASC LIMIT 1) as first_image
-            FROM records r
-            LEFT JOIN assessment_sessions as_ ON r.assessment_session_id = as_.id
-            LEFT JOIN detections d ON r.assessment_session_id = d.assessment_session_id
+        if cursor is None:
+            flash("Database connection not available", "error")
+            return redirect(url_for("home"))
+        
+        user_id = session["user_id"]
+        
+        # Fixed query - include all selected columns in GROUP BY or use aggregation
+        query = """
+        SELECT 
+            folder_name,
+            created_at,
+            detection_count,
+            record_id
+        FROM (
+            SELECT 
+                r.folder_name,
+                r.created_at,
+                (SELECT COUNT(*) FROM detections d WHERE d.assessment_session_id = r.assessment_session_id) as detection_count,
+                r.id as record_id,
+                ROW_NUMBER() OVER (PARTITION BY r.folder_name ORDER BY r.created_at DESC) as rn
+            FROM records r 
             WHERE r.user_id = %s
-            GROUP BY r.assessment_session_id
-            ORDER BY r.created_at DESC
-        """, (session["user_id"],))
-        rows = cursor.fetchall()
-        folders = []
-        for r in rows:
-            course, subject, exam_type, exam_datetime = r[1], r[2], r[3], r[4]
-            if course and subject and exam_type and exam_datetime:
-                display_title = f"{course} - {subject} ({exam_type}) - {exam_datetime.strftime('%Y-%m-%d')}"
-            else:
-                display_title = r[0]
-            folders.append({
-                "folder_name": r[0],
-                "display_title": display_title,
-                "count": r[5],
-                "created_at": r[6].isoformat() if r[6] else None,
-                "first_image": f"data:image/jpeg;base64,{r[7]}" if r[7] else None
-            })
+        ) ranked
+        WHERE rn = 1
+        ORDER BY created_at DESC
+        """
+        
+        cursor.execute(query, (user_id,))
+        folders = cursor.fetchall()
+        
+        return render_template("records.html", folders=folders)
+        
     except Exception as e:
-        logger.exception("records folders fetch error: %s", e)
-        folders = []
-    return render_template("records.html", folders=folders)
+        logger.error(f"Records folders fetch error: {e}")
+        flash("Error fetching records", "error")
+        return redirect(url_for("home"))
 
 @app.route("/records/folder/<folder_name>")
 @login_required
