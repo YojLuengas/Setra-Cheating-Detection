@@ -28,23 +28,23 @@ from flask import (
 from flask_socketio import SocketIO, emit
 import mysql.connector
 
-# Handle YOLO import gracefully
+print(f"Python version: {sys.version}")
+print("Starting Flask application...")
+
+# Try to import ML libraries, but handle if they're not available
 try:
     from ultralytics import YOLO
     YOLO_AVAILABLE = True
 except ImportError:
-    logger.warning("⚠️ YOLO not available. Object detection disabled.")
     YOLO_AVAILABLE = False
-    YOLO = None
+    print("⚠️ YOLO not available - running without ML detection")
 
-# Handle MediaPipe import gracefully
 try:
     import mediapipe as mp
     MEDIAPIPE_AVAILABLE = True
 except ImportError:
-    logger.warning("⚠️ MediaPipe not available. Face detection disabled.")
     MEDIAPIPE_AVAILABLE = False
-    mp = None
+    print("⚠️ MediaPipe not available - running without face detection")
 
 import bcrypt
 import logging
@@ -95,24 +95,31 @@ except Exception as e:
     cursor = None
 
 # ---------- Models / ML ----------
-# Update path as required
+yolo_model = None
+face_mesh = None
+
+# Try to load YOLO model
 if YOLO_AVAILABLE:
     try:
-        yolo_model = YOLO("models/best.pt")
+        import torch
+        # Add safe globals for ultralytics
+        torch.serialization.add_safe_globals([
+            'ultralytics.nn.tasks.DetectionModel',
+            'ultralytics.nn.modules.Conv',
+            'ultralytics.nn.modules.C2f',
+            'ultralytics.nn.modules.SPPF',
+            'ultralytics.nn.modules.Detect'
+        ])
+        
+        yolo_model = YOLO('yolov8n.pt')
         logger.info("✅ YOLO model loaded successfully")
     except Exception as e:
-        logger.warning(f"⚠️ Could not load custom model: {e}")
-        try:
-            yolo_model = YOLO("yolov8n.pt")
-            logger.info("✅ Using default YOLO model")
-        except Exception as e2:
-            logger.error(f"❌ Could not load any YOLO model: {e2}")
-            yolo_model = None
-else:
-    yolo_model = None
+        logger.error(f"❌ Failed to load YOLO model: {e}")
+        yolo_model = None
+        YOLO_AVAILABLE = False
 
-# Update MediaPipe initialization
-if MEDIAPIPE_AVAILABLE and mp:
+# Try to initialize MediaPipe
+if MEDIAPIPE_AVAILABLE:
     try:
         face_mesh = mp.solutions.face_mesh.FaceMesh(
             max_num_faces=1, 
@@ -120,12 +127,9 @@ if MEDIAPIPE_AVAILABLE and mp:
             min_detection_confidence=0.5, 
             min_tracking_confidence=0.5
         )
-        logger.info("✅ MediaPipe Face Mesh initialized")
+        logger.info("✅ MediaPipe initialized successfully")
     except Exception as e:
-        logger.error(f"❌ Could not initialize MediaPipe: {e}")
-        face_mesh = None
-else:
-    face_mesh = None
+        logger.error(f"❌ Failed to initialize MediaPipe: {e}")
 
 # ---------- Globals & Locks ----------
 all_snapshots = []
