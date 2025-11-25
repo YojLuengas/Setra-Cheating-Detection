@@ -384,6 +384,9 @@ def create_assessment_session():
 
     data = request.get_json(silent=True) or {}
 
+    # Create cursor here (FIX)
+    cursor = db.cursor(dictionary=True)
+
     # Clean input values
     subject = (data.get("subject") or "").strip()
     course = (data.get("course") or "").strip()
@@ -396,13 +399,11 @@ def create_assessment_session():
         if not row:
             return jsonify({"success": False, "error": "User not found"}), 400
 
-        # Use dictionary cursor value
+        # row is now a dictionary
         subjects_raw = row["subjects"] or ""
 
-        # Convert "Math, English, Sci" → ["Math", "English", "Sci"]
         valid_subjects = [s.strip() for s in subjects_raw.split(",") if s.strip()]
 
-        # Check if selected subject is valid for the user
         if subject not in valid_subjects:
             return jsonify({"success": False, "error": "Invalid subject"}), 400
 
@@ -426,7 +427,6 @@ def create_assessment_session():
 
         assessment_session_id = cursor.lastrowid
 
-        # --- Create folder name safely ---
         folder_name = (
             f"{course.replace(' ', '_')}_"
             f"{subject.replace(' ', '_')}_"
@@ -445,13 +445,12 @@ def create_assessment_session():
 
         db.commit()
 
-        # Reset global snapshot trackers
+        # Reset snapshot trackers
         global all_snapshots, notified_snapshots, last_cheating_notification_time
         all_snapshots = []
         notified_snapshots = []
         last_cheating_notification_time = 0
 
-        # Store active session
         session["assessment_session_id"] = assessment_session_id
 
         return jsonify({"success": True, "message": "Assessment session created successfully!"})
