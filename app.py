@@ -141,6 +141,7 @@ consecutive_non_cheating_frames = 0
 stable_cheating = False
 frame_lock = Lock()
 
+
 # Throttling / timing controls to reduce CPU / GPU load and UI lag
 PROCESS_INTERVAL = 0.50       # seconds between heavy processing runs (≈10 FPS)
 OUT_IMG_MAX = 608            # send this max width for annotated frames
