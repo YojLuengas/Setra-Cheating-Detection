@@ -75,17 +75,6 @@ function initSocket(video, statusDiv) {
         window.location.reload();
       }
     });
-
-    socket.on("error", (error) => {
-      console.error("Socket encountered error:", error.message, "Closing socket");
-      socket.disconnect();
-    });
-
-    socket.on("disconnect", (reason) => {
-      console.log("Socket disconnected:", reason);
-      // Optionally, you can attempt to reconnect here
-      // socket.connect();
-    });
   }
 }
 
