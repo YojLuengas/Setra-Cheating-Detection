@@ -106,21 +106,40 @@ face_mesh = None
 if YOLO_AVAILABLE:
     try:
         import torch
-        # Add safe globals for ultralytics
-        torch.serialization.add_safe_globals([
-            'ultralytics.nn.tasks.DetectionModel',
-            'ultralytics.nn.modules.Conv',
-            'ultralytics.nn.modules.C2f',
-            'ultralytics.nn.modules.SPPF',
-            'ultralytics.nn.modules.Detect'
-        ])
+        # Remove this problematic line - it's causing the loading to fail
+        # torch.serialization.add_safe_globals([
+        #     'ultralytics.nn.tasks.DetectionModel',
+        #     'ultralytics.nn.modules.Conv',
+        #     'ultralytics.nn.modules.C2f',
+        #     'ultralytics.nn.modules.SPPF',
+        #     'ultralytics.nn.modules.Detect'
+        # ])
         
-        yolo_model = YOLO('best.pt')  # Ensure 'best.pt' is in the working directory
-        logger.info("✅ YOLO model loaded successfully")
+        # Try to load model with proper fallbacks
+        yolo_model = None
+        model_paths = ["best.pt", "yolov8n.pt", "yolov8s.pt"]
+        
+        for model_path in model_paths:
+            try:
+                logger.info(f"Attempting to load YOLO model: {model_path}")
+                yolo_model = YOLO(model_path)
+                logger.info(f"✅ YOLO model loaded successfully: {model_path}")
+                break
+            except Exception as model_error:
+                logger.warning(f"⚠️ Failed to load {model_path}: {model_error}")
+                continue
+        
+        if yolo_model is None:
+            logger.error("❌ All YOLO model loading attempts failed")
+            YOLO_AVAILABLE = False
+            
     except Exception as e:
-        logger.error(f"❌ Failed to load YOLO model: {e}")
+        logger.error(f"❌ Failed to initialize YOLO: {e}")
         yolo_model = None
         YOLO_AVAILABLE = False
+else:
+    yolo_model = None
+    logger.info("🔧 YOLO not available - running without ML detection")
 
 # Try to initialize MediaPipe
 if MEDIAPIPE_AVAILABLE:
