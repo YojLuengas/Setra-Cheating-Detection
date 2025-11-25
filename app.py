@@ -28,8 +28,24 @@ from flask import (
 from flask_socketio import SocketIO, emit
 import mysql.connector
 
-from ultralytics import YOLO
-import mediapipe as mp
+# Handle YOLO import gracefully
+try:
+    from ultralytics import YOLO
+    YOLO_AVAILABLE = True
+except ImportError:
+    logger.warning("⚠️ YOLO not available. Object detection disabled.")
+    YOLO_AVAILABLE = False
+    YOLO = None
+
+# Handle MediaPipe import gracefully
+try:
+    import mediapipe as mp
+    MEDIAPIPE_AVAILABLE = True
+except ImportError:
+    logger.warning("⚠️ MediaPipe not available. Face detection disabled.")
+    MEDIAPIPE_AVAILABLE = False
+    mp = None
+
 import bcrypt
 import logging
 
@@ -80,12 +96,36 @@ except Exception as e:
 
 # ---------- Models / ML ----------
 # Update path as required
-yolo_model = YOLO("models/best.pt")
+if YOLO_AVAILABLE:
+    try:
+        yolo_model = YOLO("models/best.pt")
+        logger.info("✅ YOLO model loaded successfully")
+    except Exception as e:
+        logger.warning(f"⚠️ Could not load custom model: {e}")
+        try:
+            yolo_model = YOLO("yolov8n.pt")
+            logger.info("✅ Using default YOLO model")
+        except Exception as e2:
+            logger.error(f"❌ Could not load any YOLO model: {e2}")
+            yolo_model = None
+else:
+    yolo_model = None
 
-# Initialize MediaPipe Face Mesh
-face_mesh = mp.solutions.face_mesh.FaceMesh(max_num_faces=1, refine_landmarks=True, min_detection_confidence=0.5, min_tracking_confidence=0.5)
-
-
+# Update MediaPipe initialization
+if MEDIAPIPE_AVAILABLE and mp:
+    try:
+        face_mesh = mp.solutions.face_mesh.FaceMesh(
+            max_num_faces=1, 
+            refine_landmarks=True, 
+            min_detection_confidence=0.5, 
+            min_tracking_confidence=0.5
+        )
+        logger.info("✅ MediaPipe Face Mesh initialized")
+    except Exception as e:
+        logger.error(f"❌ Could not initialize MediaPipe: {e}")
+        face_mesh = None
+else:
+    face_mesh = None
 
 # ---------- Globals & Locks ----------
 all_snapshots = []
