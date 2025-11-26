@@ -44,10 +44,10 @@ except ImportError:
     ROBOFLOW_AVAILABLE = False
     print("⚠️ Roboflow not available - running without ML detection")
 
-# MediaPipe disabled for Python 3.13 compatibility
+# Force disable MediaPipe for Python 3.13 compatibility
 MEDIAPIPE_AVAILABLE = False
 face_mesh = None
-logger.info("⚠️ MediaPipe disabled for Python 3.13 compatibility - using Roboflow API only")
+print("⚠️ MediaPipe disabled for Python 3.13 compatibility - using Roboflow API only")
 
 import bcrypt
 import logging
@@ -86,7 +86,6 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Database connection with error handling
 def get_db_connection():
     """Get database connection with automatic reconnection"""
     global db, cursor
@@ -101,7 +100,7 @@ def get_db_connection():
         logger.error(f"❌ Database connection failed: {e}")
         return None, None
 
-# Update database connection with retry logic
+# Database connection with error handling
 try:
     db = mysql.connector.connect(**DB_CONFIG)
     cursor = db.cursor(buffered=True)
@@ -115,7 +114,6 @@ except Exception as e:
     db = None
     cursor = None
 
-# ---------- Models / ML ----------
 # ---------- Roboflow API Setup ----------
 roboflow_model = None
 
@@ -212,13 +210,14 @@ consecutive_non_cheating_frames = 0
 stable_cheating = False
 frame_lock = Lock()
 
-
 # Throttling / timing controls to reduce CPU / GPU load and UI lag
 PROCESS_INTERVAL = 0.50       # seconds between heavy processing runs (≈10 FPS)
-OUT_IMG_MAX = 640            # send this max width for annotated frames
+OUT_IMG_MAX = 480            # Reduced for Roboflow API efficiency
 _last_processed_time = 0.0
+
+# Roboflow API rate limiting
 _last_roboflow_call = 0.0
-ROBOFLOW_MIN_INTERVAL = 1.0   # seconds between Roboflow API calls
+ROBOFLOW_MIN_INTERVAL = 1.0  # Minimum 1 second between API calls
 
 # ---------- Helpers ----------
 def b64_to_cv2(data_b64):
@@ -252,19 +251,6 @@ def save_image_to_disk(img_bgr, snap_id=None, jpeg_quality=85):
     img_b64 = base64.b64encode(buffer).decode('utf-8')
     return img_b64
 
-def estimate_head_rotation(image_rgb, face_landmarks):
-    """Estimate head yaw (rotation) from face landmarks."""
-    h, w, _ = image_rgb.shape
-    try:
-        lmk = face_landmarks.landmark
-        left_x = lmk[33].x * w
-        right_x = lmk[263].x * w
-        nose_x = lmk[1].x * w
-        yaw = (nose_x - (left_x + right_x) / 2) / w
-        return float(yaw)
-    except Exception:
-        return 0.0
-
 # Binary image processing
 def process_binary_image(binary_data):
     """Convert binary image data to BGR numpy array."""
@@ -279,8 +265,6 @@ def process_binary_image(binary_data):
     except Exception as e:
         logger.exception("process_binary_image error: %s", e)
         return None
-
-
 
 def login_required(f):
     @wraps(f)
@@ -591,8 +575,8 @@ def on_disconnect():
     except Exception as e:
         logger.error(f"Disconnect error: {e}")
 
-@socketio.on_error()
-def error_handler(e):
+@socketio.on_error_default
+def default_error_handler(e):
     logger.error(f"SocketIO error: {e}")
     import traceback
     logger.error(f"Traceback: {traceback.format_exc()}")
@@ -600,10 +584,10 @@ def error_handler(e):
 @socketio.on("frame")
 def handle_frame(message):
     """
-    Process incoming frames with comprehensive error handling
+    Process incoming frames with Roboflow API integration
     """
     global all_snapshots, notified_snapshots, last_cheating_notification_time
-    global _last_processed_time
+    global _last_processed_time, _last_roboflow_call
 
     # Quick-drop if someone else is processing
     if not frame_lock.acquire(blocking=False):
@@ -643,13 +627,14 @@ def handle_frame(message):
             logger.debug(f"Invalid frame dimensions: {original_w}x{original_h}")
             return
 
-        # Resize to a reasonable size for fast model inference
+        # Resize to a reasonable size for Roboflow API efficiency
         try:
-            scale = OUT_IMG_MAX / max(original_h, original_w)
-            if scale <= 0:
+            max_dimension = min(OUT_IMG_MAX, 480)  # Max 480px for API efficiency
+            scale = max_dimension / max(original_h, original_w)
+            if scale > 1.0:  # Don't upscale
                 scale = 1.0
-            small_w = max(1, int(original_w * scale))
-            small_h = max(1, int(original_h * scale))
+            small_w = max(160, int(original_w * scale))  # Minimum 160px width
+            small_h = max(120, int(original_h * scale))  # Minimum 120px height
             small = cv2.resize(frame, (small_w, small_h), interpolation=cv2.INTER_LINEAR)
         except Exception as e:
             logger.error(f"Frame resize error: {e}")
@@ -662,7 +647,6 @@ def handle_frame(message):
         if ROBOFLOW_AVAILABLE and roboflow_model is not None:
             try:
                 # Rate limit Roboflow API calls
-                global _last_roboflow_call
                 if time.time() - _last_roboflow_call >= ROBOFLOW_MIN_INTERVAL:
                     logger.debug("Running Roboflow prediction...")
                     detections = predict_with_roboflow(small, confidence=0.5)
@@ -681,17 +665,29 @@ def handle_frame(message):
         else:
             logger.debug("Roboflow model not available - skipping object detection")
 
-        # Annotate on the small image (faster than annotating full resolution)
+        # Annotate on the small image
         try:
             annotated = small.copy()
             for label, conf, (x1, y1, x2, y2) in detections:
                 try:
-                    # Check for cheating-related labels
+                    # Enhanced cheating detection classes for Roboflow
                     cheating_classes = [
-                        "phone", "mobile", "cellphone", "smartphone",
-                        "cheating", "suspicious", "paper", "notes",
-                        "looking_away", "head_turn"
+                        # Device detection
+                        "phone", "mobile", "cellphone", "smartphone", "device", "tablet",
+                        
+                        # Paper/written materials
+                        "paper", "notes", "cheat_sheet", "book", "document",
+                        
+                        # People detection
+                        "person", "multiple_person", "face", "head",
+                        
+                        # Behavioral indicators your model might detect
+                        "looking_away", "head_turn", "suspicious", "cheating",
+                        
+                        # Objects that shouldn't be there
+                        "calculator", "computer", "laptop", "keyboard"
                     ]
+                    
                     is_cheating = str(label).lower() in cheating_classes
                     color = (0, 0, 255) if is_cheating else (0, 255, 0)
                     
@@ -716,32 +712,6 @@ def handle_frame(message):
         except Exception as e:
             logger.error(f"Annotation processing error: {e}")
             annotated = small.copy()  # Use unmodified frame as fallback
-
-        # MediaPipe face mesh processing for head rotation
-        if MEDIAPIPE_AVAILABLE and face_mesh is not None:
-            try:
-                small_rgb = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
-                results = face_mesh.process(small_rgb)
-                
-                if results and results.multi_face_landmarks:
-                    for face_landmarks in results.multi_face_landmarks:
-                        try:
-                            yaw = estimate_head_rotation(small_rgb, face_landmarks)
-                            yaw_deg = yaw * 180 / 3.14159  # Convert to degrees
-                            
-                            if abs(yaw_deg) > 25:
-                                cheating_in_frame = True
-                                cv2.putText(annotated, f"Head rotation: {yaw_deg:.1f}°", 
-                                           (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
-                                logger.info(f"🚨 Head rotation detected: {yaw_deg:.1f}°")
-                        except Exception as e:
-                            logger.debug(f"Head rotation calculation error: {e}")
-                            
-            except Exception as e:
-                logger.debug(f"MediaPipe processing error: {e}")
-        else:
-            # MediaPipe not available - rely on Roboflow API for all detection
-            logger.debug("MediaPipe not available - using Roboflow API only")
 
         # Save snapshot & DB insert (rate-limit snapshot writes)
         if cheating_in_frame and time.time() - last_cheating_notification_time >= 2:
@@ -821,7 +791,7 @@ def handle_frame(message):
             frame_lock.release()
         except Exception:
             pass
-        
+
 # ---------- UI / Snapshot routes ----------
 @app.route("/")
 @login_required
@@ -1113,12 +1083,34 @@ def delete_notification(snap_id):
 
 # ---------- Run ----------
 if __name__ == "__main__":
-    host = "0.0.0.0"
-    port = int(os.environ.get("PORT", 5000))
-    
-    # Log the status of ML models
-    logger.info(f"Roboflow Available: {ROBOFLOW_AVAILABLE and roboflow_model is not None}")
-    logger.info(f"MediaPipe Available: {MEDIAPIPE_AVAILABLE and face_mesh is not None}")
-    
-    logger.info("🚀 Server running at: http://127.0.0.1:%s", port)
-    socketio.run(app, host=host, port=port, debug=False)
+    try:
+        host = "0.0.0.0"
+        port = int(os.environ.get("PORT", 5000))
+        
+        # Log system information
+        logger.info(f"Python version: {sys.version}")
+        logger.info(f"Environment: {'Render' if os.environ.get('RENDER') else 'Local'}")
+        
+        # Log the status of ML models
+        logger.info(f"Roboflow Available: {ROBOFLOW_AVAILABLE and roboflow_model is not None}")
+        logger.info(f"MediaPipe Available: {MEDIAPIPE_AVAILABLE and face_mesh is not None}")
+        logger.info(f"Database Available: {db is not None and cursor is not None}")
+        
+        logger.info(f"🚀 Server starting on {host}:{port}")
+        
+        # Run with proper configuration
+        socketio.run(
+            app, 
+            host=host, 
+            port=port, 
+            debug=False, 
+            log_output=False,
+            use_reloader=False,
+            allow_unsafe_werkzeug=True
+        )
+        
+    except Exception as e:
+        logger.error(f"Failed to start server: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        sys.exit(1)
