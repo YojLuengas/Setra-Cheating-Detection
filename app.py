@@ -50,7 +50,7 @@ try:
     print("✅ MediaPipe available")
 except ImportError:
     MEDIAPIPE_AVAILABLE = False
-    print("⚠️ MediaPipe not available - running without face detection")
+    print("⚠️ MediaPipe not available - running without face detection (Python 3.13 compatibility)")
 
 import bcrypt
 import logging
@@ -736,6 +736,9 @@ def handle_frame(message):
                             
             except Exception as e:
                 logger.debug(f"MediaPipe processing error: {e}")
+        else:
+            # MediaPipe not available - rely on Roboflow API for all detection
+            logger.debug("MediaPipe not available - using Roboflow API only")
 
         # Save snapshot & DB insert (rate-limit snapshot writes)
         if cheating_in_frame and time.time() - last_cheating_notification_time >= 2:
