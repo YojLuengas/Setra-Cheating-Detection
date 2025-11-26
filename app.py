@@ -102,9 +102,24 @@ except Exception as e:
 yolo_model = None
 face_mesh = None
 
-# Try to load YOLO model with proper error handling
+# Try to load YOLO model with proper error handling and PyTorch 2.6 compatibility
 if YOLO_AVAILABLE:
     try:
+        import torch
+        
+        # Add safe globals for YOLO model loading (PyTorch 2.6 compatibility)
+        try:
+            import ultralytics.nn.tasks
+            torch.serialization.add_safe_globals([
+                ultralytics.nn.tasks.DetectionModel,
+                ultralytics.nn.tasks.ClassificationModel,
+                ultralytics.nn.tasks.SegmentationModel,
+                ultralytics.nn.tasks.PoseModel
+            ])
+            logger.info("✅ Added YOLO safe globals for PyTorch 2.6")
+        except Exception as e:
+            logger.warning(f"Could not add safe globals: {e}")
+
         # Create models directory if it doesn't exist
         models_dir = "models"
         if not os.path.exists(models_dir):
@@ -116,27 +131,49 @@ if YOLO_AVAILABLE:
         
         if os.path.exists(custom_model_path):
             try:
+                # Try loading with weights_only=False for custom model
                 yolo_model = YOLO(custom_model_path)
                 logger.info("✅ Custom YOLO model loaded successfully")
             except Exception as e:
                 logger.warning(f"Failed to load custom model: {e}")
-                # Fall back to pretrained model
+                # Try with explicit weights_only=False
                 try:
-                    yolo_model = YOLO("yolov8n.pt")
-                    logger.info("✅ Using YOLOv8n pretrained model as fallback")
+                    # Monkey patch torch.load temporarily for YOLO loading
+                    original_load = torch.load
+                    torch.load = lambda *args, **kwargs: original_load(*args, **kwargs, weights_only=False)
+                    yolo_model = YOLO(custom_model_path)
+                    torch.load = original_load  # Restore original
+                    logger.info("✅ Custom YOLO model loaded with weights_only=False")
                 except Exception as e2:
-                    logger.error(f"Failed to load fallback model: {e2}")
-                    yolo_model = None
-                    YOLO_AVAILABLE = False
+                    torch.load = original_load  # Ensure we restore original
+                    logger.warning(f"Custom model failed with weights_only=False: {e2}")
+                    # Fall back to pretrained model
+                    try:
+                        yolo_model = YOLO("yolov8n.pt")
+                        logger.info("✅ Using YOLOv8n pretrained model as fallback")
+                    except Exception as e3:
+                        logger.error(f"Failed to load fallback model: {e3}")
+                        yolo_model = None
+                        YOLO_AVAILABLE = False
         else:
             # Use pretrained model if custom doesn't exist
             try:
                 yolo_model = YOLO("yolov8n.pt")
                 logger.info("✅ Using YOLOv8n pretrained model (custom model not found)")
             except Exception as e:
-                logger.error(f"Failed to load pretrained model: {e}")
-                yolo_model = None
-                YOLO_AVAILABLE = False
+                logger.warning(f"Failed to load YOLOv8n: {e}")
+                # Try with weights_only=False
+                try:
+                    original_load = torch.load
+                    torch.load = lambda *args, **kwargs: original_load(*args, **kwargs, weights_only=False)
+                    yolo_model = YOLO("yolov8n.pt")
+                    torch.load = original_load
+                    logger.info("✅ YOLOv8n loaded with weights_only=False")
+                except Exception as e2:
+                    torch.load = original_load
+                    logger.error(f"Failed to load pretrained model: {e2}")
+                    yolo_model = None
+                    YOLO_AVAILABLE = False
                 
     except Exception as e:
         logger.error(f"❌ Failed to load YOLO model: {e}")
