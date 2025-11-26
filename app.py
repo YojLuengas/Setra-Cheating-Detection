@@ -103,11 +103,37 @@ yolo_model = None
 face_mesh = None
 
 # Try to load YOLO model
-# Update path as required
-yolo_model = YOLO("models/yolov8n.pt")
+if YOLO_AVAILABLE:
+    try:
+        import torch
+        # Add safe globals for ultralytics
+        torch.serialization.add_safe_globals([
+            'ultralytics.nn.tasks.DetectionModel',
+            'ultralytics.nn.modules.Conv',
+            'ultralytics.nn.modules.C2f',
+            'ultralytics.nn.modules.SPPF',
+            'ultralytics.nn.modules.Detect'
+        ])
+        
+        yolo_model = YOLO("models/yolov8.pt")
+        logger.info("✅ YOLO model loaded successfully")
+    except Exception as e:
+        logger.error(f"❌ Failed to load YOLO model: {e}")
+        yolo_model = None
+        YOLO_AVAILABLE = False
 
-# Initialize MediaPipe Face Mesh
-face_mesh = mp.solutions.face_mesh.FaceMesh(max_num_faces=1, refine_landmarks=True, min_detection_confidence=0.5, min_tracking_confidence=0.5)
+# Try to initialize MediaPipe
+if MEDIAPIPE_AVAILABLE:
+    try:
+        face_mesh = mp.solutions.face_mesh.FaceMesh(
+            max_num_faces=1, 
+            refine_landmarks=True, 
+            min_detection_confidence=0.5, 
+            min_tracking_confidence=0.5
+        )
+        logger.info("✅ MediaPipe initialized successfully")
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize MediaPipe: {e}")
 
 # ---------- Globals & Locks ----------
 all_snapshots = []
