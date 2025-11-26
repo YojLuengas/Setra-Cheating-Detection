@@ -547,6 +547,23 @@ button:hover {
   text-align: center;
 }
 
+/* Camera buttons container */
+.camera-buttons {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+/* Add Camera and Remove buttons small size */
+.add-btn, .remove-btn {
+  padding: 8px 12px;
+  font-size: 14px;
+  box-sizing: border-box;
+  min-width: 100px;
+}
+
+
+
 /* Actions */
 .form-actions {
   display: flex;
@@ -1718,19 +1735,46 @@ body.dashboard-body {
   background: transparent;
 }
 
-.camera-container img#video-frame,
-.camera-container video#video-frame {
-  width: 800px;
-  height: 720px;
+.camera-feeds {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  width: 100%;
+  max-width: 1200px;
+  justify-items: center;
+}
+
+.camera-feed {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 400px;
+}
+
+.camera-feed video,
+.camera-feed img {
+  width: 100%;
+  height: 360px;
   object-fit: contain;
   background: #000;
+  border: 2px solid #2d3e50;
+  border-radius: 8px;
   display: block;
   transition: transform 0.25s ease;
 }
 
-.camera-container img#video-frame:hover,
-.camera-container video#video-frame:hover {
+.camera-feed video:hover,
+.camera-feed img:hover {
   transform: scale(1.02);
+}
+
+.feed-label {
+  margin-top: 10px;
+  font-size: 14px;
+  color: #333;
+  font-weight: 500;
 }
 
 .status-text {
@@ -2584,4 +2628,38 @@ td {
 
 .flash-message {
   transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+/* Add styles for the live camera feed */
+.live-camera-feed {
+  position: relative;
+  margin-bottom: 20px;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #000;
+  width: 100%;
+  max-width: 800px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.live-camera-feed video {
+  width: 100%;
+  height: auto;
+  max-height: 400px;
+  object-fit: cover;
+  display: block;
+}
+
+.feed-status {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  z-index: 10;
 }

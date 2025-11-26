@@ -523,7 +523,7 @@ def handle_frame(message):
     send a smaller JPEG to clients to reduce latency.
     """
     global all_snapshots, notified_snapshots, last_cheating_notification_time
-    global _last_processed_time, _last_face_time
+    global _last_processed_time
 
     # Quick-drop if someone else is processing
     if not frame_lock.acquire(blocking=False):
@@ -537,15 +537,32 @@ def handle_frame(message):
 
         _last_processed_time = now
 
-        # Expect binary data directly
-        if isinstance(message, bytes):
-            frame = process_binary_image(message)
-        else:
-            # If not binary, assume base64 string for backward compatibility
-            img_b64 = message
-            if not img_b64:
+        # Handle different message formats
+        frame = None
+        camera_index = 0
+        
+        if isinstance(message, dict):
+            # Message is a dictionary with 'image' and potentially 'camera'
+            img_data = message.get('image')
+            camera_index = message.get('camera', 0)
+            
+            if isinstance(img_data, bytes):
+                frame = process_binary_image(img_data)
+            elif isinstance(img_data, str):
+                frame = b64_to_cv2(img_data)
+            else:
+                logger.error(f"Unexpected image data type: {type(img_data)}")
                 return
-            frame = b64_to_cv2(img_b64)
+                
+        elif isinstance(message, bytes):
+            # Message is binary data directly
+            frame = process_binary_image(message)
+        elif isinstance(message, str):
+            # Message is base64 string directly
+            frame = b64_to_cv2(message)
+        else:
+            logger.error(f"Unexpected message type: {type(message)}")
+            return
 
         if frame is None:
             return
@@ -618,15 +635,16 @@ def handle_frame(message):
                 cheating_in_frame = True
 
         # MediaPipe face mesh processing for head rotation
-        small_rgb = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
-        results = face_mesh.process(small_rgb)
-        yaw_deg = 0.0
-        if results.multi_face_landmarks:
-            for face_landmarks in results.multi_face_landmarks:
-                yaw = estimate_head_rotation(small_rgb, face_landmarks)
-                yaw_deg = yaw * 180 / 3.14159  # Convert to degrees
-                if abs(yaw_deg) > 25:
-                    cheating_in_frame = True
+        if MEDIAPIPE_AVAILABLE and face_mesh:
+            small_rgb = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
+            results = face_mesh.process(small_rgb)
+            yaw_deg = 0.0
+            if results.multi_face_landmarks:
+                for face_landmarks in results.multi_face_landmarks:
+                    yaw = estimate_head_rotation(small_rgb, face_landmarks)
+                    yaw_deg = yaw * 180 / 3.14159  # Convert to degrees
+                    if abs(yaw_deg) > 25:
+                        cheating_in_frame = True
 
         # Save snapshot & DB insert (rate-limit snapshot writes)
         if cheating_in_frame and time.time() - last_cheating_notification_time >= 2:
@@ -654,7 +672,7 @@ def handle_frame(message):
         # Prepare and emit annotated frame back to client (small image to reduce latency)
         out_b64 = cv2_to_b64(annotated, jpeg_quality=60)
         if out_b64:
-            emit("response_frame", {"image": out_b64, "cheating": cheating_in_frame})
+            emit("response_frame", {"image": out_b64, "cheating": cheating_in_frame, "camera": camera_index})
     finally:
         try:
             frame_lock.release()

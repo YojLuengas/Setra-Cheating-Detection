@@ -11,7 +11,8 @@ const confirmSubmit = document.getElementById("confirm-submit");
 const video = document.getElementById("camera-preview");
 const cameraStatus = document.getElementById("camera-status");
 const internetStatus = document.getElementById("internet-status");
-const cameraSelect = document.getElementById("camera-select");
+const cameraContainer = document.getElementById("camera-container");
+let cameraSelects = [];
 
 const cameraToggleBtn = document.getElementById("camera-toggle-btn");
 const cameraOverlay = document.getElementById("camera-overlay");
@@ -137,9 +138,8 @@ systemCheckNext.addEventListener("click", () => {
   document.getElementById("confirm-subject").textContent = document.getElementById("subject").value;
   document.getElementById("confirm-exam-type").textContent = document.getElementById("exam-type").value;
   document.getElementById("confirm-datetime").textContent = document.getElementById("exam-datetime").value;
-  document.getElementById("confirm-camera").textContent = cameraSelect.value
-    ? cameraSelect.options[cameraSelect.selectedIndex].text
-    : "";
+  const selectedCameras = cameraSelects.map(select => select.options[select.selectedIndex]?.text || "").filter(text => text);
+  document.getElementById("confirm-camera").textContent = selectedCameras.join(", ");
 });
 
 confirmBack.addEventListener("click", () => {
@@ -172,12 +172,13 @@ document.getElementById("modal-yes").addEventListener("click", async () => {
 
   setAssessmentActive(true);
 
+  const selectedCameras = cameraSelects.map(select => select.value).filter(value => value);
   const payload = {
     course: document.getElementById("course").value,
     subject: document.getElementById("subject").value,
     exam_type: document.getElementById("exam-type").value,
     exam_datetime: document.getElementById("exam-datetime").value,
-    camera: cameraSelect.value
+    cameras: selectedCameras
   };
 
   try {
@@ -230,12 +231,33 @@ cameraToggleBtn.addEventListener("click", async () => {
 
   if (isOff) {
     try {
-      const constraints = cameraSelect.value
-        ? { video: { deviceId: { exact: cameraSelect.value } } }
-        : { video: true };
+      // Get the selected camera from the first camera select
+      const selectedCameraId = cameraSelects[0]?.value;
+      
+      // Only proceed if a camera is actually selected
+      if (!selectedCameraId || selectedCameraId === "") {
+        alert("Please select a camera first.");
+        return;
+      }
+      
+      const constraints = { 
+        video: { 
+          deviceId: { exact: selectedCameraId },
+          width: { ideal: 640 },
+          height: { ideal: 480 }
+        } 
+      };
 
       cameraStream = await navigator.mediaDevices.getUserMedia(constraints);
       video.srcObject = cameraStream;
+
+      // Wait for video to be ready
+      await new Promise((resolve) => {
+        video.onloadedmetadata = () => {
+          video.play();
+          resolve();
+        };
+      });
 
       cameraStatus.classList.remove("offline");
       cameraStatus.classList.add("online");
@@ -246,14 +268,23 @@ cameraToggleBtn.addEventListener("click", async () => {
       cameraSlash.style.display = "none";  // hide slash
       cameraIcon.style.display = "block";  // show camera icon
 
-      console.log("Camera turned ON");
+      console.log("Camera turned ON with device:", selectedCameraId);
     } catch (err) {
       console.error("Error turning on camera:", err);
+      alert("Failed to access camera. Please check permissions and try again.");
+      
+      // Reset state on error
+      cameraStatus.classList.remove("online");
+      cameraStatus.classList.add("offline");
+      cameraOverlay.style.opacity = 1;
+      cameraOn = false;
+      updateCameraButton();
     }
   } else {
     if (cameraStream) {
       cameraStream.getTracks().forEach(track => track.stop());
       video.srcObject = null;
+      cameraStream = null;
     }
 
     cameraStatus.classList.remove("online");
@@ -287,29 +318,179 @@ function stopCamera() {
 
 async function loadCameras() {
   try {
+    // Request camera permissions first to get device labels
+    const tempStream = await navigator.mediaDevices.getUserMedia({ video: true });
+    tempStream.getTracks().forEach(track => track.stop()); // Stop immediately
+    
     const devices = await navigator.mediaDevices.enumerateDevices();
-    cameraSelect.innerHTML = "";
-    let count = 1;
-    devices.forEach(device => {
-      if (device.kind === "videoinput") {
+    const videoDevices = devices.filter(device => device.kind === "videoinput");
+    
+    console.log("Found video devices:", videoDevices);
+    
+    cameraSelects.forEach((select, index) => {
+      select.innerHTML = "";
+      
+      // Add default option
+      const defaultOption = document.createElement("option");
+      defaultOption.value = "";
+      defaultOption.textContent = "Select a camera...";
+      defaultOption.disabled = true;
+      defaultOption.selected = true;
+      select.appendChild(defaultOption);
+      
+      let count = 1;
+      videoDevices.forEach(device => {
         const option = document.createElement("option");
         option.value = device.deviceId;
         option.textContent = device.label || `Camera ${count++}`;
-        cameraSelect.appendChild(option);
+        select.appendChild(option);
+      });
+
+      // Auto-select first available camera for first select
+      if (videoDevices.length > 0 && index === 0) {
+        select.value = videoDevices[0].deviceId;
       }
     });
-
-    if (devices.length > 0 && !cameraSelect.value) {
-      cameraSelect.value = devices[0].deviceId;
-    }
   } catch (err) {
-    console.error("Error listing cameras:", err);
+    console.error("Error accessing cameras:", err);
+    // Fallback without permissions
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = devices.filter(device => device.kind === "videoinput");
+      
+      cameraSelects.forEach((select, index) => {
+        select.innerHTML = "";
+        
+        const defaultOption = document.createElement("option");
+        defaultOption.value = "";
+        defaultOption.textContent = "Select a camera...";
+        defaultOption.disabled = true;
+        defaultOption.selected = true;
+        select.appendChild(defaultOption);
+        
+        let count = 1;
+        videoDevices.forEach(device => {
+          const option = document.createElement("option");
+          option.value = device.deviceId;
+          option.textContent = device.label || `Camera ${count++}`;
+          select.appendChild(option);
+        });
+
+        // Auto-select first available camera for first select
+        if (videoDevices.length > 0 && index === 0) {
+          select.value = videoDevices[0].deviceId;
+        }
+      });
+    } catch (fallbackErr) {
+      console.error("Failed to enumerate devices:", fallbackErr);
+      alert("Unable to access camera devices. Please check browser permissions.");
+    }
   }
 }
-loadCameras();
+
+// ------------------ Add Camera Functionality ------------------
+const addCameraBtn = document.getElementById("add-camera-btn");
+const removeCameraBtn = document.getElementById("remove-camera-btn");
+
+function addCameraSelect() {
+  if (cameraSelects.length >= 2) {
+    alert("Maximum of 2 cameras allowed.");
+    return;
+  }
+
+  // Get the correct container for camera selects in the setup form
+  const cameraSelectContainer = document.querySelector("#camera-container");
+  const select = document.createElement("select");
+  select.className = "camera-select";
+  select.required = true;
+  select.id = `camera-select-${cameraSelects.length}`;
+
+  cameraSelectContainer.appendChild(select);
+  cameraSelects.push(select);
+
+  // Load cameras into the new select
+  loadCameras();
+
+  updateButtons();
+}
+
+function removeCameraSelect() {
+  if (cameraSelects.length <= 1) {
+    alert("At least 1 camera is required.");
+    return;
+  }
+
+  // Get the correct container for camera selects in the setup form
+  const cameraSelectContainer = document.querySelector("#camera-container");
+  const lastSelect = cameraSelects.pop();
+  if (lastSelect && cameraSelectContainer.contains(lastSelect)) {
+    cameraSelectContainer.removeChild(lastSelect);
+  }
+
+  updateButtons();
+}
+
+function updateButtons() {
+  if (cameraSelects.length >= 2) {
+    addCameraBtn.disabled = true;
+    addCameraBtn.textContent = "Max 2 Cameras";
+  } else {
+    addCameraBtn.disabled = false;
+    addCameraBtn.textContent = "Add Camera";
+  }
+
+  if (cameraSelects.length <= 1) {
+    removeCameraBtn.disabled = true;
+  } else {
+    removeCameraBtn.disabled = false;
+  }
+}
+
+addCameraBtn.addEventListener("click", addCameraSelect);
+removeCameraBtn.addEventListener("click", removeCameraSelect);
+
+// Initialize with one camera select and load cameras
+document.addEventListener("DOMContentLoaded", () => {
+  // Initialize camera selection
+  if (cameraSelects.length === 0) {
+    addCameraSelect();
+  }
+  
+  const active = isAssessmentActive();
+  const cameraContainer = document.querySelector(".camera-container");
+
+  if (active) {
+    if (cameraContainer) cameraContainer.style.display = "flex";
+    examSetup.style.display = "none";
+    systemCheck.style.display = "none";
+    confirmScreen.style.display = "none";
+  } else {
+    if (cameraContainer) cameraContainer.style.display = "none";
+    examSetup.style.display = "flex";
+  }
+
+  const stopAssessmentBtn = document.getElementById("stop-assessment-btn");
+  if (stopAssessmentBtn) {
+    stopAssessmentBtn.addEventListener("click", e => {
+      e.preventDefault();
+      document.getElementById("stop-assessment-modal").style.display = "flex";
+    });
+  }
+
+  // --- Modal: Confirm Stop ---
+  document.getElementById("stop-assessment-cancel").addEventListener("click", () => {
+    document.getElementById("stop-assessment-modal").style.display = "none";
+  });
+
+  document.getElementById("stop-assessment-yes").addEventListener("click", async () => {
+    document.getElementById("stop-assessment-modal").style.display = "none";
+    await stopAssessment();
+  });
 
 
-// --- Check Internet Connectivity ---
+});
+
+// ------------------ Check Internet Connectivity ---
 async function checkInternetStatus() {
   const internetIcon = document.getElementById("internet-status");
 
@@ -387,7 +568,6 @@ async function stopAssessment() {
   if (startBtn) startBtn.disabled = false;
   if (stopBtn) stopBtn.disabled = true;
 }
-
 
 // ------------------ Initialize on Page Load ------------------
 document.addEventListener("DOMContentLoaded", () => {

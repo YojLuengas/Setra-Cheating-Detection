@@ -11,19 +11,22 @@ function initSocket(video, statusDiv) {
     });
 
     socket.on("response_frame", (msg) => {
-      if (!video) return;
-      video.src = msg.image;
+      const cameraIndex = msg.camera || 0;
+      const feedVideo = document.getElementById(`camera-feed-${cameraIndex}`);
+      if (feedVideo) {
+        feedVideo.src = msg.image;
+      }
 
       if (msg.cheating) {
-            statusDiv.textContent = "Possible Cheating detected!";
+        statusDiv.textContent = "Possible Cheating detected!";
         statusDiv.style.color = "#ff4444";
         statusDiv.style.fontWeight = "bold";
-        video.style.borderColor = "#ff4444";
+        if (feedVideo) feedVideo.style.borderColor = "#ff4444";
       } else {
         statusDiv.textContent = "No possible cheating detected";
         statusDiv.style.color = "#228B22";
         statusDiv.style.fontWeight = "bold";
-        video.style.borderColor = "#228B22";
+        if (feedVideo) feedVideo.style.borderColor = "#228B22";
       }
     });
 
@@ -75,13 +78,38 @@ function initSocket(video, statusDiv) {
         window.location.reload();
       }
     });
+
+    // When server tells clients a snapshot was deleted (e.g. after deleting a snapshot)
+    socket.on("snapshot_deleted", (data) => {
+      const snapId = data.snap_id;
+      // Remove from seen snapshots
+      seenSnapshots.delete(snapId);
+      // Remove from timeline if present
+      const timeline = document.getElementById("timeline");
+      if (timeline) {
+        const point = timeline.querySelector(`[data-id="${snapId}"]`);
+        if (point) {
+          point.remove();
+        }
+      }
+      // Refresh notifications to update the list
+      if (typeof refreshNotifications === "function") {
+        refreshNotifications();
+      } else if (window.refreshNotifications) {
+        window.refreshNotifications();
+      }
+    });
   }
 }
 
 // Function to send a frame
-function emitFrame(frameBuffer) {
+function emitFrame(frameB64, cameraIndex = 0) {
   if (socket && socket.connected) {
-    socket.emit("frame", frameBuffer);
+    // Send as dictionary with image and camera index
+    socket.emit("frame", { 
+      image: frameB64, 
+      camera: cameraIndex 
+    });
   }
 }
 

@@ -97,10 +97,14 @@
 
             <div class="form-row">
               <div class="form-group">
-                <label>Select Camera</label>
-                <select id="camera-select" class="camera-select" required>
-                  <option value="" disabled selected>Select Camera</option>
-                </select>
+                <label>Select Cameras (at least 1 required, up to 2)</label>
+                <div id="camera-container">
+                  <!-- Camera selects will be added dynamically -->
+                </div>
+                <div class="camera-buttons">
+                  <button type="button" id="add-camera-btn" class="add-btn">Add Camera</button>
+                  <button type="button" id="remove-camera-btn" class="remove-btn">Remove Camera</button>
+                </div>
               </div>
             </div>
 
@@ -193,7 +197,7 @@
 
             <div class="form-row">
               <div class="form-group">
-                <label>Camera</label>
+                <label>Cameras</label>
                 <div class="confirm-value-cam" id="confirm-camera"></div>
               </div>
             </div>
@@ -208,8 +212,8 @@
 
       <!-- Camera Container -->
       <div class="camera-container" style="display:none;">
-        <div class="video-wrapper">
-          <img id="video-frame" src="" alt="AI Detection Feed will appear here">
+        <div id="camera-feeds" class="camera-feeds">
+          <!-- Camera feeds will be added dynamically -->
         </div>
         <div id="cheating-status" class="status-text">
           No possible cheating detected
