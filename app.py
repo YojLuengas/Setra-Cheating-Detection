@@ -102,27 +102,51 @@ except Exception as e:
 yolo_model = None
 face_mesh = None
 
-# Try to load YOLO model
+# Try to load YOLO model with proper error handling
 if YOLO_AVAILABLE:
     try:
-        import torch
-        # Add safe globals for ultralytics
-        torch.serialization.add_safe_globals([
-            'ultralytics.nn.tasks.DetectionModel',
-            'ultralytics.nn.modules.Conv',
-            'ultralytics.nn.modules.C2f',
-            'ultralytics.nn.modules.SPPF',
-            'ultralytics.nn.modules.Detect'
-        ])
+        # Create models directory if it doesn't exist
+        models_dir = "models"
+        if not os.path.exists(models_dir):
+            os.makedirs(models_dir)
+            logger.info(f"Created {models_dir} directory")
+
+        # Check if custom model exists
+        custom_model_path = "models/best.pt"
         
-        yolo_model = YOLO("models/best.pt")
-        logger.info("✅ YOLO model loaded successfully")
+        if os.path.exists(custom_model_path):
+            try:
+                yolo_model = YOLO(custom_model_path)
+                logger.info("✅ Custom YOLO model loaded successfully")
+            except Exception as e:
+                logger.warning(f"Failed to load custom model: {e}")
+                # Fall back to pretrained model
+                try:
+                    yolo_model = YOLO("yolov8n.pt")
+                    logger.info("✅ Using YOLOv8n pretrained model as fallback")
+                except Exception as e2:
+                    logger.error(f"Failed to load fallback model: {e2}")
+                    yolo_model = None
+                    YOLO_AVAILABLE = False
+        else:
+            # Use pretrained model if custom doesn't exist
+            try:
+                yolo_model = YOLO("yolov8n.pt")
+                logger.info("✅ Using YOLOv8n pretrained model (custom model not found)")
+            except Exception as e:
+                logger.error(f"Failed to load pretrained model: {e}")
+                yolo_model = None
+                YOLO_AVAILABLE = False
+                
     except Exception as e:
         logger.error(f"❌ Failed to load YOLO model: {e}")
         yolo_model = None
         YOLO_AVAILABLE = False
+else:
+    yolo_model = None
+    logger.warning("⚠️ YOLO not available - running without ML detection")
 
-# Try to initialize MediaPipe
+# Try to initialize MediaPipe with better error handling
 if MEDIAPIPE_AVAILABLE:
     try:
         face_mesh = mp.solutions.face_mesh.FaceMesh(
@@ -131,9 +155,14 @@ if MEDIAPIPE_AVAILABLE:
             min_detection_confidence=0.5, 
             min_tracking_confidence=0.5
         )
-        logger.info("✅ MediaPipe initialized successfully")
+        logger.info("✅ MediaPipe Face Mesh initialized successfully")
     except Exception as e:
         logger.error(f"❌ Failed to initialize MediaPipe: {e}")
+        face_mesh = None
+        MEDIAPIPE_AVAILABLE = False
+else:
+    face_mesh = None
+    logger.warning("⚠️ MediaPipe not available - running without face detection")
 
 # ---------- Globals & Locks ----------
 all_snapshots = []
@@ -518,7 +547,7 @@ def handle_frame(message):
     send a smaller JPEG to clients to reduce latency.
     """
     global all_snapshots, notified_snapshots, last_cheating_notification_time
-    global _last_processed_time, _last_face_time
+    global _last_processed_time
 
     # Quick-drop if someone else is processing
     if not frame_lock.acquire(blocking=False):
@@ -543,9 +572,13 @@ def handle_frame(message):
             frame = b64_to_cv2(img_b64)
 
         if frame is None:
+            logger.debug("Frame is None, skipping processing")
             return
 
         original_h, original_w = frame.shape[:2]
+        if original_h <= 0 or original_w <= 0:
+            logger.debug("Invalid frame dimensions, skipping")
+            return
 
         # Resize to a reasonable size for fast model inference
         scale = OUT_IMG_MAX / max(original_h, original_w)
@@ -555,101 +588,156 @@ def handle_frame(message):
         small_h = max(1, int(original_h * scale))
         small = cv2.resize(frame, (small_w, small_h), interpolation=cv2.INTER_LINEAR)
 
-        # Run YOLO on the small image
-        try:
-            # keep imgsz similar to our small width for efficiency
-            results = yolo_model.predict(small, imgsz=min(640, OUT_IMG_MAX), conf=0.50, verbose=False)
-        except Exception as e:
-            logger.exception("YOLO prediction error: %s", e)
-            results = []
-
         detections = []
         cheating_in_frame = False
 
-        if len(results) > 0 and hasattr(results[0], "boxes"):
-            for box in results[0].boxes:
-                try:
-                    # robust extraction: support tensors and plain numbers
-                    if hasattr(box.xyxy, "cpu"):
-                        xyxy = box.xyxy.cpu().numpy().flatten()
-                    else:
-                        xyxy = np.array(box.xyxy).flatten()
-
-                    if hasattr(box.conf, "cpu"):
-                        conf = float(box.conf.cpu().numpy().flatten()[0])
-                    else:
+        # Run YOLO on the small image with proper null checks
+        if YOLO_AVAILABLE and yolo_model is not None:
+            try:
+                # keep imgsz similar to our small width for efficiency
+                results = yolo_model.predict(small, imgsz=min(640, OUT_IMG_MAX), conf=0.50, verbose=False)
+                
+                if results and len(results) > 0 and hasattr(results[0], "boxes") and results[0].boxes is not None:
+                    for box in results[0].boxes:
                         try:
-                            conf = float(box.conf)
-                        except Exception:
-                            conf = 0.0
+                            # robust extraction: support tensors and plain numbers
+                            if hasattr(box.xyxy, "cpu"):
+                                xyxy = box.xyxy.cpu().numpy().flatten()
+                            else:
+                                xyxy = np.array(box.xyxy).flatten()
 
-                    if hasattr(box.cls, "cpu"):
-                        cls = int(box.cls.cpu().numpy().flatten()[0])
-                    else:
-                        try:
-                            cls = int(box.cls)
-                        except Exception:
-                            cls = 0
+                            if len(xyxy) < 4:
+                                continue
 
-                    label = None
-                    try:
-                        label = yolo_model.model.names.get(cls, str(cls)) if hasattr(yolo_model, "model") else str(cls)
-                    except Exception:
-                        label = str(cls)
+                            if hasattr(box.conf, "cpu"):
+                                conf = float(box.conf.cpu().numpy().flatten()[0])
+                            else:
+                                try:
+                                    conf = float(box.conf)
+                                except Exception:
+                                    conf = 0.0
 
-                    # xyxy in small image coords -> map back to small image (we annotate small)
-                    x1, y1, x2, y2 = [int(v) for v in xyxy[:4]]
-                    detections.append((label, conf, (x1, y1, x2, y2)))
-                except Exception:
-                    logger.exception("Failed parsing detection box; skipping.")
-                    continue
+                            if hasattr(box.cls, "cpu"):
+                                cls = int(box.cls.cpu().numpy().flatten()[0])
+                            else:
+                                try:
+                                    cls = int(box.cls)
+                                except Exception:
+                                    cls = 0
+
+                            label = "unknown"
+                            try:
+                                if hasattr(yolo_model, "model") and hasattr(yolo_model.model, "names"):
+                                    label = yolo_model.model.names.get(cls, str(cls))
+                                else:
+                                    label = str(cls)
+                            except Exception:
+                                label = str(cls)
+
+                            # xyxy in small image coords -> map back to small image (we annotate small)
+                            x1, y1, x2, y2 = [max(0, min(int(v), small_w if i % 2 == 0 else small_h)) for i, v in enumerate(xyxy[:4])]
+                            
+                            if x2 > x1 and y2 > y1:  # Valid bounding box
+                                detections.append((label, conf, (x1, y1, x2, y2)))
+                                
+                        except Exception as e:
+                            logger.debug(f"Failed parsing detection box: {e}")
+                            continue
+                            
+            except Exception as e:
+                logger.warning(f"YOLO prediction error: {e}")
+        else:
+            logger.debug("YOLO model not available for this frame")
 
         # Annotate on the small image (faster than annotating full resolution)
         annotated = small.copy()
         for label, conf, (x1, y1, x2, y2) in detections:
-            color = (0, 0, 255) if str(label).lower() == "cheating" else (0, 255, 0)
-            cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
-            if str(label).lower() == "cheating":
-                cheating_in_frame = True
-
-        # MediaPipe face mesh processing for head rotation
-        small_rgb = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
-        results = face_mesh.process(small_rgb)
-        yaw_deg = 0.0
-        if results.multi_face_landmarks:
-            for face_landmarks in results.multi_face_landmarks:
-                yaw = estimate_head_rotation(small_rgb, face_landmarks)
-                yaw_deg = yaw * 180 / 3.14159  # Convert to degrees
-                if abs(yaw_deg) > 25:
+            try:
+                color = (0, 0, 255) if str(label).lower() in ["cheating", "phone", "person"] else (0, 255, 0)
+                cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
+                cv2.putText(annotated, f"{label}: {conf:.2f}", (x1, y1-10), 
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+                if str(label).lower() in ["cheating", "phone"]:
                     cheating_in_frame = True
+            except Exception as e:
+                logger.debug(f"Annotation error: {e}")
+
+        # MediaPipe face mesh processing for head rotation with null checks
+        if MEDIAPIPE_AVAILABLE and face_mesh is not None:
+            try:
+                small_rgb = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
+                results = face_mesh.process(small_rgb)
+                yaw_deg = 0.0
+                if results and results.multi_face_landmarks:
+                    for face_landmarks in results.multi_face_landmarks:
+                        yaw = estimate_head_rotation(small_rgb, face_landmarks)
+                        yaw_deg = yaw * 180 / 3.14159  # Convert to degrees
+                        if abs(yaw_deg) > 25:
+                            cheating_in_frame = True
+                            cv2.putText(annotated, f"Head rotation: {yaw_deg:.1f}°", 
+                                       (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+            except Exception as e:
+                logger.debug(f"MediaPipe processing error: {e}")
+        else:
+            logger.debug("MediaPipe face mesh not available for this frame")
 
         # Save snapshot & DB insert (rate-limit snapshot writes)
         if cheating_in_frame and time.time() - last_cheating_notification_time >= 2:
-            snap_id = str(uuid.uuid4())
-            # save a smaller base64 string (annotated small)
-            _, buf = cv2.imencode(".jpg", annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
-            img_b64_small = base64.b64encode(buf).decode("utf-8")
-            timestamp = datetime.now()
-            epoch_now = time.time()
-            assessment_session_id = session.get("assessment_session_id")
-            snapshot = {"id": snap_id, "image_path": img_b64_small, "timestamp": timestamp.strftime("%Y-%m-%d %I:%M:%S %p"), "epoch": epoch_now}
-            all_snapshots.append(snapshot)
-            notified_snapshots.append(snapshot)
             try:
-                cursor.execute("INSERT INTO detections (id, timestamp, epoch, image_path, assessment_session_id, user_id) VALUES (%s, %s, %s, %s, %s, %s)",
-                               (snap_id, timestamp, epoch_now, img_b64_small, assessment_session_id, session["user_id"]))
-                db.commit()
-            except Exception:
-                db.rollback()
-                logger.exception("DB insert error for snapshot")
-            now_dt = datetime.now()
-            socketio.emit("cheating_notification", {"message": "Possible Cheating detected", "time": now_dt.strftime("%I:%M %p"), "timestamp": now_dt.strftime("%Y-%m-%d %I:%M:%S %p"), "url": f"/cheating/{snap_id}"})
-            last_cheating_notification_time = time.time()
+                snap_id = str(uuid.uuid4())
+                # save a smaller base64 string (annotated small)
+                _, buf = cv2.imencode(".jpg", annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+                img_b64_small = base64.b64encode(buf).decode("utf-8")
+                timestamp = datetime.now()
+                epoch_now = time.time()
+                assessment_session_id = session.get("assessment_session_id")
+                
+                if assessment_session_id and cursor is not None:
+                    snapshot = {
+                        "id": snap_id, 
+                        "image_path": img_b64_small, 
+                        "timestamp": timestamp.strftime("%Y-%m-%d %I:%M:%S %p"), 
+                        "epoch": epoch_now
+                    }
+                    all_snapshots.append(snapshot)
+                    notified_snapshots.append(snapshot)
+                    
+                    cursor.execute(
+                        "INSERT INTO detections (id, timestamp, epoch, image_path, assessment_session_id, user_id) VALUES (%s, %s, %s, %s, %s, %s)",
+                        (snap_id, timestamp, epoch_now, img_b64_small, assessment_session_id, session.get("user_id"))
+                    )
+                    db.commit()
+                    
+                    now_dt = datetime.now()
+                    try:
+                        socketio.emit("cheating_notification", {
+                            "message": "Possible Cheating detected", 
+                            "time": now_dt.strftime("%I:%M %p"), 
+                            "timestamp": now_dt.strftime("%Y-%m-%d %I:%M:%S %p"), 
+                            "url": f"/cheating/{snap_id}"
+                        })
+                    except Exception as e:
+                        logger.debug(f"Socket emit error: {e}")
+                        
+                    last_cheating_notification_time = time.time()
+            except Exception as e:
+                if db:
+                    try:
+                        db.rollback()
+                    except:
+                        pass
+                logger.warning(f"DB insert error for snapshot: {e}")
 
         # Prepare and emit annotated frame back to client (small image to reduce latency)
-        out_b64 = cv2_to_b64(annotated, jpeg_quality=60)
-        if out_b64:
-            emit("response_frame", {"image": out_b64, "cheating": cheating_in_frame})
+        try:
+            out_b64 = cv2_to_b64(annotated, jpeg_quality=60)
+            if out_b64:
+                emit("response_frame", {"image": out_b64, "cheating": cheating_in_frame})
+        except Exception as e:
+            logger.debug(f"Frame emission error: {e}")
+            
+    except Exception as e:
+        logger.error(f"Frame processing error: {e}")
     finally:
         try:
             frame_lock.release()
@@ -945,9 +1033,34 @@ def delete_notification(snap_id):
         logger.exception("delete_notification error: %s", e)
         return jsonify({"success": False, "error": str(e)}), 500
 
+# ---------- Add this helper function for safer database operations:
+
+def get_db_connection():
+    """Get database connection with automatic reconnection"""
+    global db, cursor
+    try:
+        if db is None or not db.is_connected():
+            db = mysql.connector.connect(**DB_CONFIG)
+            cursor = db.cursor(buffered=True)
+            cursor.execute("SET sql_mode = 'STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_BY_ZERO'")
+            logger.info("✅ Database reconnected")
+        return db, cursor
+    except Exception as e:
+        logger.error(f"❌ Database connection failed: {e}")
+        return None, None
+
 # ---------- Run ----------
 if __name__ == "__main__":
-    host = "0.0.0.0"
-    port = 5000
-    logger.info("🚀 Server running at: http://127.0.0.1:%s", port)
-    socketio.run(app, host=host, port=port, debug=True)
+    try:
+        host = "0.0.0.0"
+        port = int(os.environ.get("PORT", 5000))
+        
+        # Log the status of ML models
+        logger.info(f"YOLO Available: {YOLO_AVAILABLE and yolo_model is not None}")
+        logger.info(f"MediaPipe Available: {MEDIAPIPE_AVAILABLE and face_mesh is not None}")
+        
+        logger.info("🚀 Server starting at: http://127.0.0.1:%s", port)
+        socketio.run(app, host=host, port=port, debug=False, log_output=False)
+    except Exception as e:
+        logger.error(f"Failed to start server: {e}")
+        sys.exit(1)
