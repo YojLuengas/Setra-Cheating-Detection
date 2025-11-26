@@ -134,21 +134,22 @@ if MEDIAPIPE_AVAILABLE:
         )
         logger.info("✅ MediaPipe initialized successfully")
     except Exception as e:
+        MEDIAPIPE_AVAILABLE = False
+        face_mesh = None
         logger.error(f"❌ Failed to initialize MediaPipe: {e}")
 
-# Try to import and load Roboflow model
+# Initialize OpenCV face detection as MediaPipe alternative
 try:
-    from roboflow import Roboflow
-    rf = Roboflow(api_key="gokzwVXEayjZ3Nm7QEVX")
-    project = rf.workspace("cheating-detection-6o7xl").project("examdetection-ezdwm")
-    version = project.version(1)
-    roboflow_model = version.model
-    ROBOFLOW_AVAILABLE = True
-    logger.info("✅ Roboflow model loaded successfully")
+    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+    # Test if cascade loaded properly
+    if face_cascade.empty():
+        raise Exception("Failed to load face cascade classifier")
+    OPENCV_FACE_AVAILABLE = True
+    logger.info("✅ OpenCV face detection loaded as MediaPipe alternative")
 except Exception as e:
-    ROBOFLOW_AVAILABLE = False
-    roboflow_model = None
-    logger.error(f"❌ Failed to load Roboflow model: {e}")
+    OPENCV_FACE_AVAILABLE = False
+    face_cascade = None
+    logger.error(f"❌ OpenCV face detection failed: {e}")
 
 # ---------- Globals & Locks ----------
 all_snapshots = []
@@ -533,7 +534,7 @@ def handle_frame(message):
     send a smaller JPEG to clients to reduce latency.
     """
     global all_snapshots, notified_snapshots, last_cheating_notification_time
-    global _last_processed_time, _last_face_time
+    global _last_processed_time
 
     # Quick-drop if someone else is processing
     if not frame_lock.acquire(blocking=False):
@@ -627,16 +628,59 @@ def handle_frame(message):
             if str(label).lower() == "cheating":
                 cheating_in_frame = True
 
-        # MediaPipe face mesh processing for head rotation
-        small_rgb = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
-        results = face_mesh.process(small_rgb)
-        yaw_deg = 0.0
-        if results.multi_face_landmarks:
-            for face_landmarks in results.multi_face_landmarks:
-                yaw = estimate_head_rotation(small_rgb, face_landmarks)
-                yaw_deg = yaw * 180 / 3.14159  # Convert to degrees
-                if abs(yaw_deg) > 25:
-                    cheating_in_frame = True
+        # Face detection processing (MediaPipe or OpenCV fallback)
+        if MEDIAPIPE_AVAILABLE and face_mesh:
+            try:
+                small_rgb = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
+                results = face_mesh.process(small_rgb)
+                yaw_deg = 0.0
+                if results.multi_face_landmarks:
+                    for face_landmarks in results.multi_face_landmarks:
+                        yaw = estimate_head_rotation(small_rgb, face_landmarks)
+                        yaw_deg = yaw * 180 / 3.14159  # Convert to degrees
+                        if abs(yaw_deg) > 25:
+                            cheating_in_frame = True
+                            # Draw head rotation indicator
+                            cv2.putText(annotated, f"Head: {yaw_deg:.1f}°", (10, 30), 
+                                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+            except Exception as e:
+                logger.exception("MediaPipe processing error: %s", e)
+        
+        elif OPENCV_FACE_AVAILABLE and face_cascade is not None:
+            try:
+                # Convert to grayscale for OpenCV face detection
+                gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
+                
+                # Detect faces
+                faces = face_cascade.detectMultiScale(
+                    gray,
+                    scaleFactor=1.1,
+                    minNeighbors=5,
+                    minSize=(30, 30),
+                    flags=cv2.CASCADE_SCALE_IMAGE
+                )
+                
+                # Process detected faces
+                for (x, y, w, h) in faces:
+                    # Draw face rectangle
+                    cv2.rectangle(annotated, (x, y), (x+w, y+h), (255, 0, 0), 2)
+                    
+                    # Estimate head rotation based on face position
+                    yaw_deg = estimate_head_rotation_opencv((x, y, w, h), small_w)
+                    
+                    if abs(yaw_deg) > 20:  # Threshold for suspicious head movement
+                        cheating_in_frame = True
+                        # Draw head position indicator
+                        cv2.putText(annotated, f"Face: {yaw_deg:.1f}°", (10, 30), 
+                                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+                    
+                    # Optional: Add face center point
+                    center_x = x + w // 2
+                    center_y = y + h // 2
+                    cv2.circle(annotated, (center_x, center_y), 3, (0, 255, 255), -1)
+                    
+            except Exception as e:
+                logger.exception("OpenCV face detection error: %s", e)
 
         # Run Roboflow model on the small image
         results = []
@@ -662,6 +706,8 @@ def handle_frame(message):
 
                 color = (0, 0, 255) if label.lower() == "cheating" else (0, 255, 0)
                 cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
+                cv2.putText(annotated, f"RF: {label} {conf:.1f}%", (x1, y1-10), 
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
                 if label.lower() == "cheating":
                     cheating_in_frame = True
             except Exception:
