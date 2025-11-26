@@ -44,13 +44,10 @@ except ImportError:
     ROBOFLOW_AVAILABLE = False
     print("⚠️ Roboflow not available - running without ML detection")
 
-try:
-    import mediapipe as mp
-    MEDIAPIPE_AVAILABLE = True
-    print("✅ MediaPipe available")
-except ImportError:
-    MEDIAPIPE_AVAILABLE = False
-    print("⚠️ MediaPipe not available - running without face detection (Python 3.13 compatibility)")
+# MediaPipe disabled for Python 3.13 compatibility
+MEDIAPIPE_AVAILABLE = False
+face_mesh = None
+logger.info("⚠️ MediaPipe disabled for Python 3.13 compatibility - using Roboflow API only")
 
 import bcrypt
 import logging
@@ -121,7 +118,6 @@ except Exception as e:
 # ---------- Models / ML ----------
 # ---------- Roboflow API Setup ----------
 roboflow_model = None
-face_mesh = None
 
 def setup_roboflow():
     """Initialize Roboflow model with environment variables"""
@@ -207,21 +203,6 @@ if ROBOFLOW_AVAILABLE:
 else:
     roboflow_model = None
 
-# Try to initialize MediaPipe
-if MEDIAPIPE_AVAILABLE:
-    try:
-        face_mesh = mp.solutions.face_mesh.FaceMesh(
-            max_num_faces=1, 
-            refine_landmarks=True, 
-            min_detection_confidence=0.5, 
-            min_tracking_confidence=0.5
-        )
-        logger.info("✅ MediaPipe initialized successfully")
-    except Exception as e:
-        logger.error(f"❌ Failed to initialize MediaPipe: {e}")
-        face_mesh = None
-        MEDIAPIPE_AVAILABLE = False
-
 # ---------- Globals & Locks ----------
 all_snapshots = []
 notified_snapshots = []
@@ -236,6 +217,8 @@ frame_lock = Lock()
 PROCESS_INTERVAL = 0.50       # seconds between heavy processing runs (≈10 FPS)
 OUT_IMG_MAX = 640            # send this max width for annotated frames
 _last_processed_time = 0.0
+_last_roboflow_call = 0.0
+ROBOFLOW_MIN_INTERVAL = 1.0   # seconds between Roboflow API calls
 
 # ---------- Helpers ----------
 def b64_to_cv2(data_b64):
@@ -675,16 +658,22 @@ def handle_frame(message):
         detections = []
         cheating_in_frame = False
 
-        # Run Roboflow prediction on the small image
+        # Run Roboflow prediction on the small image with rate limiting
         if ROBOFLOW_AVAILABLE and roboflow_model is not None:
             try:
-                logger.debug("Running Roboflow prediction...")
-                detections = predict_with_roboflow(small, confidence=0.5)
-                
-                if detections:
-                    logger.debug(f"Roboflow detected {len(detections)} objects")
+                # Rate limit Roboflow API calls
+                global _last_roboflow_call
+                if time.time() - _last_roboflow_call >= ROBOFLOW_MIN_INTERVAL:
+                    logger.debug("Running Roboflow prediction...")
+                    detections = predict_with_roboflow(small, confidence=0.5)
+                    _last_roboflow_call = time.time()
+                    
+                    if detections:
+                        logger.debug(f"Roboflow detected {len(detections)} objects")
+                    else:
+                        logger.debug("No Roboflow detections found")
                 else:
-                    logger.debug("No Roboflow detections found")
+                    logger.debug("Roboflow API rate limited, skipping this frame")
                             
             except Exception as e:
                 logger.warning(f"Roboflow prediction error: {e}")
