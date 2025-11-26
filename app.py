@@ -454,6 +454,7 @@ def create_assessment_session():
     session.pop("assessment_session_id", None)
     data = request.get_json(silent=True) or {}
     try:
+        # Insert assessment session
         cursor.execute(
             """
             INSERT INTO assessment_sessions
@@ -471,17 +472,28 @@ def create_assessment_session():
             ),
         )
         assessment_session_id = cursor.lastrowid
+        
+        # Create folder name
         folder_name = f"{data.get('course', '').replace(' ', '_')}_{data.get('subject', '').replace(' ', '_')}_{data.get('exam_type', '').replace(' ', '_')}_{str(uuid.uuid4())[:8]}"
+        
+        # Insert records entry
         cursor.execute(
             "INSERT INTO records (assessment_session_id, user_id, folder_name, created_at) VALUES (%s, %s, %s, %s)",
             (assessment_session_id, session["user_id"], folder_name, datetime.now())
         )
+        
         db.commit()
+        logger.info(f"✅ Created assessment session {assessment_session_id} with folder {folder_name}")
+        
+        # Clear global variables
         global all_snapshots, notified_snapshots, last_cheating_notification_time
         all_snapshots = []
         notified_snapshots = []
         last_cheating_notification_time = 0
+        
+        # Store session ID
         session["assessment_session_id"] = assessment_session_id
+        
         return jsonify({"success": True, "message": "Assessment session created successfully!"})
     except Exception as e:
         db.rollback()
@@ -567,6 +579,12 @@ def handle_frame(message):
         if frame is None:
             return
 
+        # Check if we have an active assessment session
+        assessment_session_id = session.get("assessment_session_id")
+        if not assessment_session_id:
+            logger.warning("No active assessment session - skipping detection")
+            return
+
         original_h, original_w = frame.shape[:2]
 
         # Resize to a reasonable size for fast model inference
@@ -577,13 +595,15 @@ def handle_frame(message):
         small_h = max(1, int(original_h * scale))
         small = cv2.resize(frame, (small_w, small_h), interpolation=cv2.INTER_LINEAR)
 
-        # Run YOLO on the small image
-        try:
-            # keep imgsz similar to our small width for efficiency
-            results = yolo_model.predict(small, imgsz=min(640, OUT_IMG_MAX), conf=0.50, verbose=False)
-        except Exception as e:
-            logger.exception("YOLO prediction error: %s", e)
-            results = []
+        # Run YOLO on the small image (only if model is available)
+        results = []
+        if yolo_model:
+            try:
+                # keep imgsz similar to our small width for efficiency
+                results = yolo_model.predict(small, imgsz=min(640, OUT_IMG_MAX), conf=0.50, verbose=False)
+            except Exception as e:
+                logger.exception("YOLO prediction error: %s", e)
+                results = []
 
         detections = []
         cheating_in_frame = False
@@ -654,25 +674,49 @@ def handle_frame(message):
             img_b64_small = base64.b64encode(buf).decode("utf-8")
             timestamp = datetime.now()
             epoch_now = time.time()
-            assessment_session_id = session.get("assessment_session_id")
-            snapshot = {"id": snap_id, "image_path": img_b64_small, "timestamp": timestamp.strftime("%Y-%m-%d %I:%M:%S %p"), "epoch": epoch_now}
+            
+            # Create snapshot object
+            snapshot = {
+                "id": snap_id, 
+                "image_path": img_b64_small, 
+                "timestamp": timestamp.strftime("%Y-%m-%d %I:%M:%S %p"), 
+                "epoch": epoch_now
+            }
+            
+            # Add to memory collections
             all_snapshots.append(snapshot)
             notified_snapshots.append(snapshot)
+            
+            # Save to database immediately
             try:
-                cursor.execute("INSERT INTO detections (id, timestamp, epoch, image_path, assessment_session_id, user_id) VALUES (%s, %s, %s, %s, %s, %s)",
-                               (snap_id, timestamp, epoch_now, img_b64_small, assessment_session_id, session["user_id"]))
+                cursor.execute(
+                    "INSERT INTO detections (id, timestamp, epoch, image_path, assessment_session_id, user_id) VALUES (%s, %s, %s, %s, %s, %s)",
+                    (snap_id, timestamp, epoch_now, img_b64_small, assessment_session_id, session["user_id"])
+                )
                 db.commit()
-            except Exception:
+                logger.info(f"✅ Saved detection {snap_id} to database")
+            except Exception as e:
                 db.rollback()
-                logger.exception("DB insert error for snapshot")
+                logger.exception("❌ DB insert error for snapshot: %s", e)
+            
+            # Emit notification
             now_dt = datetime.now()
-            socketio.emit("cheating_notification", {"message": "Possible Cheating detected", "time": now_dt.strftime("%I:%M %p"), "timestamp": now_dt.strftime("%Y-%m-%d %I:%M:%S %p"), "url": f"/cheating/{snap_id}"})
+            socketio.emit("cheating_notification", {
+                "message": "Possible Cheating detected", 
+                "time": now_dt.strftime("%I:%M %p"), 
+                "timestamp": now_dt.strftime("%Y-%m-%d %I:%M:%S %p"), 
+                "url": f"/cheating/{snap_id}"
+            })
+            
             last_cheating_notification_time = time.time()
 
         # Prepare and emit annotated frame back to client (small image to reduce latency)
         out_b64 = cv2_to_b64(annotated, jpeg_quality=60)
         if out_b64:
             emit("response_frame", {"image": out_b64, "cheating": cheating_in_frame, "camera": camera_index})
+            
+    except Exception as e:
+        logger.exception("handle_frame error: %s", e)
     finally:
         try:
             frame_lock.release()
