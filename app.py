@@ -44,10 +44,16 @@ except ImportError:
     ROBOFLOW_AVAILABLE = False
     print("⚠️ Roboflow not available - running without ML detection")
 
-# Force disable MediaPipe for Python 3.13 compatibility
+# Try to import MediaPipe
 MEDIAPIPE_AVAILABLE = False
 face_mesh = None
-print("⚠️ MediaPipe disabled for Python 3.13 compatibility - using Roboflow API only")
+try:
+    import mediapipe as mp
+    MEDIAPIPE_AVAILABLE = True
+    print("✅ MediaPipe available")
+except ImportError:
+    MEDIAPIPE_AVAILABLE = False
+    print("⚠️ MediaPipe not available - running without face detection")
 
 import bcrypt
 import logging
@@ -118,7 +124,7 @@ except Exception as e:
 roboflow_model = None
 
 def setup_roboflow():
-    """Initialize Roboflow model with environment variables and debug info"""
+    """Initialize Roboflow model with environment variables"""
     try:
         if not ROBOFLOW_AVAILABLE:
             logger.warning("⚠️ Roboflow not available")
@@ -130,74 +136,39 @@ def setup_roboflow():
         project_name = os.environ.get('ROBOFLOW_PROJECT', 'examdetection-ezdwm')
         version_num = int(os.environ.get('ROBOFLOW_VERSION', '1'))
         
-        logger.info(f"🔧 Roboflow config:")
-        logger.info(f"   API Key: {'***' + api_key[-4:] if api_key else 'None'}")
-        logger.info(f"   Workspace: {workspace}")
-        logger.info(f"   Project: {project_name}")
-        logger.info(f"   Version: {version_num}")
-        
         if not api_key:
             logger.error("❌ ROBOFLOW_API_KEY not found in environment variables")
             return None
         
         # Initialize Roboflow
-        logger.info("🚀 Initializing Roboflow connection...")
         rf = Roboflow(api_key=api_key)
         project = rf.workspace(workspace).project(project_name)
         version = project.version(version_num)
         model = version.model
         
-        # Test the model with a dummy prediction
-        logger.info("🧪 Testing Roboflow model...")
-        
-        logger.info(f"✅ Roboflow model initialized successfully: {workspace}/{project_name}/v{version_num}")
+        logger.info(f"✅ Roboflow model initialized: {workspace}/{project_name}/v{version_num}")
         return model
         
     except Exception as e:
         logger.error(f"❌ Failed to initialize Roboflow: {e}")
-        import traceback
-        logger.error(f"Traceback: {traceback.format_exc()}")
         return None
 
-def predict_with_roboflow(image, confidence=0.3):
-    """Make prediction using Roboflow API with better image quality"""
+def predict_with_roboflow(image, confidence=0.5):
+    """Make prediction using Roboflow API with rate limiting"""
     if not roboflow_model:
         return []
     
     try:
-        # Better image preprocessing for API
-        h, w = image.shape[:2]
-        
-        # Increase max size for better detection accuracy
-        max_size = 480  # Larger for better detection
-        if max(h, w) > max_size:
-            scale = max_size / max(h, w)
-            new_w = int(w * scale)
-            new_h = int(h * scale)
-            # Use better interpolation
-            image = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_CUBIC)
-        
-        # Better JPEG encoding with higher quality
-        _, buffer = cv2.imencode('.jpg', image, [
-            int(cv2.IMWRITE_JPEG_QUALITY), 85,  # Higher quality
-            int(cv2.IMWRITE_JPEG_OPTIMIZE), 1
-        ])
+        # Convert OpenCV image to base64 for API
+        _, buffer = cv2.imencode('.jpg', image, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
         img_b64 = base64.b64encode(buffer).decode('utf-8')
         
-        # More lenient size limit for better detection
-        max_size_bytes = 800000  # 800KB limit
-        if len(img_b64) > max_size_bytes:
-            # Try with lower quality if too large
-            _, buffer = cv2.imencode('.jpg', image, [
-                int(cv2.IMWRITE_JPEG_QUALITY), 70
-            ])
-            img_b64 = base64.b64encode(buffer).decode('utf-8')
-            
-            if len(img_b64) > max_size_bytes:
-                logger.warning(f"Image still too large ({len(img_b64)} bytes), skipping")
-                return []
+        # Validate base64 length to avoid "File name too long" error
+        if len(img_b64) > 1000000:  # 1MB limit
+            logger.warning("Image too large for Roboflow API, skipping")
+            return []
         
-        # Make prediction with lower confidence for better detection
+        # Make prediction with confidence threshold (0-100 for Roboflow)
         prediction = roboflow_model.predict(img_b64, confidence=int(confidence*100))
         
         detections = []
@@ -211,19 +182,23 @@ def predict_with_roboflow(image, confidence=0.3):
                     y2 = int(pred['y'] + pred['height']/2)
                     
                     label = pred['class']
-                    conf = pred['confidence'] / 100.0
+                    conf = pred['confidence'] / 100.0  # Convert back to 0-1 range
                     
                     detections.append((label, conf, (x, y, x2, y2)))
-                    logger.info(f"🔍 Detected: {label} (confidence: {conf:.2f})")
                 except Exception as e:
                     logger.debug(f"Error parsing prediction: {e}")
                     continue
                 
-        logger.info(f"Roboflow API returned {len(detections)} detections")
+        logger.debug(f"Roboflow detected {len(detections)} objects")
         return detections
         
     except Exception as e:
-        logger.error(f"Roboflow prediction error: {e}")
+        logger.warning(f"Roboflow prediction error: {e}")
+        # Check if it's a rate limit error
+        if "rate limit" in str(e).lower() or "429" in str(e) or "quota" in str(e).lower():
+            logger.warning("⚠️ Roboflow rate limit reached, skipping frame")
+        elif "file name too long" in str(e).lower():
+            logger.warning("⚠️ Image data too large for Roboflow API")
         return []
 
 # Initialize Roboflow model
@@ -231,6 +206,26 @@ if ROBOFLOW_AVAILABLE:
     roboflow_model = setup_roboflow()
 else:
     roboflow_model = None
+
+# Initialize MediaPipe
+if MEDIAPIPE_AVAILABLE:
+    try:
+        mp_face_mesh = mp.solutions.face_mesh
+        face_mesh = mp_face_mesh.FaceMesh(
+            static_image_mode=False,
+            max_num_faces=1,
+            refine_landmarks=False,
+            min_detection_confidence=0.7,
+            min_tracking_confidence=0.5
+        )
+        logger.info("✅ MediaPipe FaceMesh initialized")
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize MediaPipe: {e}")
+        MEDIAPIPE_AVAILABLE = False
+        face_mesh = None
+else:
+    face_mesh = None
+    logger.info("⚠️ MediaPipe not available - skipping face detection")
 
 # ---------- Globals & Locks ----------
 all_snapshots = []
@@ -615,54 +610,58 @@ def default_error_handler(e):
 @socketio.on("frame")
 def handle_frame(message):
     """
-    Process incoming frames with improved detection and quality
+    Process incoming frames with Roboflow API integration
     """
     global all_snapshots, notified_snapshots, last_cheating_notification_time
     global _last_processed_time, _last_roboflow_call
 
-    # Non-blocking lock attempt
+    # Quick-drop if someone else is processing
     if not frame_lock.acquire(blocking=False):
         return
 
     try:
         now = time.time()
-        # Less aggressive throttling for better detection
-        if now - _last_processed_time < 0.8:  # Reduced from 1.0 to 0.8 seconds
+        # Throttle heavy processing to avoid backlog / lag
+        if now - _last_processed_time < PROCESS_INTERVAL:
             return
 
         _last_processed_time = now
 
         # Validate message
         if not message:
+            logger.debug("Empty message received")
             return
 
-        # Process frame
+        # Expect binary data directly
         frame = None
         if isinstance(message, bytes):
             frame = process_binary_image(message)
         else:
+            # If not binary, assume base64 string for backward compatibility
             img_b64 = message
             if not img_b64:
+                logger.debug("Empty base64 string")
                 return
             frame = b64_to_cv2(img_b64)
 
         if frame is None:
+            logger.debug("Failed to decode frame")
             return
 
         original_h, original_w = frame.shape[:2]
         if original_h <= 0 or original_w <= 0:
+            logger.debug(f"Invalid frame dimensions: {original_w}x{original_h}")
             return
 
-        # Better size reduction with higher quality
+        # Resize to a reasonable size for Roboflow API efficiency
         try:
-            max_dimension = 400  # Increased for better detection
+            max_dimension = min(OUT_IMG_MAX, 480)  # Max 480px for API efficiency
             scale = max_dimension / max(original_h, original_w)
-            if scale > 1.0:
+            if scale > 1.0:  # Don't upscale
                 scale = 1.0
-            small_w = max(200, int(original_w * scale))
-            small_h = max(150, int(original_h * scale))
-            # Use better interpolation
-            small = cv2.resize(frame, (small_w, small_h), interpolation=cv2.INTER_CUBIC)
+            small_w = max(160, int(original_w * scale))  # Minimum 160px width
+            small_h = max(120, int(original_h * scale))  # Minimum 120px height
+            small = cv2.resize(frame, (small_w, small_h), interpolation=cv2.INTER_LINEAR)
         except Exception as e:
             logger.error(f"Frame resize error: {e}")
             return
@@ -670,139 +669,153 @@ def handle_frame(message):
         detections = []
         cheating_in_frame = False
 
-        # Run Roboflow prediction with better rate limiting
+        # Run Roboflow prediction on the small image with rate limiting
         if ROBOFLOW_AVAILABLE and roboflow_model is not None:
             try:
-                # Better rate limiting - 1.5 seconds between calls
-                if time.time() - _last_roboflow_call >= 1.5:
-                    logger.info("🤖 Running Roboflow prediction...")
-                    detections = predict_with_roboflow(small, confidence=0.3)  # Lower confidence
+                # Rate limit Roboflow API calls
+                if time.time() - _last_roboflow_call >= ROBOFLOW_MIN_INTERVAL:
+                    logger.debug("Running Roboflow prediction...")
+                    detections = predict_with_roboflow(small, confidence=0.5)
                     _last_roboflow_call = time.time()
                     
                     if detections:
-                        logger.info(f"✅ Roboflow detected {len(detections)} objects")
-                        for label, conf, _ in detections:
-                            logger.info(f"   - {label}: {conf:.2f}")
+                        logger.debug(f"Roboflow detected {len(detections)} objects")
                     else:
-                        logger.info("⚠️ No Roboflow detections found")
+                        logger.debug("No Roboflow detections found")
                 else:
-                    logger.debug("⏱️ Roboflow API rate limited, skipping this frame")
+                    logger.debug("Roboflow API rate limited, skipping this frame")
                             
             except Exception as e:
-                logger.error(f"❌ Roboflow prediction error: {e}")
+                logger.warning(f"Roboflow prediction error: {e}")
                 detections = []
         else:
-            logger.warning("❌ Roboflow model not available")
+            logger.debug("Roboflow model not available - skipping object detection")
 
-        # Enhanced annotation with better quality
+        # Annotate on the small image
         try:
             annotated = small.copy()
             for label, conf, (x1, y1, x2, y2) in detections:
                 try:
-                    # Enhanced cheating detection - add more comprehensive classes
+                    # Enhanced cheating detection classes for Roboflow
                     cheating_classes = [
+                        # Device detection
                         "phone", "mobile", "cellphone", "smartphone", "device", "tablet",
-                        "paper", "notes", "cheat_sheet", "book", "document", "writing",
-                        "person", "people", "face", "head", "multiple_person",
-                        "cheating", "suspicious", "looking_away", "head_turn",
-                        "calculator", "computer", "laptop", "keyboard", "mouse"
+                        
+                        # Paper/written materials
+                        "paper", "notes", "cheat_sheet", "book", "document",
+                        
+                        # People detection
+                        "person", "multiple_person", "face", "head",
+                        
+                        # Behavioral indicators your model might detect
+                        "looking_away", "head_turn", "suspicious", "cheating",
+                        
+                        # Objects that shouldn't be there
+                        "calculator", "computer", "laptop", "keyboard"
                     ]
                     
-                    # Check if detected class matches cheating indicators
-                    label_lower = str(label).lower()
-                    is_cheating = any(cls in label_lower for cls in cheating_classes)
+                    is_cheating = str(label).lower() in cheating_classes
+                    color = (0, 0, 255) if is_cheating else (0, 255, 0)
                     
-                    # Also check for high confidence detections of any object (could be suspicious)
-                    if conf > 0.7:  # High confidence detection
-                        is_cheating = True
-                        logger.info(f"🚨 High confidence detection: {label} ({conf:.2f}) - marking as suspicious")
+                    # Ensure coordinates are within image bounds
+                    x1 = max(0, min(int(x1), small_w-1))
+                    y1 = max(0, min(int(y1), small_h-1))
+                    x2 = max(0, min(int(x2), small_w-1))
+                    y2 = max(0, min(int(y2), small_h-1))
                     
-                    if is_cheating:
-                        cheating_in_frame = True
-                        color = (0, 0, 255)  # Red for cheating
-                        thickness = 3
-                        logger.warning(f"🚨 CHEATING DETECTED: {label} (confidence: {conf:.2f})")
-                    else:
-                        color = (0, 255, 0)  # Green for normal
-                        thickness = 2
-                    
-                    # Better annotation
-                    x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
-                    cv2.rectangle(annotated, (x1, y1), (x2, y2), color, thickness)
-                    
-                    # Add text with background for better visibility
-                    label_text = f"{label}: {conf:.2f}"
-                    text_size = cv2.getTextSize(label_text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)[0]
-                    cv2.rectangle(annotated, (x1, y1-text_size[1]-10), (x1+text_size[0], y1), color, -1)
-                    cv2.putText(annotated, label_text, (x1, y1-5), 
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
-                    
+                    if x2 > x1 and y2 > y1:  # Valid bounding box
+                        cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
+                        cv2.putText(annotated, f"{label}: {conf:.2f}", (x1, max(y1-10, 10)), 
+                                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+                        
+                        if is_cheating:
+                            cheating_in_frame = True
+                            logger.info(f"🚨 Cheating detected: {label} (confidence: {conf:.2f})")
+                        
                 except Exception as e:
                     logger.debug(f"Annotation error for detection: {e}")
                     continue
         except Exception as e:
             logger.error(f"Annotation processing error: {e}")
-            annotated = small.copy()
+            annotated = small.copy()  # Use unmodified frame as fallback
 
-        # Save snapshot with better quality if cheating detected
-        if cheating_in_frame and time.time() - last_cheating_notification_time >= 2:  # Reduced to 2 seconds
+        # Save snapshot & DB insert (rate-limit snapshot writes)
+        if cheating_in_frame and time.time() - last_cheating_notification_time >= 2:
             try:
+                # Ensure database connection is alive
+                current_db, current_cursor = get_db_connection()
+                if not current_db or not current_cursor:
+                    logger.error("Database not available for snapshot save")
+                    return
+
+                snap_id = str(uuid.uuid4())
+                
+                # Save annotated image as base64
+                _, buf = cv2.imencode(".jpg", annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+                img_b64_small = base64.b64encode(buf).decode("utf-8")
+                
+                timestamp = datetime.now()
+                epoch_now = time.time()
                 assessment_session_id = session.get("assessment_session_id")
-                if assessment_session_id and cursor:
-                    snap_id = str(uuid.uuid4())
+                
+                if assessment_session_id:
+                    snapshot = {
+                        "id": snap_id, 
+                        "image_path": img_b64_small, 
+                        "timestamp": timestamp.strftime("%Y-%m-%d %I:%M:%S %p"), 
+                        "epoch": epoch_now
+                    }
+                    all_snapshots.append(snapshot)
+                    notified_snapshots.append(snapshot)
                     
-                    # Save with better quality for evidence
-                    _, buf = cv2.imencode(".jpg", annotated, [
-                        int(cv2.IMWRITE_JPEG_QUALITY), 75  # Better quality for evidence
-                    ])
-                    img_b64_small = base64.b64encode(buf).decode("utf-8")
-                    
-                    timestamp = datetime.now()
-                    epoch_now = time.time()
-                    
-                    # Database insert
-                    cursor.execute(
+                    current_cursor.execute(
                         "INSERT INTO detections (id, timestamp, epoch, image_path, assessment_session_id, user_id) VALUES (%s, %s, %s, %s, %s, %s)",
                         (snap_id, timestamp, epoch_now, img_b64_small, assessment_session_id, session.get("user_id"))
                     )
-                    db.commit()
+                    current_db.commit()
                     
-                    # Socket notification
-                    socketio.emit("cheating_notification", {
-                        "message": "Possible Cheating detected", 
-                        "time": timestamp.strftime("%I:%M %p"), 
-                        "timestamp": timestamp.strftime("%Y-%m-%d %I:%M:%S %p"), 
-                        "url": f"/cheating/{snap_id}"
-                    })
-                    
+                    # Emit notification
+                    now_dt = datetime.now()
+                    try:
+                        socketio.emit("cheating_notification", {
+                            "message": "Possible Cheating detected", 
+                            "time": now_dt.strftime("%I:%M %p"), 
+                            "timestamp": now_dt.strftime("%Y-%m-%d %I:%M:%S %p"), 
+                            "url": f"/cheating/{snap_id}"
+                        })
+                    except Exception as e:
+                        logger.debug(f"Socket emit error: {e}")
+                        
                     last_cheating_notification_time = time.time()
-                    logger.info(f"💾 Cheating snapshot saved: {snap_id}")
+                else:
+                    logger.debug("No assessment session ID - skipping snapshot save")
                     
             except Exception as e:
-                logger.error(f"Database error: {e}")
-                try:
-                    db.rollback()
-                except:
-                    pass
+                if 'current_db' in locals() and current_db:
+                    try:
+                        current_db.rollback()
+                    except:
+                        pass
+                logger.error(f"DB insert error for snapshot: {e}")
 
-        # Send response with better quality
+        # Prepare and emit annotated frame back to client
         try:
-            out_b64 = cv2_to_b64(annotated, jpeg_quality=70)  # Better quality for display
+            out_b64 = cv2_to_b64(annotated, jpeg_quality=60)
             if out_b64:
                 emit("response_frame", {"image": out_b64, "cheating": cheating_in_frame})
             else:
-                logger.warning("Failed to encode output frame")
+                logger.debug("Failed to encode output frame")
         except Exception as e:
             logger.error(f"Frame emission error: {e}")
             
     except Exception as e:
-        logger.error(f"Frame processing error: {e}")
+        logger.error(f"Fatal frame processing error: {e}")
         import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
     finally:
         try:
             frame_lock.release()
-        except:
+        except Exception:
             pass
 
 # ---------- UI / Snapshot routes ----------
@@ -1108,6 +1121,14 @@ if __name__ == "__main__":
         logger.info(f"Roboflow Available: {ROBOFLOW_AVAILABLE and roboflow_model is not None}")
         logger.info(f"MediaPipe Available: {MEDIAPIPE_AVAILABLE and face_mesh is not None}")
         logger.info(f"Database Available: {db is not None and cursor is not None}")
+        
+        # Log detection capabilities
+        if ROBOFLOW_AVAILABLE and roboflow_model is not None:
+            logger.info("🔍 Object detection: Roboflow API")
+        if MEDIAPIPE_AVAILABLE and face_mesh is not None:
+            logger.info("👤 Face detection: MediaPipe FaceMesh")
+        if not (ROBOFLOW_AVAILABLE or MEDIAPIPE_AVAILABLE):
+            logger.warning("⚠️ No ML detection available!")
         
         logger.info(f"🚀 Server starting on {host}:{port}")
         
