@@ -115,7 +115,7 @@ if YOLO_AVAILABLE:
             'ultralytics.nn.modules.Detect'
         ])
         
-        yolo_model = YOLO("models/yolov8.pt")
+        yolo_model = YOLO("models/best.pt")
         logger.info("✅ YOLO model loaded successfully")
     except Exception as e:
         logger.error(f"❌ Failed to load YOLO model: {e}")
