@@ -103,42 +103,11 @@ yolo_model = None
 face_mesh = None
 
 # Try to load YOLO model
-if YOLO_AVAILABLE:
-    try:
-        # Check if custom model exists
-        custom_model_path = "models/best.pt"
-        
-        if os.path.exists(custom_model_path):
-            try:
-                yolo_model = YOLO(custom_model_path)
-                logger.info("✅ Custom YOLO model loaded successfully")
-            except Exception as e:
-                logger.warning(f"Failed to load custom model: {e}")
-                # Fall back to pretrained model
-                yolo_model = YOLO("yolov8n.pt")
-                logger.info("✅ Using YOLOv8n pretrained model as fallback")
-        else:
-            # Use pretrained model if custom doesn't exist
-            yolo_model = YOLO("yolov8n.pt")
-            logger.info("✅ Using YOLOv8n pretrained model (custom model not found)")
-            
-    except Exception as e:
-        logger.error(f"❌ Failed to load YOLO model: {e}")
-        yolo_model = None
-        YOLO_AVAILABLE = False
+# Update path as required
+yolo_model = YOLO("models/yolov8n.pt")
 
-# Try to initialize MediaPipe
-if MEDIAPIPE_AVAILABLE:
-    try:
-        face_mesh = mp.solutions.face_mesh.FaceMesh(
-            max_num_faces=1, 
-            refine_landmarks=True, 
-            min_detection_confidence=0.5, 
-            min_tracking_confidence=0.5
-        )
-        logger.info("✅ MediaPipe initialized successfully")
-    except Exception as e:
-        logger.error(f"❌ Failed to initialize MediaPipe: {e}")
+# Initialize MediaPipe Face Mesh
+face_mesh = mp.solutions.face_mesh.FaceMesh(max_num_faces=1, refine_landmarks=True, min_detection_confidence=0.5, min_tracking_confidence=0.5)
 
 # ---------- Globals & Locks ----------
 all_snapshots = []
