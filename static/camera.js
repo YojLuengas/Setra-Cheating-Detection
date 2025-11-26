@@ -114,49 +114,35 @@ function showTemporaryStatus(message, duration = 3000) {
 }
 
 
-function captureFrame(videoElement) {
-  return new Promise((resolve) => {
-    const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d");
-    
-    // Better canvas size for detection
-    const maxWidth = 480;  // Increased for better detection
-    const maxHeight = 360;
-    
-    let { videoWidth, videoHeight } = videoElement;
-    
-    // Calculate scale to fit within max dimensions
-    const scale = Math.min(maxWidth / videoWidth, maxHeight / videoHeight);
-    
-    canvas.width = Math.floor(videoWidth * scale);
-    canvas.height = Math.floor(videoHeight * scale);
-    
-    ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
-    
-    // Better quality JPEG
-    canvas.toBlob((blob) => {
-      if (blob) {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.readAsArrayBuffer(blob);
-      } else {
-        resolve(null);
-      }
-    }, 'image/jpeg', 0.8); // Higher quality (0.8 instead of 0.6)
-  });
-}
-
 async function sendLoop(videoElement) {
   while (sending) {
     if (videoElement.readyState >= 2 && videoElement.videoWidth > 0) {
       const frameBuffer = await captureFrame(videoElement);
-      if (frameBuffer && frameBuffer.byteLength > 100) {
+      if (frameBuffer && frameBuffer.byteLength > 100) {  // Basic check for valid binary data
         emitFrame(frameBuffer);
       }
     }
-    // Better frame rate for detection - 2 FPS
-    await new Promise(r => setTimeout(r, 500)); // 500ms = 2 FPS
+    // Increased frequency to ~30 FPS to reduce lag (100ms -> 33ms)
+    await new Promise(r => setTimeout(r, 230));
   }
+}
+
+function captureFrame(videoElement) {
+  return new Promise((resolve) => {
+    canvas.width = 800;
+    canvas.height = 720;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(videoElement, 0, 0, 800, 720);
+    canvas.toBlob((blob) => {
+      if (blob) {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result); // ArrayBuffer
+        reader.readAsArrayBuffer(blob);
+      } else {
+        resolve(null);
+      }
+    }, 'image/jpeg', 0.6);
+  });
 }
 
 document.addEventListener("DOMContentLoaded", () => {
