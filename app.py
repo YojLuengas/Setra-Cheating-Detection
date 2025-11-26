@@ -90,6 +90,21 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Database connection with error handling
+def get_db_connection():
+    """Get database connection with automatic reconnection"""
+    global db, cursor
+    try:
+        if db is None or not db.is_connected():
+            db = mysql.connector.connect(**DB_CONFIG)
+            cursor = db.cursor(buffered=True)
+            cursor.execute("SET sql_mode = 'STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO'")
+            logger.info("✅ Database reconnected")
+        return db, cursor
+    except Exception as e:
+        logger.error(f"❌ Database connection failed: {e}")
+        return None, None
+
+# Update database connection with retry logic
 try:
     db = mysql.connector.connect(**DB_CONFIG)
     cursor = db.cursor(buffered=True)
@@ -109,19 +124,29 @@ roboflow_model = None
 face_mesh = None
 
 def setup_roboflow():
-    """Initialize Roboflow model"""
+    """Initialize Roboflow model with environment variables"""
     try:
         if not ROBOFLOW_AVAILABLE:
             logger.warning("⚠️ Roboflow not available")
             return None
         
-        # Initialize Roboflow with your API key
-        rf = Roboflow(api_key="gokzwVXEayjZ3Nm7QEVX")
-        project = rf.workspace("cheating-detection-6o7xl").project("examdetection-ezdwm")
-        version = project.version(1)
+        # Get credentials from environment variables with fallback
+        api_key = os.environ.get('ROBOFLOW_API_KEY', 'gokzwVXEayjZ3Nm7QEVX')
+        workspace = os.environ.get('ROBOFLOW_WORKSPACE', 'cheating-detection-6o7xl')
+        project_name = os.environ.get('ROBOFLOW_PROJECT', 'examdetection-ezdwm')
+        version_num = int(os.environ.get('ROBOFLOW_VERSION', '1'))
+        
+        if not api_key:
+            logger.error("❌ ROBOFLOW_API_KEY not found in environment variables")
+            return None
+        
+        # Initialize Roboflow
+        rf = Roboflow(api_key=api_key)
+        project = rf.workspace(workspace).project(project_name)
+        version = project.version(version_num)
         model = version.model
         
-        logger.info("✅ Roboflow model initialized successfully")
+        logger.info(f"✅ Roboflow model initialized: {workspace}/{project_name}/v{version_num}")
         return model
         
     except Exception as e:
@@ -556,14 +581,29 @@ def stop_assessment():
 # ---------- SocketIO frame handler ----------
 @socketio.on("connect")
 def on_connect():
-    emit("connected", {"data": "ready"})
+    try:
+        logger.info(f"Client connected: {request.sid}")
+        emit("connected", {"data": "ready"})
+    except Exception as e:
+        logger.error(f"Connect error: {e}")
+
+@socketio.on("disconnect")
+def on_disconnect():
+    try:
+        logger.info(f"Client disconnected: {request.sid}")
+    except Exception as e:
+        logger.error(f"Disconnect error: {e}")
+
+@socketio.on_error()
+def error_handler(e):
+    logger.error(f"SocketIO error: {e}")
+    import traceback
+    logger.error(f"Traceback: {traceback.format_exc()}")
 
 @socketio.on("frame")
 def handle_frame(message):
     """
-    Process incoming frames but throttle to PROCESS_INTERVAL and do
-    face mesh less frequently. Annotate on the downscaled image and
-    send a smaller JPEG to clients to reduce latency.
+    Process incoming frames with comprehensive error handling
     """
     global all_snapshots, notified_snapshots, last_cheating_notification_time
     global _last_processed_time
@@ -580,30 +620,43 @@ def handle_frame(message):
 
         _last_processed_time = now
 
+        # Validate message
+        if not message:
+            logger.debug("Empty message received")
+            return
+
         # Expect binary data directly
+        frame = None
         if isinstance(message, bytes):
             frame = process_binary_image(message)
         else:
             # If not binary, assume base64 string for backward compatibility
             img_b64 = message
             if not img_b64:
+                logger.debug("Empty base64 string")
                 return
             frame = b64_to_cv2(img_b64)
 
         if frame is None:
+            logger.debug("Failed to decode frame")
             return
 
         original_h, original_w = frame.shape[:2]
         if original_h <= 0 or original_w <= 0:
+            logger.debug(f"Invalid frame dimensions: {original_w}x{original_h}")
             return
 
         # Resize to a reasonable size for fast model inference
-        scale = OUT_IMG_MAX / max(original_h, original_w)
-        if scale <= 0:
-            scale = 1.0
-        small_w = max(1, int(original_w * scale))
-        small_h = max(1, int(original_h * scale))
-        small = cv2.resize(frame, (small_w, small_h), interpolation=cv2.INTER_LINEAR)
+        try:
+            scale = OUT_IMG_MAX / max(original_h, original_w)
+            if scale <= 0:
+                scale = 1.0
+            small_w = max(1, int(original_w * scale))
+            small_h = max(1, int(original_h * scale))
+            small = cv2.resize(frame, (small_w, small_h), interpolation=cv2.INTER_LINEAR)
+        except Exception as e:
+            logger.error(f"Frame resize error: {e}")
+            return
 
         detections = []
         cheating_in_frame = False
@@ -621,62 +674,89 @@ def handle_frame(message):
                             
             except Exception as e:
                 logger.warning(f"Roboflow prediction error: {e}")
+                detections = []
         else:
             logger.debug("Roboflow model not available - skipping object detection")
 
         # Annotate on the small image (faster than annotating full resolution)
-        annotated = small.copy()
-        for label, conf, (x1, y1, x2, y2) in detections:
-            try:
-                # Check for cheating-related labels (adjust based on your model's classes)
-                is_cheating = str(label).lower() in ["cheating", "phone", "mobile", "cellphone", "suspicious"]
-                color = (0, 0, 255) if is_cheating else (0, 255, 0)
-                
-                # Ensure coordinates are within image bounds
-                x1 = max(0, min(x1, small_w))
-                y1 = max(0, min(y1, small_h))
-                x2 = max(0, min(x2, small_w))
-                y2 = max(0, min(y2, small_h))
-                
-                cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
-                cv2.putText(annotated, f"{label}: {conf:.2f}", (x1, y1-10), 
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
-                
-                if is_cheating:
-                    cheating_in_frame = True
+        try:
+            annotated = small.copy()
+            for label, conf, (x1, y1, x2, y2) in detections:
+                try:
+                    # Check for cheating-related labels
+                    cheating_classes = [
+                        "phone", "mobile", "cellphone", "smartphone",
+                        "cheating", "suspicious", "paper", "notes",
+                        "looking_away", "head_turn"
+                    ]
+                    is_cheating = str(label).lower() in cheating_classes
+                    color = (0, 0, 255) if is_cheating else (0, 255, 0)
                     
-            except Exception as e:
-                logger.debug(f"Annotation error: {e}")
+                    # Ensure coordinates are within image bounds
+                    x1 = max(0, min(int(x1), small_w-1))
+                    y1 = max(0, min(int(y1), small_h-1))
+                    x2 = max(0, min(int(x2), small_w-1))
+                    y2 = max(0, min(int(y2), small_h-1))
+                    
+                    if x2 > x1 and y2 > y1:  # Valid bounding box
+                        cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
+                        cv2.putText(annotated, f"{label}: {conf:.2f}", (x1, max(y1-10, 10)), 
+                                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+                        
+                        if is_cheating:
+                            cheating_in_frame = True
+                            logger.info(f"🚨 Cheating detected: {label} (confidence: {conf:.2f})")
+                        
+                except Exception as e:
+                    logger.debug(f"Annotation error for detection: {e}")
+                    continue
+        except Exception as e:
+            logger.error(f"Annotation processing error: {e}")
+            annotated = small.copy()  # Use unmodified frame as fallback
 
         # MediaPipe face mesh processing for head rotation
         if MEDIAPIPE_AVAILABLE and face_mesh is not None:
             try:
                 small_rgb = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
                 results = face_mesh.process(small_rgb)
-                yaw_deg = 0.0
+                
                 if results and results.multi_face_landmarks:
                     for face_landmarks in results.multi_face_landmarks:
-                        yaw = estimate_head_rotation(small_rgb, face_landmarks)
-                        yaw_deg = yaw * 180 / 3.14159  # Convert to degrees
-                        if abs(yaw_deg) > 25:
-                            cheating_in_frame = True
-                            cv2.putText(annotated, f"Head rotation: {yaw_deg:.1f}°", 
-                                       (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+                        try:
+                            yaw = estimate_head_rotation(small_rgb, face_landmarks)
+                            yaw_deg = yaw * 180 / 3.14159  # Convert to degrees
+                            
+                            if abs(yaw_deg) > 25:
+                                cheating_in_frame = True
+                                cv2.putText(annotated, f"Head rotation: {yaw_deg:.1f}°", 
+                                           (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+                                logger.info(f"🚨 Head rotation detected: {yaw_deg:.1f}°")
+                        except Exception as e:
+                            logger.debug(f"Head rotation calculation error: {e}")
+                            
             except Exception as e:
                 logger.debug(f"MediaPipe processing error: {e}")
 
         # Save snapshot & DB insert (rate-limit snapshot writes)
         if cheating_in_frame and time.time() - last_cheating_notification_time >= 2:
             try:
+                # Ensure database connection is alive
+                current_db, current_cursor = get_db_connection()
+                if not current_db or not current_cursor:
+                    logger.error("Database not available for snapshot save")
+                    return
+
                 snap_id = str(uuid.uuid4())
-                # save a smaller base64 string (annotated small)
+                
+                # Save annotated image as base64
                 _, buf = cv2.imencode(".jpg", annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
                 img_b64_small = base64.b64encode(buf).decode("utf-8")
+                
                 timestamp = datetime.now()
                 epoch_now = time.time()
                 assessment_session_id = session.get("assessment_session_id")
                 
-                if assessment_session_id and cursor is not None:
+                if assessment_session_id:
                     snapshot = {
                         "id": snap_id, 
                         "image_path": img_b64_small, 
@@ -686,39 +766,50 @@ def handle_frame(message):
                     all_snapshots.append(snapshot)
                     notified_snapshots.append(snapshot)
                     
-                    cursor.execute(
+                    current_cursor.execute(
                         "INSERT INTO detections (id, timestamp, epoch, image_path, assessment_session_id, user_id) VALUES (%s, %s, %s, %s, %s, %s)",
-                        (snap_id, timestamp, epoch_now, img_b64_small, assessment_session_id, session["user_id"])
+                        (snap_id, timestamp, epoch_now, img_b64_small, assessment_session_id, session.get("user_id"))
                     )
-                    db.commit()
+                    current_db.commit()
                     
+                    # Emit notification
                     now_dt = datetime.now()
-                    socketio.emit("cheating_notification", {
-                        "message": "Possible Cheating detected", 
-                        "time": now_dt.strftime("%I:%M %p"), 
-                        "timestamp": now_dt.strftime("%Y-%m-%d %I:%M:%S %p"), 
-                        "url": f"/cheating/{snap_id}"
-                    })
-                    
-                    last_cheating_notification_time = time.time()
-            except Exception as e:
-                if db:
                     try:
-                        db.rollback()
+                        socketio.emit("cheating_notification", {
+                            "message": "Possible Cheating detected", 
+                            "time": now_dt.strftime("%I:%M %p"), 
+                            "timestamp": now_dt.strftime("%Y-%m-%d %I:%M:%S %p"), 
+                            "url": f"/cheating/{snap_id}"
+                        })
+                    except Exception as e:
+                        logger.debug(f"Socket emit error: {e}")
+                        
+                    last_cheating_notification_time = time.time()
+                else:
+                    logger.debug("No assessment session ID - skipping snapshot save")
+                    
+            except Exception as e:
+                if 'current_db' in locals() and current_db:
+                    try:
+                        current_db.rollback()
                     except:
                         pass
-                logger.warning(f"DB insert error for snapshot: {e}")
+                logger.error(f"DB insert error for snapshot: {e}")
 
-        # Prepare and emit annotated frame back to client (small image to reduce latency)
+        # Prepare and emit annotated frame back to client
         try:
             out_b64 = cv2_to_b64(annotated, jpeg_quality=60)
             if out_b64:
                 emit("response_frame", {"image": out_b64, "cheating": cheating_in_frame})
+            else:
+                logger.debug("Failed to encode output frame")
         except Exception as e:
-            logger.debug(f"Frame emission error: {e}")
+            logger.error(f"Frame emission error: {e}")
             
     except Exception as e:
-        logger.error(f"Frame processing error: {e}")
+        logger.error(f"Fatal frame processing error: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
     finally:
         try:
             frame_lock.release()
