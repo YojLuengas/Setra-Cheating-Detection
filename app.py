@@ -105,18 +105,23 @@ face_mesh = None
 # Try to load YOLO model
 if YOLO_AVAILABLE:
     try:
-        import torch
-        # Add safe globals for ultralytics
-        torch.serialization.add_safe_globals([
-            'ultralytics.nn.tasks.DetectionModel',
-            'ultralytics.nn.modules.Conv',
-            'ultralytics.nn.modules.C2f',
-            'ultralytics.nn.modules.SPPF',
-            'ultralytics.nn.modules.Detect'
-        ])
+        # Check if custom model exists
+        custom_model_path = "models/best.pt"
         
-        yolo_model = YOLO("models/best.pt")
-        logger.info("✅ YOLO model loaded successfully")
+        if os.path.exists(custom_model_path):
+            try:
+                yolo_model = YOLO(custom_model_path)
+                logger.info("✅ Custom YOLO model loaded successfully")
+            except Exception as e:
+                logger.warning(f"Failed to load custom model: {e}")
+                # Fall back to pretrained model
+                yolo_model = YOLO("yolov8n.pt")
+                logger.info("✅ Using YOLOv8n pretrained model as fallback")
+        else:
+            # Use pretrained model if custom doesn't exist
+            yolo_model = YOLO("yolov8n.pt")
+            logger.info("✅ Using YOLOv8n pretrained model (custom model not found)")
+            
     except Exception as e:
         logger.error(f"❌ Failed to load YOLO model: {e}")
         yolo_model = None
