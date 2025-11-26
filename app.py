@@ -88,20 +88,16 @@ logger = logging.getLogger(__name__)
 try:
     db = mysql.connector.connect(**DB_CONFIG)
     cursor = db.cursor(buffered=True)
-    
-    # Set SQL mode to be less strict
-    cursor.execute("SET sql_mode = 'STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO'")
-    
     logger.info(f"✅ Connected to database: {DB_CONFIG['host']}:{DB_CONFIG['port']}")
 except Exception as e:
     logger.error(f"❌ Database connection failed: {e}")
+    # Don't exit - let the app start without DB for health checks
     db = None
     cursor = None
 
 # ---------- Models / ML ----------
 yolo_model = None
 face_mesh = None
-roboflow_model = None
 
 # Try to load YOLO model
 if YOLO_AVAILABLE:
@@ -116,7 +112,7 @@ if YOLO_AVAILABLE:
             'ultralytics.nn.modules.Detect'
         ])
         
-        yolo_model = YOLO("models/best.pt")
+        yolo_model = YOLO('yolov8n.pt')
         logger.info("✅ YOLO model loaded successfully")
     except Exception as e:
         logger.error(f"❌ Failed to load YOLO model: {e}")
@@ -134,22 +130,7 @@ if MEDIAPIPE_AVAILABLE:
         )
         logger.info("✅ MediaPipe initialized successfully")
     except Exception as e:
-        MEDIAPIPE_AVAILABLE = False
-        face_mesh = None
         logger.error(f"❌ Failed to initialize MediaPipe: {e}")
-
-# Initialize OpenCV face detection as MediaPipe alternative
-try:
-    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-    # Test if cascade loaded properly
-    if face_cascade.empty():
-        raise Exception("Failed to load face cascade classifier")
-    OPENCV_FACE_AVAILABLE = True
-    logger.info("✅ OpenCV face detection loaded as MediaPipe alternative")
-except Exception as e:
-    OPENCV_FACE_AVAILABLE = False
-    face_cascade = None
-    logger.error(f"❌ OpenCV face detection failed: {e}")
 
 # ---------- Globals & Locks ----------
 all_snapshots = []
@@ -163,7 +144,7 @@ frame_lock = Lock()
 
 # Throttling / timing controls to reduce CPU / GPU load and UI lag
 PROCESS_INTERVAL = 0.50       # seconds between heavy processing runs (≈10 FPS)
-OUT_IMG_MAX = 640            # send this max width for annotated frames
+OUT_IMG_MAX = 608            # send this max width for annotated frames
 _last_processed_time = 0.0
 
 # ---------- Helpers ----------
@@ -418,44 +399,37 @@ def activate_user(user_id):
 @app.route("/admin/dashboard")
 @login_required
 def admin_dashboard():
+    if session.get("role") != "admin":
+        flash("Access denied!", "danger")
+        return redirect(url_for("home"))
+
     try:
-        if cursor is None:
-            flash("Database connection not available", "error")
-            return redirect(url_for("admin_page"))
-        
-        # Fix dashboard queries
-        # Users count
-        cursor.execute("SELECT COUNT(*) as total FROM users")
+        # Summary counts
+        cursor.execute("SELECT COUNT(*) FROM users")
         total_users = cursor.fetchone()[0]
-        
-        # Active sessions count  
-        cursor.execute("SELECT COUNT(*) as active FROM assessment_sessions WHERE DATE(created_at) = CURDATE()")
-        active_sessions = cursor.fetchone()[0]
-        
-        # Recent detections with proper grouping
-        cursor.execute("""
-            SELECT 
-                u.username,
-                COUNT(d.id) as detection_count,
-                MAX(d.timestamp) as last_detection
-            FROM detections d 
-            JOIN users u ON d.user_id = u.id 
-            WHERE DATE(d.timestamp) = CURDATE()
-            GROUP BY u.id, u.username
-            ORDER BY last_detection DESC 
-            LIMIT 10
-        """)
-        recent_detections = cursor.fetchall()
-        
-        return render_template("admin_dashboard.html", 
-                             total_users=total_users,
-                             active_sessions=active_sessions, 
-                             recent_detections=recent_detections)
-                             
+
+        cursor.execute("SELECT COUNT(*) FROM users WHERE status='Active'")
+        active_users = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM users WHERE status='Inactive'")
+        inactive_users = cursor.fetchone()[0]
+
+        # Recent users preview (include status here)
+        cursor.execute("SELECT username, role, status FROM users ORDER BY id DESC LIMIT 5")
+        users_preview = cursor.fetchall()
+
     except Exception as e:
-        logger.error(f"Admin dashboard error: {e}")
-        flash("Error loading dashboard", "error")
-        return redirect(url_for("admin_page"))
+        logger.exception("admin_dashboard error: %s", e)
+        total_users = active_users = inactive_users = 0
+        users_preview = []
+
+    return render_template(
+        "admin_dashboard.html",
+        total_users=total_users,
+        active_users=active_users,
+        inactive_users=inactive_users,
+        users_preview=users_preview
+    )
 
 # ---------- Assessment session ----------
 @app.route("/assessment-session", methods=["POST"])
@@ -534,7 +508,7 @@ def handle_frame(message):
     send a smaller JPEG to clients to reduce latency.
     """
     global all_snapshots, notified_snapshots, last_cheating_notification_time
-    global _last_processed_time
+    global _last_processed_time, _last_face_time
 
     # Quick-drop if someone else is processing
     if not frame_lock.acquire(blocking=False):
@@ -574,7 +548,7 @@ def handle_frame(message):
         # Run YOLO on the small image
         try:
             # keep imgsz similar to our small width for efficiency
-            results = yolo_model.predict(small, imgsz=min(640, OUT_IMG_MAX), conf=0.50, verbose=False)
+            results = yolo_model.predict(small, imgsz=min(608, OUT_IMG_MAX), conf=0.50, verbose=False)
         except Exception as e:
             logger.exception("YOLO prediction error: %s", e)
             results = []
@@ -628,91 +602,16 @@ def handle_frame(message):
             if str(label).lower() == "cheating":
                 cheating_in_frame = True
 
-        # Face detection processing (MediaPipe or OpenCV fallback)
-        if MEDIAPIPE_AVAILABLE and face_mesh:
-            try:
-                small_rgb = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
-                results = face_mesh.process(small_rgb)
-                yaw_deg = 0.0
-                if results.multi_face_landmarks:
-                    for face_landmarks in results.multi_face_landmarks:
-                        yaw = estimate_head_rotation(small_rgb, face_landmarks)
-                        yaw_deg = yaw * 180 / 3.14159  # Convert to degrees
-                        if abs(yaw_deg) > 25:
-                            cheating_in_frame = True
-                            # Draw head rotation indicator
-                            cv2.putText(annotated, f"Head: {yaw_deg:.1f}°", (10, 30), 
-                                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
-            except Exception as e:
-                logger.exception("MediaPipe processing error: %s", e)
-        
-        elif OPENCV_FACE_AVAILABLE and face_cascade is not None:
-            try:
-                # Convert to grayscale for OpenCV face detection
-                gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
-                
-                # Detect faces
-                faces = face_cascade.detectMultiScale(
-                    gray,
-                    scaleFactor=1.1,
-                    minNeighbors=5,
-                    minSize=(30, 30),
-                    flags=cv2.CASCADE_SCALE_IMAGE
-                )
-                
-                # Process detected faces
-                for (x, y, w, h) in faces:
-                    # Draw face rectangle
-                    cv2.rectangle(annotated, (x, y), (x+w, y+h), (255, 0, 0), 2)
-                    
-                    # Estimate head rotation based on face position
-                    yaw_deg = estimate_head_rotation_opencv((x, y, w, h), small_w)
-                    
-                    if abs(yaw_deg) > 20:  # Threshold for suspicious head movement
-                        cheating_in_frame = True
-                        # Draw head position indicator
-                        cv2.putText(annotated, f"Face: {yaw_deg:.1f}°", (10, 30), 
-                                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
-                    
-                    # Optional: Add face center point
-                    center_x = x + w // 2
-                    center_y = y + h // 2
-                    cv2.circle(annotated, (center_x, center_y), 3, (0, 255, 255), -1)
-                    
-            except Exception as e:
-                logger.exception("OpenCV face detection error: %s", e)
-
-        # Run Roboflow model on the small image
-        results = []
-        if ROBOFLOW_AVAILABLE and roboflow_model:
-            try:
-                # Convert image to PIL and send to Roboflow
-                img_rgb = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
-                pil_img = Image.fromarray(img_rgb)
-                # Roboflow expects a file path or PIL image
-                prediction = roboflow_model.predict(pil_img, confidence=40, overlap=30)
-                results = prediction.json().get("predictions", [])
-            except Exception as e:
-                logger.exception("Roboflow prediction error: %s", e)
-                results = []
-
-        # Annotate Roboflow results
-        for result in results:
-            try:
-                label = result.get("class", "unknown")
-                conf = result.get("confidence", 0.0)
-                bbox = result.get("bbox", {})
-                x1, y1, x2, y2 = int(bbox.get("x1", 0)), int(bbox.get("y1", 0)), int(bbox.get("x2", 0)), int(bbox.get("y2", 0))
-
-                color = (0, 0, 255) if label.lower() == "cheating" else (0, 255, 0)
-                cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
-                cv2.putText(annotated, f"RF: {label} {conf:.1f}%", (x1, y1-10), 
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
-                if label.lower() == "cheating":
+        # MediaPipe face mesh processing for head rotation
+        small_rgb = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
+        results = face_mesh.process(small_rgb)
+        yaw_deg = 0.0
+        if results.multi_face_landmarks:
+            for face_landmarks in results.multi_face_landmarks:
+                yaw = estimate_head_rotation(small_rgb, face_landmarks)
+                yaw_deg = yaw * 180 / 3.14159  # Convert to degrees
+                if abs(yaw_deg) > 25:
                     cheating_in_frame = True
-            except Exception:
-                logger.exception("Error annotating Roboflow result")
-                continue
 
         # Save snapshot & DB insert (rate-limit snapshot writes)
         if cheating_in_frame and time.time() - last_cheating_notification_time >= 2:
