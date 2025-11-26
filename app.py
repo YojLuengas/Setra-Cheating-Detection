@@ -34,11 +34,11 @@ print("Starting Flask application...")
 
 # Try to import ML libraries, but handle if they're not available
 try:
-    from ultralytics import YOLO
-    YOLO_AVAILABLE = True
+    from roboflow import Roboflow
+    ROBOFLOW_AVAILABLE = True
 except ImportError:
-    YOLO_AVAILABLE = False
-    print("⚠️ YOLO not available - running without ML detection")
+    ROBOFLOW_AVAILABLE = False
+    print("⚠️ Roboflow not available - running without ML detection")
 
 try:
     import mediapipe as mp
@@ -99,33 +99,20 @@ except Exception as e:
     cursor = None
 
 # ---------- Models / ML ----------
-yolo_model = None
+rf_model = None
 face_mesh = None
 
-# Try to load YOLO model
-if YOLO_AVAILABLE:
+# Initialize Roboflow model
+if ROBOFLOW_AVAILABLE:
     try:
-        # Check if custom model exists
-        custom_model_path = "models/best.pt"
-        
-        if os.path.exists(custom_model_path):
-            try:
-                yolo_model = YOLO(custom_model_path)
-                logger.info("✅ Custom YOLO model loaded successfully")
-            except Exception as e:
-                logger.warning(f"Failed to load custom model: {e}")
-                # Fall back to pretrained model
-                yolo_model = YOLO("yolov8n.pt")
-                logger.info("✅ Using YOLOv8n pretrained model as fallback")
-        else:
-            # Use pretrained model if custom doesn't exist
-            yolo_model = YOLO("yolov8n.pt")
-            logger.info("✅ Using YOLOv8n pretrained model (custom model not found)")
-            
+        rf = Roboflow(api_key="gokzwVXEayjZ3Nm7QEVX")
+        project = rf.workspace("cheating-detection-6o7xl").project("examdetection-ezdwm")
+        rf_model = project.version(1).model
+        logger.info("✅ Roboflow model initialized successfully")
     except Exception as e:
-        logger.error(f"❌ Failed to load YOLO model: {e}")
-        yolo_model = None
-        YOLO_AVAILABLE = False
+        logger.error(f"❌ Failed to initialize Roboflow model: {e}")
+        rf_model = None
+        ROBOFLOW_AVAILABLE = False
 
 # Try to initialize MediaPipe
 if MEDIAPIPE_AVAILABLE:
@@ -595,64 +582,68 @@ def handle_frame(message):
         small_h = max(1, int(original_h * scale))
         small = cv2.resize(frame, (small_w, small_h), interpolation=cv2.INTER_LINEAR)
 
-        # Run YOLO on the small image (only if model is available)
-        results = []
-        if yolo_model:
-            try:
-                # keep imgsz similar to our small width for efficiency
-                results = yolo_model.predict(small, imgsz=min(640, OUT_IMG_MAX), conf=0.50, verbose=False)
-            except Exception as e:
-                logger.exception("YOLO prediction error: %s", e)
-                results = []
-
+        # Run Roboflow inference on the small image (only if model is available)
         detections = []
         cheating_in_frame = False
 
-        if len(results) > 0 and hasattr(results[0], "boxes"):
-            for box in results[0].boxes:
-                try:
-                    # robust extraction: support tensors and plain numbers
-                    if hasattr(box.xyxy, "cpu"):
-                        xyxy = box.xyxy.cpu().numpy().flatten()
-                    else:
-                        xyxy = np.array(box.xyxy).flatten()
-
-                    if hasattr(box.conf, "cpu"):
-                        conf = float(box.conf.cpu().numpy().flatten()[0])
-                    else:
-                        try:
-                            conf = float(box.conf)
-                        except Exception:
-                            conf = 0.0
-
-                    if hasattr(box.cls, "cpu"):
-                        cls = int(box.cls.cpu().numpy().flatten()[0])
-                    else:
-                        try:
-                            cls = int(box.cls)
-                        except Exception:
-                            cls = 0
-
-                    label = None
+        if rf_model and ROBOFLOW_AVAILABLE:
+            try:
+                # Save the image temporarily for Roboflow API
+                temp_path = f"temp_frame_{uuid.uuid4()}.jpg"
+                cv2.imwrite(temp_path, small)
+                
+                # Run inference using Roboflow API
+                results = rf_model.predict(temp_path, confidence=50, overlap=30).json()
+                
+                # Clean up temp file
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+                
+                # Process Roboflow results
+                for prediction in results.get('predictions', []):
                     try:
-                        label = yolo_model.model.names.get(cls, str(cls)) if hasattr(yolo_model, "model") else str(cls)
-                    except Exception:
-                        label = str(cls)
-
-                    # xyxy in small image coords -> map back to small image (we annotate small)
-                    x1, y1, x2, y2 = [int(v) for v in xyxy[:4]]
-                    detections.append((label, conf, (x1, y1, x2, y2)))
-                except Exception:
-                    logger.exception("Failed parsing detection box; skipping.")
-                    continue
+                        label = prediction.get('class', 'unknown')
+                        conf = prediction.get('confidence', 0.0) / 100.0  # Convert percentage to decimal
+                        
+                        # Get bounding box coordinates
+                        x_center = prediction.get('x', 0)
+                        y_center = prediction.get('y', 0)
+                        width = prediction.get('width', 0)
+                        height = prediction.get('height', 0)
+                        
+                        # Convert center coordinates to corner coordinates
+                        x1 = int(x_center - width / 2)
+                        y1 = int(y_center - height / 2)
+                        x2 = int(x_center + width / 2)
+                        y2 = int(y_center + height / 2)
+                        
+                        # Ensure coordinates are within image bounds
+                        x1 = max(0, x1)
+                        y1 = max(0, y1)
+                        x2 = min(small_w, x2)
+                        y2 = min(small_h, y2)
+                        
+                        detections.append((label, conf, (x1, y1, x2, y2)))
+                        
+                        # Check if this is a cheating detection
+                        if str(label).lower() == "cheating":
+                            cheating_in_frame = True
+                            
+                    except Exception as e:
+                        logger.exception("Failed parsing Roboflow prediction: %s", e)
+                        continue
+                        
+            except Exception as e:
+                logger.exception("Roboflow prediction error: %s", e)
 
         # Annotate on the small image (faster than annotating full resolution)
         annotated = small.copy()
         for label, conf, (x1, y1, x2, y2) in detections:
             color = (0, 0, 255) if str(label).lower() == "cheating" else (0, 255, 0)
             cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
-            if str(label).lower() == "cheating":
-                cheating_in_frame = True
+            # Add confidence score to label
+            text = f"{label}: {conf:.2f}"
+            cv2.putText(annotated, text, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
 
         # MediaPipe face mesh processing for head rotation
         if MEDIAPIPE_AVAILABLE and face_mesh:
