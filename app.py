@@ -33,16 +33,21 @@ print(f"Python version: {sys.version}")
 print("Starting Flask application...")
 
 # Try to import ML libraries, but handle if they're not available
+ROBOFLOW_AVAILABLE = False
+YOLO_AVAILABLE = False
 try:
-    from ultralytics import YOLO
-    YOLO_AVAILABLE = True
+    from roboflow import Roboflow
+    import requests
+    ROBOFLOW_AVAILABLE = True
+    print("✅ Roboflow available")
 except ImportError:
-    YOLO_AVAILABLE = False
-    print("⚠️ YOLO not available - running without ML detection")
+    ROBOFLOW_AVAILABLE = False
+    print("⚠️ Roboflow not available - running without ML detection")
 
 try:
     import mediapipe as mp
     MEDIAPIPE_AVAILABLE = True
+    print("✅ MediaPipe available")
 except ImportError:
     MEDIAPIPE_AVAILABLE = False
     print("⚠️ MediaPipe not available - running without face detection")
@@ -99,88 +104,71 @@ except Exception as e:
     cursor = None
 
 # ---------- Models / ML ----------
-yolo_model = None
+# ---------- Roboflow API Setup ----------
+roboflow_model = None
 face_mesh = None
 
-def load_yolo_model_safe(model_path):
-    """Load YOLO model with PyTorch 2.6 compatibility"""
+def setup_roboflow():
+    """Initialize Roboflow model"""
     try:
-        import torch
+        if not ROBOFLOW_AVAILABLE:
+            logger.warning("⚠️ Roboflow not available")
+            return None
         
-        # Add safe globals for YOLO model loading (PyTorch 2.6 compatibility)
-        try:
-            import ultralytics.nn.tasks
-            torch.serialization.add_safe_globals([
-                ultralytics.nn.tasks.DetectionModel,
-                ultralytics.nn.tasks.ClassificationModel, 
-                ultralytics.nn.tasks.SegmentationModel,
-                ultralytics.nn.tasks.PoseModel
-            ])
-        except Exception as e:
-            logger.warning(f"Could not add safe globals: {e}")
-            
-        # Try with weights_only=False for older models
-        original_load = torch.load
-        def custom_load(*args, **kwargs):
-            kwargs.pop('weights_only', None)  # Remove if present
-            return original_load(*args, weights_only=False, **kwargs)
+        # Initialize Roboflow with your API key
+        rf = Roboflow(api_key="gokzwVXEayjZ3Nm7QEVX")
+        project = rf.workspace("cheating-detection-6o7xl").project("examdetection-ezdwm")
+        version = project.version(1)
+        model = version.model
         
-        torch.load = custom_load
-        try:
-            model = YOLO(model_path)
-            logger.info(f"✅ YOLO model loaded from {model_path}")
-            return model
-        finally:
-            torch.load = original_load  # Always restore
-            
+        logger.info("✅ Roboflow model initialized successfully")
+        return model
+        
     except Exception as e:
-        logger.error(f"Failed to load YOLO model {model_path}: {e}")
+        logger.error(f"❌ Failed to initialize Roboflow: {e}")
         return None
 
-# Try to load YOLO model with proper error handling
-if YOLO_AVAILABLE:
+def predict_with_roboflow(image, confidence=0.5):
+    """Make prediction using Roboflow API"""
+    if not roboflow_model:
+        return []
+    
     try:
-        # Create models directory if it doesn't exist
-        models_dir = "models"
-        if not os.path.exists(models_dir):
-            os.makedirs(models_dir)
-            logger.info(f"Created {models_dir} directory")
-
-        # Check if custom model exists
-        custom_model_path = "models/best.pt"
+        # Convert OpenCV image to base64 for API
+        _, buffer = cv2.imencode('.jpg', image, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
+        img_b64 = base64.b64encode(buffer).decode('utf-8')
         
-        if os.path.exists(custom_model_path):
-            yolo_model = load_yolo_model_safe(custom_model_path)
-            if yolo_model:
-                logger.info("✅ Custom YOLO model loaded successfully")
-            else:
-                # Fall back to pretrained model
-                yolo_model = load_yolo_model_safe("yolov8n.pt")
-                if yolo_model:
-                    logger.info("✅ Using YOLOv8n pretrained model as fallback")
-                else:
-                    logger.error("Failed to load any YOLO model")
-                    yolo_model = None
-                    YOLO_AVAILABLE = False
-        else:
-            # Use pretrained model if custom doesn't exist
-            yolo_model = load_yolo_model_safe("yolov8n.pt")
-            if yolo_model:
-                logger.info("✅ Using YOLOv8n pretrained model (custom model not found)")
-            else:
-                logger.error("Failed to load pretrained model")
-                yolo_model = None
-                YOLO_AVAILABLE = False
+        # Make prediction with confidence threshold (0-100 for Roboflow)
+        prediction = roboflow_model.predict(img_b64, confidence=int(confidence*100))
+        
+        detections = []
+        if hasattr(prediction, 'predictions') and prediction.predictions:
+            for pred in prediction.predictions:
+                # Extract bounding box coordinates
+                x = int(pred['x'] - pred['width']/2)
+                y = int(pred['y'] - pred['height']/2)
+                x2 = int(pred['x'] + pred['width']/2)
+                y2 = int(pred['y'] + pred['height']/2)
                 
+                label = pred['class']
+                conf = pred['confidence']
+                
+                detections.append((label, conf, (x, y, x2, y2)))
+                
+        logger.debug(f"Roboflow detected {len(detections)} objects")
+        return detections
+        
     except Exception as e:
-        logger.error(f"❌ Failed to load YOLO model: {e}")
-        yolo_model = None
-        YOLO_AVAILABLE = False
-else:
-    yolo_model = None
-    logger.warning("⚠️ YOLO not available - running without ML detection")
+        logger.warning(f"Roboflow prediction error: {e}")
+        return []
 
-# Try to initialize MediaPipe with better error handling
+# Initialize Roboflow model
+if ROBOFLOW_AVAILABLE:
+    roboflow_model = setup_roboflow()
+else:
+    roboflow_model = None
+
+# Try to initialize MediaPipe
 if MEDIAPIPE_AVAILABLE:
     try:
         face_mesh = mp.solutions.face_mesh.FaceMesh(
@@ -189,14 +177,11 @@ if MEDIAPIPE_AVAILABLE:
             min_detection_confidence=0.5, 
             min_tracking_confidence=0.5
         )
-        logger.info("✅ MediaPipe Face Mesh initialized successfully")
+        logger.info("✅ MediaPipe initialized successfully")
     except Exception as e:
         logger.error(f"❌ Failed to initialize MediaPipe: {e}")
         face_mesh = None
         MEDIAPIPE_AVAILABLE = False
-else:
-    face_mesh = None
-    logger.warning("⚠️ MediaPipe not available - running without face detection")
 
 # ---------- Globals & Locks ----------
 all_snapshots = []
@@ -606,12 +591,10 @@ def handle_frame(message):
             frame = b64_to_cv2(img_b64)
 
         if frame is None:
-            logger.debug("Frame is None, skipping processing")
             return
 
         original_h, original_w = frame.shape[:2]
         if original_h <= 0 or original_w <= 0:
-            logger.debug("Invalid frame dimensions, skipping")
             return
 
         # Resize to a reasonable size for fast model inference
@@ -625,85 +608,47 @@ def handle_frame(message):
         detections = []
         cheating_in_frame = False
 
-        # Run YOLO on the small image with proper null checks
-        if YOLO_AVAILABLE and yolo_model is not None:
+        # Run Roboflow prediction on the small image
+        if ROBOFLOW_AVAILABLE and roboflow_model is not None:
             try:
-                # keep imgsz similar to our small width for efficiency
-                results = yolo_model.predict(
-                    small, 
-                    imgsz=min(640, OUT_IMG_MAX), 
-                    conf=0.50, 
-                    verbose=False,
-                    save=False,
-                    show=False
-                )
+                logger.debug("Running Roboflow prediction...")
+                detections = predict_with_roboflow(small, confidence=0.5)
                 
-                if results and len(results) > 0 and hasattr(results[0], "boxes") and results[0].boxes is not None:
-                    for box in results[0].boxes:
-                        try:
-                            # robust extraction: support tensors and plain numbers
-                            if hasattr(box.xyxy, "cpu"):
-                                xyxy = box.xyxy.cpu().numpy().flatten()
-                            else:
-                                xyxy = np.array(box.xyxy).flatten()
-
-                            if len(xyxy) < 4:
-                                continue
-
-                            if hasattr(box.conf, "cpu"):
-                                conf = float(box.conf.cpu().numpy().flatten()[0])
-                            else:
-                                try:
-                                    conf = float(box.conf)
-                                except Exception:
-                                    conf = 0.0
-
-                            if hasattr(box.cls, "cpu"):
-                                cls = int(box.cls.cpu().numpy().flatten()[0])
-                            else:
-                                try:
-                                    cls = int(box.cls)
-                                except Exception:
-                                    cls = 0
-
-                            label = "unknown"
-                            try:
-                                if hasattr(yolo_model, "model") and hasattr(yolo_model.model, "names"):
-                                    label = yolo_model.model.names.get(cls, str(cls))
-                                else:
-                                    label = str(cls)
-                            except Exception:
-                                label = str(cls)
-
-                            # xyxy in small image coords -> map back to small image (we annotate small)
-                            x1, y1, x2, y2 = [max(0, min(int(v), small_w if i % 2 == 0 else small_h)) for i, v in enumerate(xyxy[:4])]
-                            
-                            if x2 > x1 and y2 > y1:  # Valid bounding box
-                                detections.append((label, conf, (x1, y1, x2, y2)))
-                                
-                        except Exception as e:
-                            logger.debug(f"Failed parsing detection box: {e}")
-                            continue
+                if detections:
+                    logger.debug(f"Roboflow detected {len(detections)} objects")
+                else:
+                    logger.debug("No Roboflow detections found")
                             
             except Exception as e:
-                logger.warning(f"YOLO prediction error: {e}")
+                logger.warning(f"Roboflow prediction error: {e}")
         else:
-            logger.debug("YOLO model not available for this frame")
+            logger.debug("Roboflow model not available - skipping object detection")
 
         # Annotate on the small image (faster than annotating full resolution)
         annotated = small.copy()
         for label, conf, (x1, y1, x2, y2) in detections:
             try:
-                color = (0, 0, 255) if str(label).lower() in ["cheating", "phone", "person"] else (0, 255, 0)
+                # Check for cheating-related labels (adjust based on your model's classes)
+                is_cheating = str(label).lower() in ["cheating", "phone", "mobile", "cellphone", "suspicious"]
+                color = (0, 0, 255) if is_cheating else (0, 255, 0)
+                
+                # Ensure coordinates are within image bounds
+                x1 = max(0, min(x1, small_w))
+                y1 = max(0, min(y1, small_h))
+                x2 = max(0, min(x2, small_w))
+                y2 = max(0, min(y2, small_h))
+                
                 cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
                 cv2.putText(annotated, f"{label}: {conf:.2f}", (x1, y1-10), 
                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
-                if str(label).lower() in ["cheating", "phone"]:
+                
+                if is_cheating:
                     cheating_in_frame = True
+                    
             except Exception as e:
                 logger.debug(f"Annotation error: {e}")
 
-        # MediaPipe face mesh processing for head rotation with proper null checks
+        # MediaPipe face mesh processing for head rotation
         if MEDIAPIPE_AVAILABLE and face_mesh is not None:
             try:
                 small_rgb = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
@@ -719,8 +664,6 @@ def handle_frame(message):
                                        (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
             except Exception as e:
                 logger.debug(f"MediaPipe processing error: {e}")
-        else:
-            logger.debug("MediaPipe face mesh not available for this frame")
 
         # Save snapshot & DB insert (rate-limit snapshot writes)
         if cheating_in_frame and time.time() - last_cheating_notification_time >= 2:
@@ -750,16 +693,13 @@ def handle_frame(message):
                     db.commit()
                     
                     now_dt = datetime.now()
-                    try:
-                        socketio.emit("cheating_notification", {
-                            "message": "Possible Cheating detected", 
-                            "time": now_dt.strftime("%I:%M %p"), 
-                            "timestamp": now_dt.strftime("%Y-%m-%d %I:%M:%S %p"), 
-                            "url": f"/cheating/{snap_id}"
-                        })
-                    except Exception as e:
-                        logger.debug(f"Socket emit error: {e}")
-                        
+                    socketio.emit("cheating_notification", {
+                        "message": "Possible Cheating detected", 
+                        "time": now_dt.strftime("%I:%M %p"), 
+                        "timestamp": now_dt.strftime("%Y-%m-%d %I:%M:%S %p"), 
+                        "url": f"/cheating/{snap_id}"
+                    })
+                    
                     last_cheating_notification_time = time.time()
             except Exception as e:
                 if db:
@@ -1076,16 +1016,12 @@ def delete_notification(snap_id):
 
 # ---------- Run ----------
 if __name__ == "__main__":
-    try:
-        host = "0.0.0.0"
-        port = int(os.environ.get("PORT", 5000))
-        
-        # Log the status of ML models
-        logger.info(f"YOLO Available: {YOLO_AVAILABLE and yolo_model is not None}")
-        logger.info(f"MediaPipe Available: {MEDIAPIPE_AVAILABLE and face_mesh is not None}")
-        
-        logger.info("🚀 Server starting at: http://127.0.0.1:%s", port)
-        socketio.run(app, host=host, port=port, debug=False)
-    except Exception as e:
-        logger.error(f"Failed to start server: {e}")
-        sys.exit(1)
+    host = "0.0.0.0"
+    port = int(os.environ.get("PORT", 5000))
+    
+    # Log the status of ML models
+    logger.info(f"Roboflow Available: {ROBOFLOW_AVAILABLE and roboflow_model is not None}")
+    logger.info(f"MediaPipe Available: {MEDIAPIPE_AVAILABLE and face_mesh is not None}")
+    
+    logger.info("🚀 Server running at: http://127.0.0.1:%s", port)
+    socketio.run(app, host=host, port=port, debug=False)
