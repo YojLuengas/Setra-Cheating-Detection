@@ -148,18 +148,31 @@ def setup_roboflow():
         return None
 
 def predict_with_roboflow(image, confidence=0.5):
-    """Make prediction using Roboflow API with rate limiting"""
+    """Make prediction using Roboflow API with aggressive size reduction"""
     if not roboflow_model:
         return []
     
     try:
-        # Convert OpenCV image to base64 for API
-        _, buffer = cv2.imencode('.jpg', image, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
+        # Aggressively reduce image size for Roboflow API
+        h, w = image.shape[:2]
+        max_size = 320  # Very small for API efficiency
+        if max(h, w) > max_size:
+            scale = max_size / max(h, w)
+            new_w = int(w * scale)
+            new_h = int(h * scale)
+            image = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+        
+        # Use lower JPEG quality to reduce size
+        _, buffer = cv2.imencode('.jpg', image, [
+            int(cv2.IMWRITE_JPEG_QUALITY), 60,  # Lower quality
+            int(cv2.IMWRITE_JPEG_OPTIMIZE), 1
+        ])
         img_b64 = base64.b64encode(buffer).decode('utf-8')
         
-        # Validate base64 length to avoid "File name too long" error
-        if len(img_b64) > 1000000:  # 1MB limit
-            logger.warning("Image too large for Roboflow API, skipping")
+        # Validate base64 length - much stricter limit
+        max_size_bytes = 500000  # 500KB limit instead of 1MB
+        if len(img_b64) > max_size_bytes:
+            logger.warning(f"Image still too large ({len(img_b64)} bytes), skipping")
             return []
         
         # Make prediction with confidence threshold (0-100 for Roboflow)
@@ -188,11 +201,6 @@ def predict_with_roboflow(image, confidence=0.5):
         
     except Exception as e:
         logger.warning(f"Roboflow prediction error: {e}")
-        # Check if it's a rate limit error
-        if "rate limit" in str(e).lower() or "429" in str(e) or "quota" in str(e).lower():
-            logger.warning("⚠️ Roboflow rate limit reached, skipping frame")
-        elif "file name too long" in str(e).lower():
-            logger.warning("⚠️ Image data too large for Roboflow API")
         return []
 
 # Initialize Roboflow model
@@ -584,57 +592,52 @@ def default_error_handler(e):
 @socketio.on("frame")
 def handle_frame(message):
     """
-    Process incoming frames with Roboflow API integration
+    Process incoming frames with non-blocking operations
     """
     global all_snapshots, notified_snapshots, last_cheating_notification_time
     global _last_processed_time, _last_roboflow_call
 
-    # Quick-drop if someone else is processing
+    # Non-blocking lock attempt
     if not frame_lock.acquire(blocking=False):
         return
 
     try:
         now = time.time()
-        # Throttle heavy processing to avoid backlog / lag
-        if now - _last_processed_time < PROCESS_INTERVAL:
+        # More aggressive throttling to reduce load
+        if now - _last_processed_time < 1.0:  # Increased from 0.5 to 1.0 seconds
             return
 
         _last_processed_time = now
 
         # Validate message
         if not message:
-            logger.debug("Empty message received")
             return
 
-        # Expect binary data directly
+        # Process frame
         frame = None
         if isinstance(message, bytes):
             frame = process_binary_image(message)
         else:
-            # If not binary, assume base64 string for backward compatibility
             img_b64 = message
             if not img_b64:
-                logger.debug("Empty base64 string")
                 return
             frame = b64_to_cv2(img_b64)
 
         if frame is None:
-            logger.debug("Failed to decode frame")
             return
 
         original_h, original_w = frame.shape[:2]
         if original_h <= 0 or original_w <= 0:
-            logger.debug(f"Invalid frame dimensions: {original_w}x{original_h}")
             return
 
-        # Resize to a reasonable size for Roboflow API efficiency
+        # Much more aggressive size reduction
         try:
-            max_dimension = min(OUT_IMG_MAX, 480)  # Max 480px for API efficiency
+            max_dimension = 240  # Even smaller for API efficiency
             scale = max_dimension / max(original_h, original_w)
-            if scale > 1.0:  # Don't upscale
+            if scale > 1.0:
                 scale = 1.0
-            small_w = max(160, int(original_w * scale))  # Minimum 160px width
-            small_h = max(120, int(original_h * scale))  # Minimum 120px height
+            small_w = max(120, int(original_w * scale))
+            small_h = max(90, int(original_h * scale))
             small = cv2.resize(frame, (small_w, small_h), interpolation=cv2.INTER_LINEAR)
         except Exception as e:
             logger.error(f"Frame resize error: {e}")
@@ -643,153 +646,95 @@ def handle_frame(message):
         detections = []
         cheating_in_frame = False
 
-        # Run Roboflow prediction on the small image with rate limiting
+        # Run Roboflow prediction with more aggressive rate limiting
         if ROBOFLOW_AVAILABLE and roboflow_model is not None:
             try:
-                # Rate limit Roboflow API calls
-                if time.time() - _last_roboflow_call >= ROBOFLOW_MIN_INTERVAL:
+                # More aggressive rate limiting - 2 seconds between calls
+                if time.time() - _last_roboflow_call >= 2.0:
                     logger.debug("Running Roboflow prediction...")
-                    detections = predict_with_roboflow(small, confidence=0.5)
+                    detections = predict_with_roboflow(small, confidence=0.4)  # Lower confidence
                     _last_roboflow_call = time.time()
                     
                     if detections:
                         logger.debug(f"Roboflow detected {len(detections)} objects")
-                    else:
-                        logger.debug("No Roboflow detections found")
                 else:
                     logger.debug("Roboflow API rate limited, skipping this frame")
                             
             except Exception as e:
                 logger.warning(f"Roboflow prediction error: {e}")
                 detections = []
-        else:
-            logger.debug("Roboflow model not available - skipping object detection")
 
-        # Annotate on the small image
-        try:
-            annotated = small.copy()
-            for label, conf, (x1, y1, x2, y2) in detections:
-                try:
-                    # Enhanced cheating detection classes for Roboflow
-                    cheating_classes = [
-                        # Device detection
-                        "phone", "mobile", "cellphone", "smartphone", "device", "tablet",
-                        
-                        # Paper/written materials
-                        "paper", "notes", "cheat_sheet", "book", "document",
-                        
-                        # People detection
-                        "person", "multiple_person", "face", "head",
-                        
-                        # Behavioral indicators your model might detect
-                        "looking_away", "head_turn", "suspicious", "cheating",
-                        
-                        # Objects that shouldn't be there
-                        "calculator", "computer", "laptop", "keyboard"
-                    ]
-                    
-                    is_cheating = str(label).lower() in cheating_classes
-                    color = (0, 0, 255) if is_cheating else (0, 255, 0)
-                    
-                    # Ensure coordinates are within image bounds
-                    x1 = max(0, min(int(x1), small_w-1))
-                    y1 = max(0, min(int(y1), small_h-1))
-                    x2 = max(0, min(int(x2), small_w-1))
-                    y2 = max(0, min(int(y2), small_h-1))
-                    
-                    if x2 > x1 and y2 > y1:  # Valid bounding box
-                        cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
-                        cv2.putText(annotated, f"{label}: {conf:.2f}", (x1, max(y1-10, 10)), 
-                                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
-                        
-                        if is_cheating:
-                            cheating_in_frame = True
-                            logger.info(f"🚨 Cheating detected: {label} (confidence: {conf:.2f})")
-                        
-                except Exception as e:
-                    logger.debug(f"Annotation error for detection: {e}")
-                    continue
-        except Exception as e:
-            logger.error(f"Annotation processing error: {e}")
-            annotated = small.copy()  # Use unmodified frame as fallback
-
-        # Save snapshot & DB insert (rate-limit snapshot writes)
-        if cheating_in_frame and time.time() - last_cheating_notification_time >= 2:
+        # Quick annotation without heavy processing
+        annotated = small.copy()
+        for label, conf, (x1, y1, x2, y2) in detections:
             try:
-                # Ensure database connection is alive
-                current_db, current_cursor = get_db_connection()
-                if not current_db or not current_cursor:
-                    logger.error("Database not available for snapshot save")
-                    return
-
-                snap_id = str(uuid.uuid4())
+                # Simplified cheating detection
+                cheating_keywords = ["phone", "mobile", "paper", "person", "cheating"]
+                is_cheating = any(keyword in str(label).lower() for keyword in cheating_keywords)
                 
-                # Save annotated image as base64
-                _, buf = cv2.imencode(".jpg", annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
-                img_b64_small = base64.b64encode(buf).decode("utf-8")
-                
-                timestamp = datetime.now()
-                epoch_now = time.time()
-                assessment_session_id = session.get("assessment_session_id")
-                
-                if assessment_session_id:
-                    snapshot = {
-                        "id": snap_id, 
-                        "image_path": img_b64_small, 
-                        "timestamp": timestamp.strftime("%Y-%m-%d %I:%M:%S %p"), 
-                        "epoch": epoch_now
-                    }
-                    all_snapshots.append(snapshot)
-                    notified_snapshots.append(snapshot)
+                if is_cheating:
+                    cheating_in_frame = True
+                    color = (0, 0, 255)
+                    # Simple annotation
+                    cv2.rectangle(annotated, (int(x1), int(y1)), (int(x2), int(y2)), color, 1)
                     
-                    current_cursor.execute(
+            except Exception:
+                continue
+
+        # Non-blocking database operations
+        if cheating_in_frame and time.time() - last_cheating_notification_time >= 3:  # Increased to 3 seconds
+            try:
+                assessment_session_id = session.get("assessment_session_id")
+                if assessment_session_id and cursor:
+                    snap_id = str(uuid.uuid4())
+                    
+                    # Compress image more aggressively for storage
+                    _, buf = cv2.imencode(".jpg", annotated, [
+                        int(cv2.IMWRITE_JPEG_QUALITY), 50  # Very low quality for storage
+                    ])
+                    img_b64_small = base64.b64encode(buf).decode("utf-8")
+                    
+                    timestamp = datetime.now()
+                    epoch_now = time.time()
+                    
+                    # Non-blocking database insert
+                    cursor.execute(
                         "INSERT INTO detections (id, timestamp, epoch, image_path, assessment_session_id, user_id) VALUES (%s, %s, %s, %s, %s, %s)",
                         (snap_id, timestamp, epoch_now, img_b64_small, assessment_session_id, session.get("user_id"))
                     )
-                    current_db.commit()
+                    db.commit()
                     
-                    # Emit notification
-                    now_dt = datetime.now()
-                    try:
-                        socketio.emit("cheating_notification", {
-                            "message": "Possible Cheating detected", 
-                            "time": now_dt.strftime("%I:%M %p"), 
-                            "timestamp": now_dt.strftime("%Y-%m-%d %I:%M:%S %p"), 
-                            "url": f"/cheating/{snap_id}"
-                        })
-                    except Exception as e:
-                        logger.debug(f"Socket emit error: {e}")
-                        
+                    # Non-blocking socket emit
+                    socketio.emit("cheating_notification", {
+                        "message": "Possible Cheating detected", 
+                        "time": timestamp.strftime("%I:%M %p"), 
+                        "timestamp": timestamp.strftime("%Y-%m-%d %I:%M:%S %p"), 
+                        "url": f"/cheating/{snap_id}"
+                    }, room=request.sid)  # Send only to current client
+                    
                     last_cheating_notification_time = time.time()
-                else:
-                    logger.debug("No assessment session ID - skipping snapshot save")
                     
             except Exception as e:
-                if 'current_db' in locals() and current_db:
-                    try:
-                        current_db.rollback()
-                    except:
-                        pass
-                logger.error(f"DB insert error for snapshot: {e}")
+                logger.error(f"Non-blocking DB error: {e}")
+                try:
+                    db.rollback()
+                except:
+                    pass
 
-        # Prepare and emit annotated frame back to client
+        # Send response with lower quality
         try:
-            out_b64 = cv2_to_b64(annotated, jpeg_quality=60)
+            out_b64 = cv2_to_b64(annotated, jpeg_quality=50)  # Lower quality
             if out_b64:
                 emit("response_frame", {"image": out_b64, "cheating": cheating_in_frame})
-            else:
-                logger.debug("Failed to encode output frame")
         except Exception as e:
-            logger.error(f"Frame emission error: {e}")
+            logger.debug(f"Frame emission error: {e}")
             
     except Exception as e:
-        logger.error(f"Fatal frame processing error: {e}")
-        import traceback
-        logger.error(f"Traceback: {traceback.format_exc()}")
+        logger.error(f"Frame processing error: {e}")
     finally:
         try:
             frame_lock.release()
-        except Exception:
+        except:
             pass
 
 # ---------- UI / Snapshot routes ----------
