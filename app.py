@@ -154,7 +154,7 @@ def setup_roboflow():
         return None
 
 def predict_with_roboflow(image, confidence=0.5):
-    """Make prediction using Roboflow API"""
+    """Make prediction using Roboflow API with rate limiting"""
     if not roboflow_model:
         return []
     
@@ -163,28 +163,42 @@ def predict_with_roboflow(image, confidence=0.5):
         _, buffer = cv2.imencode('.jpg', image, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
         img_b64 = base64.b64encode(buffer).decode('utf-8')
         
+        # Validate base64 length to avoid "File name too long" error
+        if len(img_b64) > 1000000:  # 1MB limit
+            logger.warning("Image too large for Roboflow API, skipping")
+            return []
+        
         # Make prediction with confidence threshold (0-100 for Roboflow)
         prediction = roboflow_model.predict(img_b64, confidence=int(confidence*100))
         
         detections = []
-        if hasattr(prediction, 'predictions') and prediction.predictions:
+        if prediction and hasattr(prediction, 'predictions') and prediction.predictions:
             for pred in prediction.predictions:
-                # Extract bounding box coordinates
-                x = int(pred['x'] - pred['width']/2)
-                y = int(pred['y'] - pred['height']/2)
-                x2 = int(pred['x'] + pred['width']/2)
-                y2 = int(pred['y'] + pred['height']/2)
-                
-                label = pred['class']
-                conf = pred['confidence']
-                
-                detections.append((label, conf, (x, y, x2, y2)))
+                try:
+                    # Extract bounding box coordinates
+                    x = int(pred['x'] - pred['width']/2)
+                    y = int(pred['y'] - pred['height']/2)
+                    x2 = int(pred['x'] + pred['width']/2)
+                    y2 = int(pred['y'] + pred['height']/2)
+                    
+                    label = pred['class']
+                    conf = pred['confidence'] / 100.0  # Convert back to 0-1 range
+                    
+                    detections.append((label, conf, (x, y, x2, y2)))
+                except Exception as e:
+                    logger.debug(f"Error parsing prediction: {e}")
+                    continue
                 
         logger.debug(f"Roboflow detected {len(detections)} objects")
         return detections
         
     except Exception as e:
         logger.warning(f"Roboflow prediction error: {e}")
+        # Check if it's a rate limit error
+        if "rate limit" in str(e).lower() or "429" in str(e) or "quota" in str(e).lower():
+            logger.warning("⚠️ Roboflow rate limit reached, skipping frame")
+        elif "file name too long" in str(e).lower():
+            logger.warning("⚠️ Image data too large for Roboflow API")
         return []
 
 # Initialize Roboflow model
