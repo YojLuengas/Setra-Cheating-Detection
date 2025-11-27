@@ -100,8 +100,12 @@ header {
 }
 
 .camera-container {
-  text-align: center;
+  position: relative !important; /* REQUIRED */
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
+
 
 .camera-container img#video-frame {
   width: 720px;
@@ -195,12 +199,6 @@ button:hover {
    Responsive tweaks
 ------------------- */
 @media (max-width: 768px) {
-  .camera-container img#video-frame,
-  .snapshot-img {
-    width: 100%;
-    height: auto;
-    max-height: 50vh;
-  }
 
   .sidebar {
     display: none;
@@ -1728,10 +1726,7 @@ body.dashboard-body {
   transition: transform 0.25s ease;
 }
 
-.camera-container img#video-frame:hover,
-.camera-container video#video-frame:hover {
-  transform: scale(1.02);
-}
+
 
 .status-text {
   margin-top: 30px;
@@ -2584,4 +2579,32 @@ td {
 
 .flash-message {
   transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+#session-timer {
+  position: absolute;
+  top: 16px;
+  transform: translateX(-50%);
+
+  background: linear-gradient(135deg, #17172b, #2b2b49);
+  color: #ffffff;
+
+  padding: 14px 28px;
+  border-radius: 14px;
+  font-weight: 900;
+  font-size: 32px;
+  letter-spacing: 2px;
+  border: 3px solid rgba(255,255,255,0.18);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.55);
+
+  z-index: 9999;
+  text-align: center;
+  font-family: "Arial", sans-serif;
+
+  transition: transform 0.2s ease-out, background 0.5s linear;
+}
+
+#session-timer.low-time {
+  animation: pulse 0.9s infinite;
+  background: linear-gradient(135deg, #8a0000, #c10000);
 }

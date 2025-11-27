@@ -443,34 +443,31 @@ function startExamCountdown(minutes) {
 function updateTimerUI() {
   const timerEl = document.getElementById("session-timer");
   if (!timerEl) return;
-  if (!timerEndTime) {
-    timerEl.textContent = "⏱ 00:00";
-    return;
-  }
 
   const now = Date.now();
   let remaining = timerEndTime - now;
 
   if (remaining <= 0) {
-    timerEl.textContent = "⏱ 00:00";
-    timerEl.style.color = "red";
-    if (countdownTimer) {
-      clearInterval(countdownTimer);
-      countdownTimer = null;
-    }
-    // Auto end
+    timerEl.innerHTML = "⏱ 00:00";
+    timerEl.classList.add("low-time");
+    clearInterval(countdownTimer);
+    countdownTimer = null;
     autoEndExam();
     return;
   }
 
   const mins = Math.floor(remaining / 60000);
   const secs = Math.floor((remaining % 60000) / 1000);
-  timerEl.textContent = `⏱ ${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 
-  // last minute style
-  timerEl.style.color = remaining <= 60000 ? "red" : "white";
+  timerEl.innerHTML = `⏱ ${String(mins).padStart(2,"0")}:${String(secs).padStart(2,"0")}`;
+
+  // Apply alert style if last 5 minutes
+  if (remaining <= 5 * 60 * 1000) {
+    timerEl.classList.add("low-time");
+  } else {
+    timerEl.classList.remove("low-time");
+  }
 }
-
 async function autoEndExam() {
   // final UI alert and then call stop endpoint & local cleanup
   try {
@@ -496,6 +493,7 @@ async function autoEndExam() {
     window.location.href = "/dashboard";
   }
 }
+
 
 // ------------------ Stop Assessment ------------------
 async function stopAssessment() {
