@@ -1744,6 +1744,14 @@ body.dashboard-body {
   justify-items: center;
 }
 
+.camera-feeds.single-camera {
+  grid-template-columns: 1fr;
+}
+
+.camera-feeds.dual-camera {
+  grid-template-columns: repeat(2, 1fr);
+}
+
 .camera-feed {
   position: relative;
   display: flex;

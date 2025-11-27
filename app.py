@@ -34,11 +34,11 @@ print("Starting Flask application...")
 
 # Try to import ML libraries, but handle if they're not available
 try:
-    from roboflow import Roboflow
-    ROBOFLOW_AVAILABLE = True
+    from ultralytics import YOLO
+    YOLO_AVAILABLE = True
 except ImportError:
-    ROBOFLOW_AVAILABLE = False
-    print("⚠️ Roboflow not available - running without ML detection")
+    YOLO_AVAILABLE = False
+    print("⚠️ YOLO not available - running without ML detection")
 
 try:
     import mediapipe as mp
@@ -99,20 +99,33 @@ except Exception as e:
     cursor = None
 
 # ---------- Models / ML ----------
-rf_model = None
+yolo_model = None
 face_mesh = None
 
-# Initialize Roboflow model
-if ROBOFLOW_AVAILABLE:
+# Try to load YOLO model
+if YOLO_AVAILABLE:
     try:
-        rf = Roboflow(api_key="gokzwVXEayjZ3Nm7QEVX")
-        project = rf.workspace("cheating-detection-6o7xl").project("examdetection-ezdwm")
-        rf_model = project.version(1).model
-        logger.info("✅ Roboflow model initialized successfully")
+        # Check if custom model exists
+        custom_model_path = "models/best.pt"
+        
+        if os.path.exists(custom_model_path):
+            try:
+                yolo_model = YOLO(custom_model_path)
+                logger.info("✅ Custom YOLO model loaded successfully")
+            except Exception as e:
+                logger.warning(f"Failed to load custom model: {e}")
+                # Fall back to pretrained model
+                yolo_model = YOLO("yolov8n.pt")
+                logger.info("✅ Using YOLOv8n pretrained model as fallback")
+        else:
+            # Use pretrained model if custom doesn't exist
+            yolo_model = YOLO("yolov8n.pt")
+            logger.info("✅ Using YOLOv8n pretrained model (custom model not found)")
+            
     except Exception as e:
-        logger.error(f"❌ Failed to initialize Roboflow model: {e}")
-        rf_model = None
-        ROBOFLOW_AVAILABLE = False
+        logger.error(f"❌ Failed to load YOLO model: {e}")
+        yolo_model = None
+        YOLO_AVAILABLE = False
 
 # Try to initialize MediaPipe
 if MEDIAPIPE_AVAILABLE:
@@ -130,10 +143,8 @@ if MEDIAPIPE_AVAILABLE:
 # ---------- Globals & Locks ----------
 all_snapshots = []
 notified_snapshots = []
-last_cheating_notification_time = 0
-consecutive_cheating_frames = 0
-consecutive_non_cheating_frames = 0
-stable_cheating = False
+# Per-camera detection state
+camera_detection_state = {}  # camera_index -> {'last_notification_time': 0, 'consecutive_cheating': 0, 'consecutive_non_cheating': 0, 'stable_cheating': False}
 frame_lock = Lock()
 
 
@@ -473,10 +484,10 @@ def create_assessment_session():
         logger.info(f"✅ Created assessment session {assessment_session_id} with folder {folder_name}")
         
         # Clear global variables
-        global all_snapshots, notified_snapshots, last_cheating_notification_time
+        global all_snapshots, notified_snapshots, camera_detection_state
         all_snapshots = []
         notified_snapshots = []
-        last_cheating_notification_time = 0
+        camera_detection_state = {}
         
         # Store session ID
         session["assessment_session_id"] = assessment_session_id
@@ -521,7 +532,7 @@ def handle_frame(message):
     face mesh less frequently. Annotate on the downscaled image and
     send a smaller JPEG to clients to reduce latency.
     """
-    global all_snapshots, notified_snapshots, last_cheating_notification_time
+    global all_snapshots, notified_snapshots
     global _last_processed_time
 
     # Quick-drop if someone else is processing
@@ -582,68 +593,64 @@ def handle_frame(message):
         small_h = max(1, int(original_h * scale))
         small = cv2.resize(frame, (small_w, small_h), interpolation=cv2.INTER_LINEAR)
 
-        # Run Roboflow inference on the small image (only if model is available)
+        # Run YOLO on the small image (only if model is available)
+        results = []
+        if yolo_model:
+            try:
+                # keep imgsz similar to our small width for efficiency
+                results = yolo_model.predict(small, imgsz=min(640, OUT_IMG_MAX), conf=0.50, verbose=False)
+            except Exception as e:
+                logger.exception("YOLO prediction error: %s", e)
+                results = []
+
         detections = []
         cheating_in_frame = False
 
-        if rf_model and ROBOFLOW_AVAILABLE:
-            try:
-                # Save the image temporarily for Roboflow API
-                temp_path = f"temp_frame_{uuid.uuid4()}.jpg"
-                cv2.imwrite(temp_path, small)
-                
-                # Run inference using Roboflow API
-                results = rf_model.predict(temp_path, confidence=50, overlap=30).json()
-                
-                # Clean up temp file
-                if os.path.exists(temp_path):
-                    os.remove(temp_path)
-                
-                # Process Roboflow results
-                for prediction in results.get('predictions', []):
+        if len(results) > 0 and hasattr(results[0], "boxes"):
+            for box in results[0].boxes:
+                try:
+                    # robust extraction: support tensors and plain numbers
+                    if hasattr(box.xyxy, "cpu"):
+                        xyxy = box.xyxy.cpu().numpy().flatten()
+                    else:
+                        xyxy = np.array(box.xyxy).flatten()
+
+                    if hasattr(box.conf, "cpu"):
+                        conf = float(box.conf.cpu().numpy().flatten()[0])
+                    else:
+                        try:
+                            conf = float(box.conf)
+                        except Exception:
+                            conf = 0.0
+
+                    if hasattr(box.cls, "cpu"):
+                        cls = int(box.cls.cpu().numpy().flatten()[0])
+                    else:
+                        try:
+                            cls = int(box.cls)
+                        except Exception:
+                            cls = 0
+
+                    label = None
                     try:
-                        label = prediction.get('class', 'unknown')
-                        conf = prediction.get('confidence', 0.0) / 100.0  # Convert percentage to decimal
-                        
-                        # Get bounding box coordinates
-                        x_center = prediction.get('x', 0)
-                        y_center = prediction.get('y', 0)
-                        width = prediction.get('width', 0)
-                        height = prediction.get('height', 0)
-                        
-                        # Convert center coordinates to corner coordinates
-                        x1 = int(x_center - width / 2)
-                        y1 = int(y_center - height / 2)
-                        x2 = int(x_center + width / 2)
-                        y2 = int(y_center + height / 2)
-                        
-                        # Ensure coordinates are within image bounds
-                        x1 = max(0, x1)
-                        y1 = max(0, y1)
-                        x2 = min(small_w, x2)
-                        y2 = min(small_h, y2)
-                        
-                        detections.append((label, conf, (x1, y1, x2, y2)))
-                        
-                        # Check if this is a cheating detection
-                        if str(label).lower() == "cheating":
-                            cheating_in_frame = True
-                            
-                    except Exception as e:
-                        logger.exception("Failed parsing Roboflow prediction: %s", e)
-                        continue
-                        
-            except Exception as e:
-                logger.exception("Roboflow prediction error: %s", e)
+                        label = yolo_model.model.names.get(cls, str(cls)) if hasattr(yolo_model, "model") else str(cls)
+                    except Exception:
+                        label = str(cls)
+
+                    # xyxy in small image coords -> map back to small image (we annotate small)
+                    x1, y1, x2, y2 = [int(v) for v in xyxy[:4]]
+                    detections.append((label, conf, (x1, y1, x2, y2)))
+                except Exception:
+                    logger.exception("Failed parsing detection box; skipping.")
+                    continue
 
         # Annotate on the small image (faster than annotating full resolution)
         annotated = small.copy()
         for label, conf, (x1, y1, x2, y2) in detections:
             color = (0, 0, 255) if str(label).lower() == "cheating" else (0, 255, 0)
             cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
-            # Add confidence score to label
-            text = f"{label}: {conf:.2f}"
-            cv2.putText(annotated, text, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+            if str(label).lower() == "cheating":
+                cheating_in_frame = True
 
         # MediaPipe face mesh processing for head rotation
         if MEDIAPIPE_AVAILABLE and face_mesh:
@@ -657,27 +664,38 @@ def handle_frame(message):
                     if abs(yaw_deg) > 25:
                         cheating_in_frame = True
 
-        # Save snapshot & DB insert (rate-limit snapshot writes)
-        if cheating_in_frame and time.time() - last_cheating_notification_time >= 2:
+        # Initialize camera detection state if not exists
+        if camera_index not in camera_detection_state:
+            camera_detection_state[camera_index] = {
+                'last_notification_time': 0,
+                'consecutive_cheating': 0,
+                'consecutive_non_cheating': 0,
+                'stable_cheating': False
+            }
+
+        # Save snapshot & DB insert (rate-limit snapshot writes per camera)
+        camera_state = camera_detection_state[camera_index]
+        if cheating_in_frame and time.time() - camera_state['last_notification_time'] >= 2:
             snap_id = str(uuid.uuid4())
             # save a smaller base64 string (annotated small)
             _, buf = cv2.imencode(".jpg", annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
             img_b64_small = base64.b64encode(buf).decode("utf-8")
             timestamp = datetime.now()
             epoch_now = time.time()
-            
+
             # Create snapshot object
             snapshot = {
-                "id": snap_id, 
-                "image_path": img_b64_small, 
-                "timestamp": timestamp.strftime("%Y-%m-%d %I:%M:%S %p"), 
-                "epoch": epoch_now
+                "id": snap_id,
+                "image_path": img_b64_small,
+                "timestamp": timestamp.strftime("%Y-%m-%d %I:%M:%S %p"),
+                "epoch": epoch_now,
+                "camera": camera_index  # Add camera info to snapshot
             }
-            
+
             # Add to memory collections
             all_snapshots.append(snapshot)
             notified_snapshots.append(snapshot)
-            
+
             # Save to database immediately
             try:
                 cursor.execute(
@@ -685,21 +703,22 @@ def handle_frame(message):
                     (snap_id, timestamp, epoch_now, img_b64_small, assessment_session_id, session["user_id"])
                 )
                 db.commit()
-                logger.info(f"✅ Saved detection {snap_id} to database")
+                logger.info(f"✅ Saved detection {snap_id} from camera {camera_index} to database")
             except Exception as e:
                 db.rollback()
                 logger.exception("❌ DB insert error for snapshot: %s", e)
-            
+
             # Emit notification
             now_dt = datetime.now()
             socketio.emit("cheating_notification", {
-                "message": "Possible Cheating detected", 
-                "time": now_dt.strftime("%I:%M %p"), 
-                "timestamp": now_dt.strftime("%Y-%m-%d %I:%M:%S %p"), 
-                "url": f"/cheating/{snap_id}"
+                "message": f"Possible Cheating detected (Camera {camera_index})",
+                "time": now_dt.strftime("%I:%M %p"),
+                "timestamp": now_dt.strftime("%Y-%m-%d %I:%M:%S %p"),
+                "url": f"/cheating/{snap_id}",
+                "camera": camera_index
             })
-            
-            last_cheating_notification_time = time.time()
+
+            camera_state['last_notification_time'] = time.time()
 
         # Prepare and emit annotated frame back to client (small image to reduce latency)
         out_b64 = cv2_to_b64(annotated, jpeg_quality=60)

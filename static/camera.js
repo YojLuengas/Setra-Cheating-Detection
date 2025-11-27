@@ -86,6 +86,18 @@ async function startCamera() {
     }
 
     cameraFeedsContainer.innerHTML = ""; // Clear existing feeds
+    
+    // Set the grid layout based on number of cameras
+    const numCameras = currentDeviceIds.length;
+    if (numCameras === 1) {
+      cameraFeedsContainer.className = "camera-feeds single-camera";
+    } else if (numCameras === 2) {
+      cameraFeedsContainer.className = "camera-feeds dual-camera";
+    } else if (numCameras <= 4) {
+      cameraFeedsContainer.className = "camera-feeds quad-camera";
+    } else {
+      cameraFeedsContainer.className = "camera-feeds multi-camera";
+    }
 
     // Start cameras based on selected number
     for (let i = 0; i < currentDeviceIds.length; i++) {
@@ -122,7 +134,7 @@ async function startCamera() {
         await vid.play();
         vids[i] = vid;
 
-        // Create dynamic camera feed UI
+        // Create dynamic camera feed UI with responsive sizing
         const feedDiv = document.createElement("div");
         feedDiv.className = "camera-feed";
         feedDiv.innerHTML = `

@@ -2,7 +2,9 @@ import { appendNotification, persistState, updateBadge, seenSnapshots, refreshNo
 
 let socket;
 
-function initSocket(video, statusDiv) {
+let detectionCallback = null;
+
+function initSocket(video, statusDiv, onDetection) {
   if (!socket) {
     socket = io({ transports: ["websocket"] });
 
@@ -97,6 +99,18 @@ function initSocket(video, statusDiv) {
         refreshNotifications();
       } else if (window.refreshNotifications) {
         window.refreshNotifications();
+      }
+    });
+
+    socket.on('detection_result', (data) => {
+      if (detectionCallback && data.detections) {
+        detectionCallback(data.detections, data.camera_index || 0);
+      }
+      
+      // Update status if needed
+      if (data.suspicious && statusDiv) {
+        statusDiv.textContent = "Potential cheating detected!";
+        statusDiv.style.color = "#ff0000";
       }
     });
   }
