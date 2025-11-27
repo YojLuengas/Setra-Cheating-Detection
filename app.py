@@ -9,7 +9,8 @@ from PIL import Image
 from datetime import datetime
 from functools import wraps
 from threading import Lock
-
+from datetime import datetime
+import uuid
 from flask import (
     Flask,
     render_template,
@@ -384,35 +385,42 @@ def create_assessment_session():
 
     data = request.get_json(silent=True) or {}
 
-    # Create cursor here (FIX)
     cursor = db.cursor(dictionary=True)
 
-    # Clean input values
     subject = (data.get("subject") or "").strip()
     course = (data.get("course") or "").strip()
 
+    # Duration validation
+    allowed_durations = {30, 60, 90, 120}
     try:
-        # --- Validate subject belongs to the logged-in user ---
+        raw_duration = data.get("duration_minutes", data.get("duration", None))
+        duration_minutes = int(raw_duration) if raw_duration else 60
+    except (ValueError, TypeError):
+        return jsonify({"success": False, "error": "Invalid duration value"}), 400
+
+    if duration_minutes not in allowed_durations:
+        return jsonify({"success": False, "error": "Unsupported duration value"}), 400
+
+    try:
+        # Validate subject belongs to the user
         cursor.execute("SELECT subjects FROM users WHERE id = %s", (session["user_id"],))
         row = cursor.fetchone()
 
         if not row:
             return jsonify({"success": False, "error": "User not found"}), 400
 
-        # row is now a dictionary
-        subjects_raw = row["subjects"] or ""
-
+        subjects_raw = row.get("subjects") or ""
         valid_subjects = [s.strip() for s in subjects_raw.split(",") if s.strip()]
 
         if subject not in valid_subjects:
             return jsonify({"success": False, "error": "Invalid subject"}), 400
 
-        # --- Insert assessment session ---
+        # Insert assessment session with STATUS added
         cursor.execute(
             """
             INSERT INTO assessment_sessions
-                (user_id, course, subject, exam_type, exam_datetime, camera, created_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+                (user_id, course, subject, exam_type, exam_datetime, camera, duration_minutes, status, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 session["user_id"],
@@ -421,12 +429,15 @@ def create_assessment_session():
                 data.get("exam_type"),
                 data.get("exam_datetime"),
                 data.get("camera"),
+                duration_minutes,
+                "active",   # NEW: Default active status
                 datetime.now(),
             ),
         )
 
         assessment_session_id = cursor.lastrowid
 
+        # Create folder record
         folder_name = (
             f"{course.replace(' ', '_')}_"
             f"{subject.replace(' ', '_')}_"
@@ -445,7 +456,7 @@ def create_assessment_session():
 
         db.commit()
 
-        # Reset snapshot trackers
+        # Reset tracking
         global all_snapshots, notified_snapshots, last_cheating_notification_time
         all_snapshots = []
         notified_snapshots = []
@@ -453,34 +464,71 @@ def create_assessment_session():
 
         session["assessment_session_id"] = assessment_session_id
 
-        return jsonify({"success": True, "message": "Assessment session created successfully!"})
+        return jsonify({
+            "success": True,
+            "message": "Assessment session created successfully!",
+            "assessment_session_id": assessment_session_id,
+            "duration_minutes": duration_minutes,
+            "status": "active"
+        })
 
     except Exception as e:
         db.rollback()
         logger.exception("create_assessment_session error: %s", e)
         return jsonify({"success": False, "error": str(e)}), 500
 
+    finally:
+        try:
+            cursor.close()
+        except Exception:
+            pass
+      
+        
 @app.route("/stop-assessment", methods=["POST"])
 @login_required
 def stop_assessment():
     """
-    Called by the frontend when user stops an assessment.
-    Emits a refresh_notifications event and clears the session assessment ID.
+    Stops an active assessment session:
+    - Update DB status to 'completed'
+    - Emit refresh event to update UI
+    - Clear session assessment ID
     """
+    assessment_id = session.get("assessment_session_id")
+
+    if not assessment_id:
+        return jsonify({"success": False, "error": "No active session"}), 400
+
     try:
-        # Clear the assessment session ID from the session
+        cursor = db.cursor()
+
+        # Mark the session as completed
+        cursor.execute(
+            "UPDATE assessment_sessions SET status = 'completed' WHERE id = %s",
+            (assessment_id,)
+        )
+        db.commit()
+
+        # Remove from session
         session.pop("assessment_session_id", None)
 
-        # Notify connected clients to refresh notifications / records view
+        # Notify the UI to refresh notifications / history
         try:
-            socketio.emit("refresh_notifications", {"msg": "assessment_stopped"})
+            socketio.emit("refresh_notifications", {"msg": "assessment_ended"})
         except Exception as e:
-            logger.exception("socket emit failed: %s", e)
+            logger.exception("SocketIO emit failed: %s", e)
 
-        return jsonify({"success": True})
+        return jsonify({"success": True, "message": "Assessment session stopped"})
+
     except Exception as e:
         logger.exception("stop_assessment error: %s", e)
         return jsonify({"success": False, "error": str(e)}), 500
+
+    finally:
+        try:
+            cursor.close()
+        except Exception:
+            pass
+
 
 @app.route("/api/get_user_subjects")
 @login_required
