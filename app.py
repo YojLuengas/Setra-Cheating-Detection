@@ -953,6 +953,6 @@ def delete_notification(snap_id):
 # ---------- Run ----------
 if __name__ == "__main__":
     host = "0.0.0.0"
-    port = 5000
-    logger.info("🚀 Server running at: http://127.0.0.1:%s", port)
-    socketio.run(app, host=host, port=port, debug=True)
+    port = int(os.environ.get("PORT", 5000))  # Railway provides PORT env var
+    logger.info("🚀 Server running at: http://0.0.0.0:%s", port)
+    socketio.run(app, host=host, port=port, debug=False)  # Set debug=False for production
