@@ -1,6 +1,3 @@
-import eventlet
-eventlet.monkey_patch()
-import sys
 import os
 import io
 import base64
@@ -29,24 +26,8 @@ from flask import (
 from flask_socketio import SocketIO, emit
 import mysql.connector
 
-print(f"Python version: {sys.version}")
-print("Starting Flask application...")
-
-# Try to import ML libraries, but handle if they're not available
-try:
-    from ultralytics import YOLO
-    YOLO_AVAILABLE = True
-except ImportError:
-    YOLO_AVAILABLE = False
-    print("⚠️ YOLO not available - running without ML detection")
-
-try:
-    import mediapipe as mp
-    MEDIAPIPE_AVAILABLE = True
-except ImportError:
-    MEDIAPIPE_AVAILABLE = False
-    print("⚠️ MediaPipe not available - running without face detection")
-
+from ultralytics import YOLO
+import mediapipe as mp
 import bcrypt
 import logging
 
@@ -62,83 +43,29 @@ DB_CONFIG = {
 
 # ---------- App / DB / Logging ----------
 app = Flask(__name__)
-
-# Single source of configuration
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'fallback-secret-key-change-in-production')
-app.config['DEBUG'] = os.environ.get('DEBUG', 'False').lower() == 'true'
-
-# Single database configuration
-DB_CONFIG = {
-    "host": os.environ.get("MYSQL_HOST", "switchback.proxy.rlwy.net"),
-    "user": os.environ.get("MYSQL_USER", "root"), 
-    "password": os.environ.get("MYSQL_PASSWORD", "PLbCUQpgMuuLSPqHNQhSWUIbbJKXrpzp"),
-    "database": os.environ.get("MYSQL_DATABASE", "railway"),
-    "port": int(os.environ.get("MYSQL_PORT", 57978)),
-    "charset": "utf8mb4",
-}
-
-# Initialize SocketIO
+app.secret_key = "replace_this_with_a_strong_random_secret"  # change this
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0  # Disable caching for static files to enable cache busting
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
-# Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Database connection with error handling
+# Use a buffered cursor to permit multiple fetches reliably
 try:
     db = mysql.connector.connect(**DB_CONFIG)
     cursor = db.cursor(buffered=True)
-    
-    # Set SQL mode to be less strict
-    cursor.execute("SET sql_mode = 'STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO'")
-    
-    logger.info(f"✅ Connected to database: {DB_CONFIG['host']}:{DB_CONFIG['port']}")
 except Exception as e:
-    logger.error(f"❌ Database connection failed: {e}")
-    db = None
-    cursor = None
+    logger.exception("Database connection error: %s", e)
+    raise
 
 # ---------- Models / ML ----------
-yolo_model = None
-face_mesh = None
+# Update path as required
+yolo_model = YOLO("models/best.pt")
 
-# Try to load YOLO model
-if YOLO_AVAILABLE:
-    try:
-        # Check if custom model exists
-        custom_model_path = "models/best.pt"
-        
-        if os.path.exists(custom_model_path):
-            try:
-                yolo_model = YOLO(custom_model_path)
-                logger.info("✅ Custom YOLO model loaded successfully")
-            except Exception as e:
-                logger.warning(f"Failed to load custom model: {e}")
-                # Fall back to pretrained model
-                yolo_model = YOLO("yolov8n.pt")
-                logger.info("✅ Using YOLOv8n pretrained model as fallback")
-        else:
-            # Use pretrained model if custom doesn't exist
-            yolo_model = YOLO("yolov8n.pt")
-            logger.info("✅ Using YOLOv8n pretrained model (custom model not found)")
-            
-    except Exception as e:
-        logger.error(f"❌ Failed to load YOLO model: {e}")
-        yolo_model = None
-        YOLO_AVAILABLE = False
+# Initialize MediaPipe Face Mesh
+face_mesh = mp.solutions.face_mesh.FaceMesh(max_num_faces=1, refine_landmarks=True, min_detection_confidence=0.5, min_tracking_confidence=0.5)
 
-# Try to initialize MediaPipe
-if MEDIAPIPE_AVAILABLE:
-    try:
-        face_mesh = mp.solutions.face_mesh.FaceMesh(
-            max_num_faces=1, 
-            refine_landmarks=True, 
-            min_detection_confidence=0.5, 
-            min_tracking_confidence=0.5
-        )
-        logger.info("✅ MediaPipe initialized successfully")
-    except Exception as e:
-        logger.error(f"❌ Failed to initialize MediaPipe: {e}")
+
 
 # ---------- Globals & Locks ----------
 all_snapshots = []
@@ -149,10 +76,9 @@ consecutive_non_cheating_frames = 0
 stable_cheating = False
 frame_lock = Lock()
 
-
 # Throttling / timing controls to reduce CPU / GPU load and UI lag
 PROCESS_INTERVAL = 0.50       # seconds between heavy processing runs (≈10 FPS)
-OUT_IMG_MAX = 640            # send this max width for annotated frames
+OUT_IMG_MAX = 608            # send this max width for annotated frames
 _last_processed_time = 0.0
 
 # ---------- Helpers ----------
@@ -407,44 +333,37 @@ def activate_user(user_id):
 @app.route("/admin/dashboard")
 @login_required
 def admin_dashboard():
+    if session.get("role") != "admin":
+        flash("Access denied!", "danger")
+        return redirect(url_for("home"))
+
     try:
-        if cursor is None:
-            flash("Database connection not available", "error")
-            return redirect(url_for("admin_page"))
-        
-        # Fix dashboard queries
-        # Users count
-        cursor.execute("SELECT COUNT(*) as total FROM users")
+        # Summary counts
+        cursor.execute("SELECT COUNT(*) FROM users")
         total_users = cursor.fetchone()[0]
-        
-        # Active sessions count  
-        cursor.execute("SELECT COUNT(*) as active FROM assessment_sessions WHERE DATE(created_at) = CURDATE()")
-        active_sessions = cursor.fetchone()[0]
-        
-        # Recent detections with proper grouping
-        cursor.execute("""
-            SELECT 
-                u.username,
-                COUNT(d.id) as detection_count,
-                MAX(d.timestamp) as last_detection
-            FROM detections d 
-            JOIN users u ON d.user_id = u.id 
-            WHERE DATE(d.timestamp) = CURDATE()
-            GROUP BY u.id, u.username
-            ORDER BY last_detection DESC 
-            LIMIT 10
-        """)
-        recent_detections = cursor.fetchall()
-        
-        return render_template("admin_dashboard.html", 
-                             total_users=total_users,
-                             active_sessions=active_sessions, 
-                             recent_detections=recent_detections)
-                             
+
+        cursor.execute("SELECT COUNT(*) FROM users WHERE status='Active'")
+        active_users = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM users WHERE status='Inactive'")
+        inactive_users = cursor.fetchone()[0]
+
+        # Recent users preview (include status here)
+        cursor.execute("SELECT username, role, status FROM users ORDER BY id DESC LIMIT 5")
+        users_preview = cursor.fetchall()
+
     except Exception as e:
-        logger.error(f"Admin dashboard error: {e}")
-        flash("Error loading dashboard", "error")
-        return redirect(url_for("admin_page"))
+        logger.exception("admin_dashboard error: %s", e)
+        total_users = active_users = inactive_users = 0
+        users_preview = []
+
+    return render_template(
+        "admin_dashboard.html",
+        total_users=total_users,
+        active_users=active_users,
+        inactive_users=inactive_users,
+        users_preview=users_preview
+    )
 
 # ---------- Assessment session ----------
 @app.route("/assessment-session", methods=["POST"])
@@ -563,7 +482,7 @@ def handle_frame(message):
         # Run YOLO on the small image
         try:
             # keep imgsz similar to our small width for efficiency
-            results = yolo_model.predict(small, imgsz=min(640, OUT_IMG_MAX), conf=0.50, verbose=False)
+            results = yolo_model.predict(small, imgsz=min(608, OUT_IMG_MAX), conf=0.50, verbose=False)
         except Exception as e:
             logger.exception("YOLO prediction error: %s", e)
             results = []
