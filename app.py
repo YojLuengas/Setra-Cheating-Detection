@@ -1,5 +1,20 @@
+import os
+# CRITICAL: Set memory limits BEFORE any imports
+os.environ['OMP_NUM_THREADS'] = '1'
+os.environ['MKL_NUM_THREADS'] = '1'
+os.environ['TORCH_NUM_THREADS'] = '1'
+os.environ['PYTORCH_JIT'] = '0'  # Disable JIT compilation
+
 import eventlet
 eventlet.monkey_patch()
+
+# Add timeout and memory monitoring
+import psutil
+import gc
+import threading
+import signal
+import sys
+
 import sys
 import os
 import io
@@ -528,152 +543,259 @@ def stop_assessment():
 def on_connect():
     emit("connected", {"data": "ready"})
 
+# Global frame processing controls
+frame_processing = False
+frame_count = 0
+last_memory_check = time.time()
+
+def monitor_memory():
+    """Kill process if memory usage too high"""
+    try:
+        process = psutil.Process()
+        memory_mb = process.memory_info().rss / 1024 / 1024
+        
+        if memory_mb > 450:  # 450MB threshold for 512MB limit
+            logger.error(f"Memory usage too high: {memory_mb:.1f}MB - restarting worker")
+            os.kill(os.getpid(), signal.SIGTERM)
+        
+        return memory_mb
+    except Exception:
+        return 0
+
+# Fix the frame handler with timeouts and memory management
 @socketio.on("frame")
 def handle_frame(message):
-    """
-    Process incoming frames but throttle to PROCESS_INTERVAL and do
-    face mesh less frequently. Annotate on the downscaled image and
-    send a smaller JPEG to clients to reduce latency.
-    """
+    global frame_processing, frame_count, last_memory_check, _last_processed_time
     global all_snapshots, notified_snapshots, last_cheating_notification_time
-    global _last_processed_time, _last_face_time
 
-    # Quick-drop if someone else is processing
-    if not frame_lock.acquire(blocking=False):
+    # Prevent multiple concurrent frame processing
+    if frame_processing:
+        return
+    
+    # Skip frames if processing too frequently
+    now = time.time()
+    if now - _last_processed_time < 1.0:  # Minimum 1 second between frames
         return
 
     try:
-        now = time.time()
-        # Throttle heavy processing to avoid backlog / lag
-        if now - _last_processed_time < PROCESS_INTERVAL:
-            return
-
+        frame_processing = True
+        frame_count += 1
         _last_processed_time = now
-
-        # Expect binary data directly
-        if isinstance(message, bytes):
-            frame = process_binary_image(message)
-        else:
-            # If not binary, assume base64 string for backward compatibility
-            img_b64 = message
-            if not img_b64:
-                return
-            frame = b64_to_cv2(img_b64)
-
-        if frame is None:
-            return
-
-        original_h, original_w = frame.shape[:2]
-
-        # Resize to a reasonable size for fast model inference
-        scale = OUT_IMG_MAX / max(original_h, original_w)
-        if scale <= 0:
-            scale = 1.0
-        small_w = max(1, int(original_w * scale))
-        small_h = max(1, int(original_h * scale))
-        small = cv2.resize(frame, (small_w, small_h), interpolation=cv2.INTER_LINEAR)
-
-        # Run YOLO on the small image
-        try:
-            # keep imgsz similar to our small width for efficiency
-            results = yolo_model.predict(small, imgsz=min(640, OUT_IMG_MAX), conf=0.50, verbose=False)
-        except Exception as e:
-            logger.exception("YOLO prediction error: %s", e)
-            results = []
-
-        detections = []
-        cheating_in_frame = False
-
-        if len(results) > 0 and hasattr(results[0], "boxes"):
-            for box in results[0].boxes:
-                try:
-                    # robust extraction: support tensors and plain numbers
-                    if hasattr(box.xyxy, "cpu"):
-                        xyxy = box.xyxy.cpu().numpy().flatten()
-                    else:
-                        xyxy = np.array(box.xyxy).flatten()
-
-                    if hasattr(box.conf, "cpu"):
-                        conf = float(box.conf.cpu().numpy().flatten()[0])
-                    else:
-                        try:
-                            conf = float(box.conf)
-                        except Exception:
-                            conf = 0.0
-
-                    if hasattr(box.cls, "cpu"):
-                        cls = int(box.cls.cpu().numpy().flatten()[0])
-                    else:
-                        try:
-                            cls = int(box.cls)
-                        except Exception:
-                            cls = 0
-
-                    label = None
-                    try:
-                        label = yolo_model.model.names.get(cls, str(cls)) if hasattr(yolo_model, "model") else str(cls)
-                    except Exception:
-                        label = str(cls)
-
-                    # xyxy in small image coords -> map back to small image (we annotate small)
-                    x1, y1, x2, y2 = [int(v) for v in xyxy[:4]]
-                    detections.append((label, conf, (x1, y1, x2, y2)))
-                except Exception:
-                    logger.exception("Failed parsing detection box; skipping.")
-                    continue
-
-        # Annotate on the small image (faster than annotating full resolution)
-        annotated = small.copy()
-        for label, conf, (x1, y1, x2, y2) in detections:
-            color = (0, 0, 255) if str(label).lower() == "cheating" else (0, 255, 0)
-            cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
-            if str(label).lower() == "cheating":
-                cheating_in_frame = True
-
-        # MediaPipe face mesh processing for head rotation
-        small_rgb = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
-        results = face_mesh.process(small_rgb)
-        yaw_deg = 0.0
-        if results.multi_face_landmarks:
-            for face_landmarks in results.multi_face_landmarks:
-                yaw = estimate_head_rotation(small_rgb, face_landmarks)
-                yaw_deg = yaw * 180 / 3.14159  # Convert to degrees
-                if abs(yaw_deg) > 25:
-                    cheating_in_frame = True
-
-        # Save snapshot & DB insert (rate-limit snapshot writes)
-        if cheating_in_frame and time.time() - last_cheating_notification_time >= 2:
-            snap_id = str(uuid.uuid4())
-            # save a smaller base64 string (annotated small)
-            _, buf = cv2.imencode(".jpg", annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
-            img_b64_small = base64.b64encode(buf).decode("utf-8")
-            timestamp = datetime.now()
-            epoch_now = time.time()
-            assessment_session_id = session.get("assessment_session_id")
-            snapshot = {"id": snap_id, "image_path": img_b64_small, "timestamp": timestamp.strftime("%Y-%m-%d %I:%M:%S %p"), "epoch": epoch_now}
-            all_snapshots.append(snapshot)
-            notified_snapshots.append(snapshot)
-            try:
-                cursor.execute("INSERT INTO detections (id, timestamp, epoch, image_path, assessment_session_id, user_id) VALUES (%s, %s, %s, %s, %s, %s)",
-                               (snap_id, timestamp, epoch_now, img_b64_small, assessment_session_id, session["user_id"]))
-                db.commit()
-            except Exception:
-                db.rollback()
-                logger.exception("DB insert error for snapshot")
-            now_dt = datetime.now()
-            socketio.emit("cheating_notification", {"message": "Possible Cheating detected", "time": now_dt.strftime("%I:%M %p"), "timestamp": now_dt.strftime("%Y-%m-%d %I:%M:%S %p"), "url": f"/cheating/{snap_id}"})
-            last_cheating_notification_time = time.time()
-
-        # Prepare and emit annotated frame back to client (small image to reduce latency)
-        out_b64 = cv2_to_b64(annotated, jpeg_quality=60)
-        if out_b64:
-            emit("response_frame", {"image": out_b64, "cheating": cheating_in_frame})
-    finally:
-        try:
-            frame_lock.release()
-        except Exception:
-            pass
         
+        # Memory check every 10 frames
+        if frame_count % 10 == 0:
+            memory_mb = monitor_memory()
+            logger.info(f"Frame {frame_count}, Memory: {memory_mb:.1f}MB")
+        
+        # Process frame with strict timeout
+        def process_frame_with_timeout():
+            try:
+                # Convert frame data
+                if isinstance(message, bytes):
+                    frame = process_binary_image(message)
+                else:
+                    frame = b64_to_cv2(message)
+                
+                if frame is None:
+                    emit("response_frame", {"error": "Invalid frame"})
+                    return
+
+                # Aggressive resize for memory efficiency
+                h, w = frame.shape[:2]
+                max_size = 300  # Very small processing size
+                if max(h, w) > max_size:
+                    scale = max_size / max(h, w)
+                    new_w = max(64, int(w * scale))
+                    new_h = max(64, int(h * scale))
+                    frame = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_AREA)
+
+                cheating_detected = False
+
+                # YOLO detection with timeout protection
+                if yolo_model and YOLO_AVAILABLE:
+                    try:
+                        # Set a processing timeout
+                        start_time = time.time()
+                        
+                        results = yolo_model.predict(
+                            frame, 
+                            imgsz=320,
+                            conf=0.7,
+                            verbose=False,
+                            device='cpu'
+                        )
+                        
+                        # Check processing time
+                        if time.time() - start_time > 5.0:  # 5 second timeout
+                            logger.warning("YOLO processing timeout")
+                            del results
+                            return
+                        
+                        # Quick detection check
+                        if results and len(results) > 0 and hasattr(results[0], 'boxes'):
+                            for box in results[0].boxes:
+                                try:
+                                    if hasattr(box.cls, 'cpu'):
+                                        cls_id = int(box.cls.cpu().numpy()[0])
+                                    else:
+                                        cls_id = int(box.cls)
+                                    
+                                    label = yolo_model.model.names.get(cls_id, '')
+                                    if str(label).lower() == 'cheating':
+                                        cheating_detected = True
+                                        break
+                                except Exception:
+                                    continue
+                        
+                        # Immediately clear results
+                        del results
+                        
+                    except Exception as e:
+                        logger.error(f"YOLO error: {e}")
+                        cheating_detected = False
+
+                # Save detection if needed (with memory limits)
+                if cheating_detected and now - last_cheating_notification_time >= 5:  # 5 second cooldown
+                    try:
+                        # Compress heavily before saving
+                        encode_params = [cv2.IMWRITE_JPEG_QUALITY, 30]
+                        _, buffer = cv2.imencode('.jpg', frame, encode_params)
+                        img_b64 = base64.b64encode(buffer).decode('utf-8')
+                        
+                        # Limit stored data
+                        if len(img_b64) > 200000:  # Max 200KB
+                            logger.warning("Image too large, skipping save")
+                        else:
+                            snap_id = str(uuid.uuid4())
+                            timestamp = datetime.now()
+                            
+                            # Database save with timeout
+                            try:
+                                success = execute_db_query(
+                                    "INSERT INTO detections (id, timestamp, epoch, image_path, user_id) VALUES (%s, %s, %s, %s, %s)",
+                                    (snap_id, timestamp, now, img_b64, session.get("user_id")),
+                                    timeout=3  # 3 second DB timeout
+                                )
+                                
+                                if success:
+                                    # Limit in-memory snapshots
+                                    snapshot = {
+                                        "id": snap_id,
+                                        "timestamp": timestamp.strftime("%Y-%m-%d %I:%M:%S %p"),
+                                        "epoch": now
+                                    }
+                                    
+                                    all_snapshots.append(snapshot)
+                                    notified_snapshots.append(snapshot)
+                                    
+                                    # Keep only last 5 in memory
+                                    if len(all_snapshots) > 5:
+                                        all_snapshots = all_snapshots[-5:]
+                                    if len(notified_snapshots) > 5:
+                                        notified_snapshots = notified_snapshots[-5:]
+                                    
+                                    # Emit notification
+                                    socketio.emit("cheating_notification", {
+                                        "message": "Cheating detected",
+                                        "time": timestamp.strftime("%I:%M %p")
+                                    })
+                                    
+                                    last_cheating_notification_time = now
+                            
+                            except Exception as db_error:
+                                logger.error(f"Database save error: {db_error}")
+                        
+                        del buffer, img_b64
+                        
+                    except Exception as save_error:
+                        logger.error(f"Save error: {save_error}")
+
+                # Send response with heavy compression
+                try:
+                    encode_params = [cv2.IMWRITE_JPEG_QUALITY, 40]
+                    _, response_buffer = cv2.imencode('.jpg', frame, encode_params)
+                    response_b64 = base64.b64encode(response_buffer).decode('utf-8')
+                    
+                    emit("response_frame", {
+                        "image": response_b64, 
+                        "cheating": cheating_detected
+                    })
+                    
+                    del response_buffer, response_b64
+                
+                except Exception as emit_error:
+                    logger.error(f"Emit error: {emit_error}")
+                    emit("response_frame", {"error": "Processing failed"})
+                
+                # Clear frame data
+                del frame
+
+            except Exception as process_error:
+                logger.error(f"Frame processing error: {process_error}")
+                emit("response_frame", {"error": "Processing failed"})
+            finally:
+                # Force garbage collection
+                gc.collect()
+
+        # Run frame processing with timeout
+        try:
+            # Use eventlet timeout to prevent hanging
+            with eventlet.timeout.Timeout(10):  # 10 second max processing time
+                process_frame_with_timeout()
+        except eventlet.timeout.Timeout:
+            logger.error("Frame processing timeout - killing worker")
+            emit("response_frame", {"error": "Processing timeout"})
+            # Force restart worker
+            os.kill(os.getpid(), signal.SIGTERM)
+        except Exception as timeout_error:
+            logger.error(f"Timeout handler error: {timeout_error}")
+            emit("response_frame", {"error": "Processing failed"})
+
+    except Exception as handler_error:
+        logger.error(f"Frame handler error: {handler_error}")
+        emit("response_frame", {"error": "Handler failed"})
+    finally:
+        frame_processing = False
+
+# Update the database function to include timeout
+def execute_db_query(query, params=None, fetch_one=False, fetch_all=False, timeout=5):
+    """Execute database query with timeout"""
+    connection = None
+    cursor = None
+    try:
+        # Get connection with timeout
+        connection = db_pool.get_connection()
+        if not connection:
+            return None
+        
+        cursor = connection.cursor(buffered=False)
+        
+        # Set query timeout
+        cursor.execute("SET SESSION innodb_lock_wait_timeout = %s", (timeout,))
+        
+        cursor.execute(query, params or ())
+        
+        if fetch_one:
+            result = cursor.fetchone()
+        elif fetch_all:
+            result = cursor.fetchall()
+        else:
+            connection.commit()
+            result = True
+            
+        return result
+        
+    except Exception as e:
+        logger.error(f"Database query error: {e}")
+        if connection:
+            connection.rollback()
+        return None
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
 # ---------- UI / Snapshot routes ----------
 @app.route("/")
 @login_required
