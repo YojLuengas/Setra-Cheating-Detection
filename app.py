@@ -127,15 +127,21 @@ if YOLO_AVAILABLE:
     try:
         # Check if custom model exists
         custom_model_path = "models/best.pt"
-        
+
+        logger.info(f"Checking for custom model at: {custom_model_path}")
+        logger.info(f"Current working directory: {os.getcwd()}")
+        logger.info(f"Custom model exists: {os.path.exists(custom_model_path)}")
+
         if os.path.exists(custom_model_path):
             try:
+                logger.info("Attempting to load custom YOLO model...")
                 # Load with CPU mapping for deployment compatibility
                 yolo_model = YOLO(custom_model_path)
                 # Force model to CPU if CUDA not available
                 if hasattr(yolo_model.model, 'to'):
                     yolo_model.model.to('cpu')
                 logger.info("✅ Custom YOLO model loaded successfully on CPU")
+                logger.info(f"Model classes: {yolo_model.model.names}")
             except Exception as e:
                 logger.warning(f"Failed to load custom model: {e}")
                 # Fall back to pretrained model
@@ -143,13 +149,24 @@ if YOLO_AVAILABLE:
                 if hasattr(yolo_model.model, 'to'):
                     yolo_model.model.to('cpu')
                 logger.info("✅ Using YOLOv8n pretrained model as fallback")
+                logger.info(f"Fallback model classes: {yolo_model.model.names}")
         else:
             # Use pretrained model if custom doesn't exist
             yolo_model = YOLO("yolov8n.pt")
             if hasattr(yolo_model.model, 'to'):
                 yolo_model.model.to('cpu')
             logger.info("✅ Using YOLOv8n pretrained model (custom model not found)")
-            
+            logger.info(f"Fallback model classes: {yolo_model.model.names}")
+
+        # Check if 'cheating' class is available
+        if yolo_model and hasattr(yolo_model.model, 'names'):
+            class_names = [name.lower() for name in yolo_model.model.names.values()]
+            if 'cheating' not in class_names:
+                logger.warning("⚠️ 'cheating' class not found in model classes. Detection may not work.")
+                logger.warning(f"Available classes: {yolo_model.model.names}")
+            else:
+                logger.info("✅ 'cheating' class found in model")
+
     except Exception as e:
         logger.error(f"❌ Failed to load YOLO model: {e}")
         yolo_model = None
