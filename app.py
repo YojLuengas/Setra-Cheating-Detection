@@ -86,19 +86,72 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Database connection with error handling
+# Remove these memory-heavy global connections:
+# db = mysql.connector.connect(**DB_CONFIG)
+# cursor = db.cursor(buffered=True)
+
+# Database connection pool (much more memory efficient)
+DB_POOL_CONFIG = {
+    "pool_name": "setra_pool",
+    "pool_size": 2,  # Very small pool for 512MB limit
+    "pool_reset_session": True,
+    "host": os.environ.get("MYSQL_HOST", "switchback.proxy.rlwy.net"),
+    "user": os.environ.get("MYSQL_USER", "root"), 
+    "password": os.environ.get("MYSQL_PASSWORD", "PLbCUQpgMuuLSPqHNQhSWUIbbJKXrpzp"),
+    "database": os.environ.get("MYSQL_DATABASE", "railway"),
+    "port": int(os.environ.get("MYSQL_PORT", 57978)),
+    "charset": "utf8mb4",
+    "autocommit": True,
+    "use_pure": True,  # Use pure Python connector (less memory)
+}
+
 try:
-    db = mysql.connector.connect(**DB_CONFIG)
-    cursor = db.cursor(buffered=True)
-    
-    # Set SQL mode to be less strict
-    cursor.execute("SET sql_mode = 'STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO'")
-    
-    logger.info(f"✅ Connected to database: {DB_CONFIG['host']}:{DB_CONFIG['port']}")
+    db_pool = mysql.connector.pooling.MySQLConnectionPool(**DB_POOL_CONFIG)
+    logger.info("✅ Database pool created (memory optimized)")
 except Exception as e:
-    logger.error(f"❌ Database connection failed: {e}")
-    db = None
+    logger.error(f"❌ Database pool failed: {e}")
+    db_pool = None
+
+def execute_db_query(query, params=None, fetch_one=False, fetch_all=False):
+    """Memory-efficient database operations"""
+    if not db_pool:
+        return None
+    
+    connection = None
     cursor = None
+    try:
+        connection = db_pool.get_connection()
+        cursor = connection.cursor(buffered=False)  # Non-buffered = less memory
+        
+        cursor.execute(query, params or ())
+        
+        if fetch_one:
+            result = cursor.fetchone()
+        elif fetch_all:
+            # Limit result size to prevent memory issues
+            cursor.execute("SELECT COUNT(*) FROM (%s) as count_query" % query.split('LIMIT')[0])
+            count = cursor.fetchone()[0]
+            if count > 1000:  # Prevent large result sets
+                logger.warning(f"Large result set ({count} rows) - limiting to 1000")
+                query += " LIMIT 1000"
+            
+            cursor.execute(query, params or ())
+            result = cursor.fetchall()
+        else:
+            connection.commit()
+            result = True
+            
+        return result
+        
+    except Exception as e:
+        logger.error(f"Database query error: {e}")
+        return None
+    finally:
+        # Always clean up connections
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()  # Returns to pool
 
 # ---------- Models / ML ----------
 yolo_model = None
