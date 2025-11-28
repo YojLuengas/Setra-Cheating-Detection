@@ -109,7 +109,7 @@ torch.serialization.add_safe_globals([DetectionModel])
 
 # Temporarily set weights_only to False for YOLO loading
 with torch.serialization.safe_globals([]):
-    model = torch.load('path/to/your/model.pt', weights_only=False)
+    model = torch.load("models/best.pt", weights_only=False)
 
 # Try to load YOLO model
 if YOLO_AVAILABLE:
