@@ -28,6 +28,8 @@ from flask import (
 )
 from flask_socketio import SocketIO, emit
 import mysql.connector
+import torch
+from ultralytics.nn.tasks import DetectionModel
 
 print(f"Python version: {sys.version}")
 print("Starting Flask application...")
@@ -101,6 +103,9 @@ except Exception as e:
 # ---------- Models / ML ----------
 yolo_model = None
 face_mesh = None
+
+# Add safe globals for YOLO model loading
+torch.serialization.add_safe_globals([DetectionModel])
 
 # Try to load YOLO model
 if YOLO_AVAILABLE:
