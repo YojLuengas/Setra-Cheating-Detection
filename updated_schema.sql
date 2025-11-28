@@ -6,6 +6,8 @@
 --
 -- Table structure for table `assessment_sessions`
 --
+ALTER TABLE assessment_sessions
+ADD COLUMN duration_minutes INT DEFAULT 60;
 
 CREATE TABLE `assessment_sessions` (
   `id` int(11) NOT NULL,
@@ -62,6 +64,7 @@ CREATE TABLE `records` (
 --
 -- Table structure for table `users`
 --
+ALTER TABLE users ADD COLUMN subjects VARCHAR(255) DEFAULT NULL;
 
 CREATE TABLE `users` (
   `id` int(11) NOT NULL,
