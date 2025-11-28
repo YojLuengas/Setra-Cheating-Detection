@@ -107,10 +107,6 @@ face_mesh = None
 # Add safe globals for YOLO model loading
 torch.serialization.add_safe_globals([DetectionModel])
 
-# Temporarily set weights_only to False for YOLO loading
-with torch.serialization.safe_globals([]):
-    model = torch.load("models/best.pt", weights_only=False)
-
 # Try to load YOLO model
 if YOLO_AVAILABLE:
     try:
@@ -119,16 +115,24 @@ if YOLO_AVAILABLE:
         
         if os.path.exists(custom_model_path):
             try:
+                # Load with CPU mapping for deployment compatibility
                 yolo_model = YOLO(custom_model_path)
-                logger.info("✅ Custom YOLO model loaded successfully")
+                # Force model to CPU if CUDA not available
+                if hasattr(yolo_model.model, 'to'):
+                    yolo_model.model.to('cpu')
+                logger.info("✅ Custom YOLO model loaded successfully on CPU")
             except Exception as e:
                 logger.warning(f"Failed to load custom model: {e}")
                 # Fall back to pretrained model
                 yolo_model = YOLO("yolov8n.pt")
+                if hasattr(yolo_model.model, 'to'):
+                    yolo_model.model.to('cpu')
                 logger.info("✅ Using YOLOv8n pretrained model as fallback")
         else:
             # Use pretrained model if custom doesn't exist
             yolo_model = YOLO("yolov8n.pt")
+            if hasattr(yolo_model.model, 'to'):
+                yolo_model.model.to('cpu')
             logger.info("✅ Using YOLOv8n pretrained model (custom model not found)")
             
     except Exception as e:
