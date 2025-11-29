@@ -4,7 +4,9 @@ let socket;
 
 function initSocket(video, statusDiv) {
   if (!socket) {
-    socket = io({ transports: ["websocket"] });
+    socket = io("https://setra-cheating-detection-sx0n.onrender.com", {
+      transports: ["websocket", "polling"]
+    });
 
     socket.on("connect", () => {
       console.log("Connected to server");
