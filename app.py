@@ -11,6 +11,7 @@ from functools import wraps
 from threading import Lock
 from datetime import datetime
 import uuid
+import sys  # <-- Add this import
 from flask import (
     Flask,
     render_template,
@@ -26,19 +27,38 @@ from flask import (
 )
 from flask_socketio import SocketIO, emit
 import mysql.connector
+import torch
+from ultralytics.nn.tasks import DetectionModel
 
-from ultralytics import YOLO
-import mediapipe as mp
+print(f"Python version: {sys.version}")
+print("Starting Flask application...")
+
+# Try to import ML libraries, but handle if they're not available
+try:
+    from ultralytics import YOLO
+    YOLO_AVAILABLE = True
+except ImportError:
+    YOLO_AVAILABLE = False
+    print("⚠️ YOLO not available - running without ML detection")
+
+try:
+    import mediapipe as mp
+    MEDIAPIPE_AVAILABLE = True
+except ImportError:
+    MEDIAPIPE_AVAILABLE = False
+    print("⚠️ MediaPipe not available - running without face detection")
+
 import bcrypt
 import logging
 
 # ---------- Config ----------
 
 DB_CONFIG = {
-    "host": "localhost",
-    "user": "root",
-    "password": "",
-    "database": "sentra_db",
+    "host": os.environ.get("MYSQL_HOST", "switchback.proxy.rlwy.net"),
+    "user": os.environ.get("MYSQL_USER", "root"), 
+    "password": os.environ.get("MYSQL_PASSWORD", "PLbCUQpgMuuLSPqHNQhSWUIbbJKXrpzp"),
+    "database": os.environ.get("MYSQL_DATABASE", "railway"),
+    "port": int(os.environ.get("MYSQL_PORT", 57978)),
     "charset": "utf8mb4",
 }
 
@@ -51,13 +71,19 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Use a buffered cursor to permit multiple fetches reliably
+# Database connection with error handling
 try:
     db = mysql.connector.connect(**DB_CONFIG)
     cursor = db.cursor(buffered=True)
+    
+    # Set SQL mode to be less strict
+    cursor.execute("SET sql_mode = 'STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO'")
+    
+    logger.info(f"✅ Connected to database: {DB_CONFIG['host']}:{DB_CONFIG['port']}")
 except Exception as e:
-    logger.exception("Database connection error: %s", e)
-    raise
+    logger.error(f"❌ Database connection failed: {e}")
+    db = None
+    cursor = None
 
 # ---------- Models / ML ----------
 # Update path as required
