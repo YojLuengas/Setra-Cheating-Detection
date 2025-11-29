@@ -694,6 +694,7 @@ def handle_frame(message):
             frame_lock.release()
         except Exception:
             pass
+        logger.debug("Frame processed")  # Use debug level for less critical logs
         
 # ---------- UI / Snapshot routes ----------
 @app.route("/")
