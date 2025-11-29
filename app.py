@@ -28,7 +28,7 @@ from flask import (
     Response,
 )
 from flask_socketio import SocketIO, emit
-import mysql.connector
+import pymysql
 import torch
 from ultralytics.nn.tasks import DetectionModel
 
@@ -75,8 +75,8 @@ logger = logging.getLogger(__name__)
 
 # Database connection with error handling
 try:
-    db = mysql.connector.connect(**DB_CONFIG)
-    cursor = db.cursor(buffered=True)
+    db = pymysql.connect(**DB_CONFIG)
+    cursor = db.cursor()
     
     # Set SQL mode to be less strict
     cursor.execute("SET sql_mode = 'STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO'")
