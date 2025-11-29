@@ -1016,6 +1016,6 @@ def delete_notification(snap_id):
 # ---------- Run ----------
 if __name__ == "__main__":
     host = "0.0.0.0"
-    port = 5000
+    port = int(os.environ.get("PORT", 8000))  # Use PORT from environment
     logger.info("🚀 Server running at: http://127.0.0.1:%s", port)
     socketio.run(app, host=host, port=port, debug=True)
