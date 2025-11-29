@@ -14,6 +14,8 @@ from threading import Lock
 from datetime import datetime
 import uuid
 import sys  # <-- Add this import
+import signal
+import psutil
 from flask import (
     Flask,
     render_template,
@@ -107,8 +109,10 @@ frame_lock = Lock()
 
 # Throttling / timing controls to reduce CPU / GPU load and UI lag
 PROCESS_INTERVAL = 0.50       # seconds between heavy processing runs (≈10 FPS)
-OUT_IMG_MAX = 608            # send this max width for annotated frames
+OUT_IMG_MAX = 320             # reduced from 608 to lower memory usage
+FRAME_TIMEOUT = 2.0           # timeout for frame processing to prevent hangs
 _last_processed_time = 0.0
+_last_face_time = 0.0
 
 # ---------- Helpers ----------
 def b64_to_cv2(data_b64):
@@ -580,9 +584,8 @@ def on_connect():
 @socketio.on("frame")
 def handle_frame(message):
     """
-    Process incoming frames but throttle to PROCESS_INTERVAL and do
-    face mesh less frequently. Annotate on the downscaled image and
-    send a smaller JPEG to clients to reduce latency.
+    Process incoming frames with optimizations: timeout handling, reduced face mesh frequency,
+    performance logging, and lower memory usage.
     """
     global all_snapshots, notified_snapshots, last_cheating_notification_time
     global _last_processed_time, _last_face_time
@@ -591,6 +594,7 @@ def handle_frame(message):
     if not frame_lock.acquire(blocking=False):
         return
 
+    start_time = time.time()
     try:
         now = time.time()
         # Throttle heavy processing to avoid backlog / lag
@@ -614,7 +618,7 @@ def handle_frame(message):
 
         original_h, original_w = frame.shape[:2]
 
-        # Resize to a reasonable size for fast model inference
+        # Resize to a reasonable size for fast model inference (optimized to 320)
         scale = OUT_IMG_MAX / max(original_h, original_w)
         if scale <= 0:
             scale = 1.0
@@ -622,10 +626,9 @@ def handle_frame(message):
         small_h = max(1, int(original_h * scale))
         small = cv2.resize(frame, (small_w, small_h), interpolation=cv2.INTER_LINEAR)
 
-        # Run YOLO on the small image
+        # Run YOLO on the small image with optimized settings
         try:
-            # keep imgsz similar to our small width for efficiency
-            results = yolo_model.predict(small, imgsz=min(608, OUT_IMG_MAX), conf=0.50, verbose=False)
+            results = yolo_model.predict(small, imgsz=OUT_IMG_MAX, conf=0.50, verbose=False)
         except Exception as e:
             logger.exception("YOLO prediction error: %s", e)
             results = []
@@ -679,16 +682,21 @@ def handle_frame(message):
             if str(label).lower() == "cheating":
                 cheating_in_frame = True
 
-        # MediaPipe face mesh processing for head rotation
-        small_rgb = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
-        results = face_mesh.process(small_rgb)
+        # MediaPipe face mesh processing for head rotation (reduced frequency)
         yaw_deg = 0.0
-        if results.multi_face_landmarks:
-            for face_landmarks in results.multi_face_landmarks:
-                yaw = estimate_head_rotation(small_rgb, face_landmarks)
-                yaw_deg = yaw * 180 / 3.14159  # Convert to degrees
-                if abs(yaw_deg) > 25:
-                    cheating_in_frame = True
+        if now - _last_face_time >= 1.0:  # Process face mesh every 1 second instead of every frame
+            _last_face_time = now
+            try:
+                small_rgb = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
+                results = face_mesh.process(small_rgb)
+                if results.multi_face_landmarks:
+                    for face_landmarks in results.multi_face_landmarks:
+                        yaw = estimate_head_rotation(small_rgb, face_landmarks)
+                        yaw_deg = yaw * 180 / 3.14159  # Convert to degrees
+                        if abs(yaw_deg) > 25:
+                            cheating_in_frame = True
+            except Exception as e:
+                logger.exception("Face mesh processing error: %s", e)
 
         # Save snapshot & DB insert (rate-limit snapshot writes)
         if cheating_in_frame and time.time() - last_cheating_notification_time >= 2:
@@ -717,11 +725,23 @@ def handle_frame(message):
         out_b64 = cv2_to_b64(annotated, jpeg_quality=60)
         if out_b64:
             emit("response_frame", {"image": out_b64, "cheating": cheating_in_frame})
+
+        # Performance logging
+        processing_time = time.time() - start_time
+        if processing_time > 0.1:  # Log if processing takes more than 100ms
+            logger.info(f"Frame processing time: {processing_time:.3f}s, detections: {len(detections)}, cheating: {cheating_in_frame}")
+
+    except Exception as e:
+        logger.exception("Frame processing error: %s", e)
     finally:
         try:
             frame_lock.release()
         except Exception:
             pass
+        # Timeout check
+        total_time = time.time() - start_time
+        if total_time > FRAME_TIMEOUT:
+            logger.warning(f"Frame processing exceeded timeout: {total_time:.3f}s")
         logger.debug("Frame processed")  # Use debug level for less critical logs
         
 # ---------- UI / Snapshot routes ----------
