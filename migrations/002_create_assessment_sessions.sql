@@ -9,3 +9,9 @@ CREATE TABLE IF NOT EXISTS assessment_sessions (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
+
+ALTER TABLE assessment_sessions
+ADD COLUMN duration_minutes INT DEFAULT 60;
+
+ALTER TABLE assessment_sessions
+ADD COLUMN status varchar(50) DEFAULT 'active';
