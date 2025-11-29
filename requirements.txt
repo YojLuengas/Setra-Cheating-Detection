@@ -14,3 +14,5 @@ torch>=2.0.0,<3.0.0
 torchvision>=0.15.0,<1.0.0
 ultralytics>=8.2.0
 mediapipe>=0.10.0,<1.0.0
+gevent>=22.10.2,<23.0.0
+gevent-websocket>=0.10.1,<1.0.0
