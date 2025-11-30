@@ -1,24 +1,19 @@
 FROM python:3.10-slim
 
-# Set working directory
 WORKDIR /app
 
-# Install system packages required for OpenCV + MediaPipe
+# Install system dependencies required for OpenCV
 RUN apt-get update && apt-get install -y \
     libgl1-mesa-glx \
-    libglib2.0-0 \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    libglib2.0-0
 
-# Install Python dependencies first for caching
 COPY requirements.txt .
+
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy project files
 COPY . .
 
-# Expose port for Railway
 EXPOSE 8080
 
-# Socket.IO requires Gunicorn + Eventlet
+# Run using Gunicorn + Eventlet for WebSockets (SocketIO support)
 CMD ["gunicorn", "-k", "eventlet", "-w", "1", "-b", "0.0.0.0:8080", "app:app"]
