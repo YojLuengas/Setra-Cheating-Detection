@@ -991,9 +991,7 @@ def delete_notification(snap_id):
 
 # ---------- Run ----------
 
-
 if __name__ == "__main__":
-    host = "0.0.0.0"
+    import os
     port = int(os.environ.get("PORT", 5000))
-    logger.info(f"🚀 Server running at: http://{host}:{port}")
-    socketio.run(app, host=host, port=port, debug=False)
+    socketio.run(app, host="0.0.0.0", port=port, debug=False)
