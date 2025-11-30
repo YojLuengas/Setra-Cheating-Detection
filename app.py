@@ -394,7 +394,8 @@ def handle_frame(message):
         emit("response_frame", {"cheating": cheating})
     finally:
         frame_lock.release()
+# ---------- Main ----------
 
-# ===== Launch Fix =====
-if __name__ == "__main__" or os.getenv("RAILWAY_ENVIRONMENT"):
-    socketio.run(app, host="0.0.0.0", port=int(os.getenv("PORT",5000)), debug=False)
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
