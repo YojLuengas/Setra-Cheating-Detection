@@ -13,6 +13,8 @@ from threading import Lock
 import bcrypt
 import logging
 
+from ultralytics import YOLO
+
 # eventlet must be monkey-patched before other networking/threading libs
 try:
     import eventlet
@@ -29,12 +31,21 @@ from mysql.connector import Error
 # from ultralytics import YOLO
 # import mediapipe as mp
 
+
 app = Flask(__name__)
-app.secret_key = os.getenv("SECRET_KEY", "replace_this_123")
+app.secret_key = os.getenv("8f42c6b2a1d9e5f7c3b9a8d1e6f4c2b5d7g9h3j1k5m8n2p4q6r8s0t3u5v7w9x", "replace_this_123")
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+# ========= Safe globals ========= #
+frame_lock = Lock()
+_last_processed_time = 0
+last_cheating_notification_time = 0
+PROCESS_INTERVAL = 0.5
+yolo_model = YOLO("model.pt")  # Make sure model.pt exists in project root
 
 # ===== DB FIXED & STABLE =====
 db = None
@@ -299,13 +310,3 @@ def handle_frame(message):
             emit("response_frame", {"image": out_b64, "cheating": cheating})
     finally:
         frame_lock.release()
-
-# Keep the rest of your routes (admin, assessment session, etc.) but ensure every DB usage
-# obtains a cursor via get_db_cursor() and closes it in a finally block. (You already had that pattern.)
-
-# ---------- Entrypoint ----------
-# For local debug (not used by Gunicorn); Gunicorn will import 'app' variable above.
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    # Use socketio.run locally for proper WebSocket behavior in dev
-    socketio.run(app, host="0.0.0.0", port=port)
