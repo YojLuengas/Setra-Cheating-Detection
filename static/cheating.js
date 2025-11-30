@@ -162,19 +162,22 @@ window.autoSwitchTo = function (point, force = true) {
     });
     point.classList.add("active");
 
-    const url = "/cheating_snapshot/" + snapId;
-    fetch(url)
-      .then((res) => res.text())
-      .then((data) => {
-        if (!data) return;
-        imgEl.src = data.startsWith("data:")
-          ? data
-          : "data:image/jpeg;base64," + data;
+  const url = "/cheating_snapshot/" + snapId;
+fetch(url)
+  .then((res) => res.text())
+  .then((data) => {
+    if (!data) return;
+    imgEl.src = data.startsWith("data:")
+      ? data
+      : "data:image/jpeg;base64," + data;
 
-        if (tsEl && point.dataset.timestamp) {
-          tsEl.textContent = "Snapshot at: " + point.dataset.timestamp;
-        }
-      })
+    imgEl.dataset.currentId = snapId;  // <-- REQUIRED FIX
+
+    if (tsEl && point.dataset.timestamp) {
+      tsEl.textContent = "Snapshot at: " + point.dataset.timestamp;
+    }
+  })
+
       .catch((err) => {
         console.error("Failed to load snapshot", err);
       });
@@ -203,4 +206,32 @@ document.addEventListener("DOMContentLoaded", () => {
       if (latestPoint) window.autoSwitchTo(latestPoint, false);
     }
   }
+  // === Arrow Navigation using existing points (NO UI BUTTONS ADDED) ===
+function navigateSnapshot(direction) {
+  const imgEl = document.getElementById("cheating-snapshot-img");
+  if (!imgEl) return;
+
+  const points = [...document.querySelectorAll(".timeline-point")]
+    .sort((a, b) => parseFloat(a.dataset.epoch) - parseFloat(b.dataset.epoch));
+
+  const currentIndex = points.findIndex(p => p.dataset.id === imgEl.dataset.currentId);
+  if (currentIndex === -1) return;
+
+  if (direction === "prev" && currentIndex > 0) {
+    userLockedSnapshot = true;
+    window.autoSwitchTo(points[currentIndex - 1], false);
+  }
+
+  if (direction === "next" && currentIndex < points.length - 1) {
+    userLockedSnapshot = true;
+    window.autoSwitchTo(points[currentIndex + 1], false);
+  }
+}
+
+// Listen for arrow key events
+document.addEventListener("keydown", (e) => {
+  if (e.key === "ArrowLeft") navigateSnapshot("prev");
+  if (e.key === "ArrowRight") navigateSnapshot("next");
+});
+
 });

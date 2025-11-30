@@ -2615,3 +2615,30 @@ td {
   animation: pulse 0.9s infinite;
   background: linear-gradient(135deg, #8a0000, #c10000);
 }
+.snapshot-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.nav-btn {
+  background: #0B3D91;
+  border: none;
+  color: white;
+  font-size: 26px;
+  width: 50px;
+  height: 50px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background .2s ease;
+}
+
+.nav-btn:hover {
+  background: #052a6d;
+}
+
+.timeline-point.active {
+  background: #007bff !important;
+}

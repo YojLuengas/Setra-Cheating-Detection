@@ -1,0 +1,27 @@
+# Node
+node_modules/
+
+# Python env/cache
+.venv/
+__pycache__/
+*.pyc
+
+# Backend builds
+dist/
+build/
+
+# SQLite + internal DBs
+*.db
+
+# Media & snapshots
+uploads/
+snapshots/
+detected_faces/
+media/
+static/uploads/
+
+# Logs
+*.log
+
+# Docker volumes
+volumes/
