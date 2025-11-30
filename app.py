@@ -55,6 +55,8 @@ import logging
 
 # ---------- Config ----------
 
+import os
+
 DB_CONFIG = {
     "host": os.environ.get("MYSQL_HOST", "switchback.proxy.rlwy.net"),
     "user": os.environ.get("MYSQL_USER", "root"), 
@@ -698,17 +700,11 @@ def handle_frame(message):
             img_b64_small = base64.b64encode(buf).decode("utf-8")
             timestamp = datetime.now()
             epoch_now = time.time()
-            assessment_session_id = session.get("assessment_session_id")
             snapshot = {"id": snap_id, "image_path": img_b64_small, "timestamp": timestamp.strftime("%Y-%m-%d %I:%M:%S %p"), "epoch": epoch_now}
             all_snapshots.append(snapshot)
             notified_snapshots.append(snapshot)
-            try:
-                cursor.execute("INSERT INTO detections (id, timestamp, epoch, image_path, assessment_session_id, user_id) VALUES (%s, %s, %s, %s, %s, %s)",
-                               (snap_id, timestamp, epoch_now, img_b64_small, assessment_session_id, session["user_id"]))
-                db.commit()
-            except Exception:
-                db.rollback()
-                logger.exception("DB insert error for snapshot")
+            # removed DB insert for snapshot here; defer to stop_assessment
+
             now_dt = datetime.now()
             socketio.emit("cheating_notification", {"message": "Possible Cheating detected", "time": now_dt.strftime("%I:%M %p"), "timestamp": now_dt.strftime("%Y-%m-%d %I:%M:%S %p"), "url": f"/cheating/{snap_id}"})
             last_cheating_notification_time = time.time()
@@ -734,17 +730,27 @@ def home():
 @login_required
 def cheating(snap_id):
     try:
+        # Try DB first
         cursor.execute("SELECT id, timestamp, assessment_session_id FROM detections WHERE id = %s AND user_id = %s", (snap_id, session["user_id"]))
         row = cursor.fetchone()
-        if not row:
-            return "Snapshot not found", 404
+        if row:
+            snap_id, ts, assessment_session_id = row
 
-        snap_id, ts, assessment_session_id = row
+            cursor.execute("SELECT id, timestamp, epoch FROM detections WHERE assessment_session_id = %s ORDER BY epoch DESC", (assessment_session_id,))
+            cheating_snapshots = [{"id": r[0], "timestamp": r[1], "epoch": r[2]} for r in cursor.fetchall()]
 
-        cursor.execute("SELECT id, timestamp, epoch FROM detections WHERE assessment_session_id = %s ORDER BY epoch DESC", (assessment_session_id,))
-        cheating_snapshots = [{"id": r[0], "timestamp": r[1], "epoch": r[2]} for r in cursor.fetchall()]
+            return render_template("cheating.html", snapshot_id=snap_id, timestamp=ts, cheating_snapshots=cheating_snapshots)
 
-        return render_template("cheating.html", snapshot_id=snap_id, timestamp=ts, cheating_snapshots=cheating_snapshots)
+        # Fallback: check in-memory snapshots collected during active assessment
+        for s in all_snapshots:
+            if s.get("id") == snap_id:
+                ts_str = s.get("timestamp")
+                # Build a minimal cheating_snapshots list from in-memory data (most recent first)
+                cheating_snapshots = [{"id": x["id"], "timestamp": x["timestamp"], "epoch": x.get("epoch", 0)} for x in reversed(all_snapshots)]
+                return render_template("cheating.html", snapshot_id=snap_id, timestamp=ts_str, cheating_snapshots=cheating_snapshots)
+
+        # Not found anywhere
+        return "Snapshot not found", 404
     except Exception as e:
         logger.exception("cheating page error: %s", e)
         return "Internal server error", 500
@@ -752,20 +758,30 @@ def cheating(snap_id):
 @app.route("/cheating_snapshot/<snap_id>")
 @login_required
 def cheating_snapshot(snap_id):
-    cursor.execute("SELECT image_path FROM detections WHERE id = %s AND user_id = %s", (snap_id, session["user_id"]))
-    row = cursor.fetchone()
-    if row and row[0]:
-        image_path = row[0]
-        if not os.path.isabs(image_path):
-            image_path = os.path.join(os.getcwd(), image_path)
-        # Check if it's a file path (old snapshots) or base64 (new snapshots)
-        if os.path.isfile(image_path):
-            # Serve the file from disk
-            return send_file(image_path, mimetype='image/jpeg')
-        else:
-            # Treat as base64 data
-            return f'data:image/jpeg;base64,{row[0]}'
-    return "Snapshot not found", 404
+    try:
+        cursor.execute("SELECT image_path FROM detections WHERE id = %s AND user_id = %s", (snap_id, session["user_id"]))
+        row = cursor.fetchone()
+        if row and row[0]:
+            image_path = row[0]
+            if not os.path.isabs(image_path):
+                image_path = os.path.join(os.getcwd(), image_path)
+            # Check if it's a file path (old snapshots) or base64 (new snapshots)
+            if os.path.isfile(image_path):
+                # Serve the file from disk
+                return send_file(image_path, mimetype='image/jpeg')
+            else:
+                # Treat as base64 data
+                return f'data:image/jpeg;base64,{row[0]}'
+
+        # Fallback to in-memory snapshots (during active assessment)
+        for s in all_snapshots:
+            if s.get("id") == snap_id and s.get("image_path"):
+                return f'data:image/jpeg;base64,{s["image_path"]}'
+
+        return "Snapshot not found", 404
+    except Exception as e:
+        logger.exception("cheating_snapshot error: %s", e)
+        return "Internal server error", 500
 
 @app.route("/records")
 @login_required
@@ -1013,7 +1029,43 @@ def delete_notification(snap_id):
         logger.exception("delete_notification error: %s", e)
         return jsonify({"success": False, "error": str(e)}), 500
 
-# ---------- Run ----------
+# ---------- Table creation ----------
+def create_tables():
+    """Create database tables if they don't exist"""
+    try:
+        with get_cursor() as cursor:
+            # Create detections table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS detections (
+                    id VARCHAR(128) PRIMARY KEY,
+                    timestamp DATETIME NOT NULL,
+                    epoch DOUBLE NOT NULL,
+                    image_path LONGTEXT,
+                    assessment_session_id VARCHAR(128),
+                    user_id VARCHAR(128),
+                    INDEX idx_assessment_session (assessment_session_id),
+                    INDEX idx_user (user_id),
+                    INDEX idx_timestamp (timestamp)
+                ) CHARACTER SET utf8mb4
+            """)
+            
+            # Create users table (if needed)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id VARCHAR(128) PRIMARY KEY,
+                    username VARCHAR(255) UNIQUE NOT NULL,
+                    password_hash VARCHAR(255) NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                ) CHARACTER SET utf8mb4
+            """)
+            
+            print("✓ Database tables created successfully")
+            
+    except Exception as e:
+        print(f"✗ Failed to create tables: {e}")
+        logger.exception("Table creation error")
+
+# Add this call when your app starts (find the existing startup code)
 if __name__ == "__main__":
     host = "0.0.0.0"
     port = 5000
