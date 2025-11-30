@@ -45,7 +45,7 @@ frame_lock = Lock()
 _last_processed_time = 0
 last_cheating_notification_time = 0
 PROCESS_INTERVAL = 0.5
-yolo_model = YOLO("model.pt")  # Make sure model.pt exists in project root
+yolo_model = YOLO("best.pt")  # Make sure model.pt exists in project root
 
 # ===== DB FIXED & STABLE =====
 db = None
