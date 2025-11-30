@@ -88,9 +88,11 @@ except Exception as e:
     cursor = None
 
 # ---------- Models / ML ----------
-# Models will be loaded lazily to improve startup time
-yolo_model = None
-face_mesh = None
+# Update path as required
+yolo_model = YOLO("models/best.pt")
+
+# Initialize MediaPipe Face Mesh
+face_mesh = mp.solutions.face_mesh.FaceMesh(max_num_faces=1, refine_landmarks=True, min_detection_confidence=0.5, min_tracking_confidence=0.5)
 
 
 
@@ -575,14 +577,28 @@ def get_user_subjects():
 def on_connect():
     emit("connected", {"data": "ready"})
 
-def process_frame(message):
+@socketio.on("frame")
+def handle_frame(message):
     """
-    Background task to process incoming frames.
+    Process incoming frames but throttle to PROCESS_INTERVAL and do
+    face mesh less frequently. Annotate on the downscaled image and
+    send a smaller JPEG to clients to reduce latency.
     """
     global all_snapshots, notified_snapshots, last_cheating_notification_time
-    global yolo_model, face_mesh
+    global _last_processed_time, _last_face_time
+
+    # Quick-drop if someone else is processing
+    if not frame_lock.acquire(blocking=False):
+        return
 
     try:
+        now = time.time()
+        # Throttle heavy processing to avoid backlog / lag
+        if now - _last_processed_time < PROCESS_INTERVAL:
+            return
+
+        _last_processed_time = now
+
         # Expect binary data directly
         if isinstance(message, bytes):
             frame = process_binary_image(message)
@@ -606,25 +622,13 @@ def process_frame(message):
         small_h = max(1, int(original_h * scale))
         small = cv2.resize(frame, (small_w, small_h), interpolation=cv2.INTER_LINEAR)
 
-        # Lazy load YOLO model if not loaded
-        if yolo_model is None and YOLO_AVAILABLE:
-            try:
-                logger.info("Loading YOLO model...")
-                yolo_model = YOLO("models/best.pt")
-                logger.info("YOLO model loaded successfully.")
-            except Exception as e:
-                logger.exception("Failed to load YOLO model: %s", e)
-                yolo_model = None
-
-        # Run YOLO on the small image if model is available
-        results = []
-        if yolo_model is not None:
-            try:
-                # keep imgsz similar to our small width for efficiency
-                results = yolo_model.predict(small, imgsz=min(608, OUT_IMG_MAX), conf=0.50, verbose=False)
-            except Exception as e:
-                logger.exception("YOLO prediction error: %s", e)
-                results = []
+        # Run YOLO on the small image
+        try:
+            # keep imgsz similar to our small width for efficiency
+            results = yolo_model.predict(small, imgsz=min(608, OUT_IMG_MAX), conf=0.50, verbose=False)
+        except Exception as e:
+            logger.exception("YOLO prediction error: %s", e)
+            results = []
 
         detections = []
         cheating_in_frame = False
@@ -675,27 +679,16 @@ def process_frame(message):
             if str(label).lower() == "cheating":
                 cheating_in_frame = True
 
-        # Lazy load MediaPipe face mesh if not loaded
-        if face_mesh is None and MEDIAPIPE_AVAILABLE:
-            try:
-                logger.info("Loading MediaPipe FaceMesh...")
-                face_mesh = mp.solutions.face_mesh.FaceMesh(max_num_faces=1, refine_landmarks=True, min_detection_confidence=0.5, min_tracking_confidence=0.5)
-                logger.info("MediaPipe FaceMesh loaded successfully.")
-            except Exception as e:
-                logger.exception("Failed to load MediaPipe FaceMesh: %s", e)
-                face_mesh = None
-
-        # MediaPipe face mesh processing for head rotation if available
-        if face_mesh is not None:
-            small_rgb = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
-            results = face_mesh.process(small_rgb)
-            yaw_deg = 0.0
-            if results.multi_face_landmarks:
-                for face_landmarks in results.multi_face_landmarks:
-                    yaw = estimate_head_rotation(small_rgb, face_landmarks)
-                    yaw_deg = yaw * 180 / 3.14159  # Convert to degrees
-                    if abs(yaw_deg) > 25:
-                        cheating_in_frame = True
+        # MediaPipe face mesh processing for head rotation
+        small_rgb = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
+        results = face_mesh.process(small_rgb)
+        yaw_deg = 0.0
+        if results.multi_face_landmarks:
+            for face_landmarks in results.multi_face_landmarks:
+                yaw = estimate_head_rotation(small_rgb, face_landmarks)
+                yaw_deg = yaw * 180 / 3.14159  # Convert to degrees
+                if abs(yaw_deg) > 25:
+                    cheating_in_frame = True
 
         # Save snapshot & DB insert (rate-limit snapshot writes)
         if cheating_in_frame and time.time() - last_cheating_notification_time >= 2:
@@ -723,36 +716,13 @@ def process_frame(message):
         # Prepare and emit annotated frame back to client (small image to reduce latency)
         out_b64 = cv2_to_b64(annotated, jpeg_quality=60)
         if out_b64:
-            socketio.emit("response_frame", {"image": out_b64, "cheating": cheating_in_frame})
-    except Exception as e:
-        logger.exception("Error in process_frame: %s", e)
-
-@socketio.on("frame")
-def handle_frame(message):
-    """
-    Handle incoming frames by starting a background task for processing.
-    """
-    global _last_processed_time
-
-    # Quick-drop if someone else is processing
-    if not frame_lock.acquire(blocking=False):
-        return
-
-    try:
-        now = time.time()
-        # Throttle heavy processing to avoid backlog / lag
-        if now - _last_processed_time < PROCESS_INTERVAL:
-            return
-
-        _last_processed_time = now
-
-        # Start background task for processing
-        socketio.start_background_task(process_frame, message)
+            emit("response_frame", {"image": out_b64, "cheating": cheating_in_frame})
     finally:
         try:
             frame_lock.release()
         except Exception:
             pass
+        logger.debug("Frame processed")  # Use debug level for less critical logs
         
 # ---------- UI / Snapshot routes ----------
 @app.route("/")
