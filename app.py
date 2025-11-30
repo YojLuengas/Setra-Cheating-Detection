@@ -38,14 +38,14 @@ eventlet.monkey_patch()
 
 # ---------- Config ----------
 
-DB_CONFIG = {
-    "host": "localhost",
-    "user": "root",
-    "password": "",
-    "database": "sentra_db",
-    "charset": "utf8mb4",
-}
-
+def get_db():
+    return mysql.connector.connect(
+        host=os.environ.get("mysql.railway.internal"),
+        port=os.environ.get("3306"),
+        user=os.environ.get("root"),
+        password=os.environ.get("PLbCUQpgMuuLSPqHNQhSWUIbbJKXrpzp"),
+        database=os.environ.get("railway")
+    )
 # ---------- App / DB / Logging ----------
 app = Flask(__name__)
 app.secret_key = "replace_this_with_a_strong_random_secret"  # change this
@@ -156,6 +156,19 @@ def login_required(f):
             return redirect(url_for("login", next=request.path))
         return f(*args, **kwargs)
     return decorated_function
+
+@app.route("/db-test")
+def db_test():
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1")
+        result = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        return f"DB Connected Successfully: {result}"
+    except Exception as e:
+        return f"DB Connection Failed: {e}" 
 
 # ---------- Routes: Auth/Admin ----------
 @app.route("/login", methods=["GET", "POST"])
