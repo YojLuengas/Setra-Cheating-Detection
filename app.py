@@ -127,6 +127,11 @@ def login_required(f):
         return f(*args, **kwargs)
     return wrapper
 
+@app.route("/")
+def home():
+    return "Server is running on Railway!"
+
+
 @app.route("/login", methods=["GET","POST"])
 def login():
     if request.method == "POST":
