@@ -1,0 +1,12 @@
+CREATE TABLE IF NOT EXISTS users (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    username VARCHAR(50) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    role ENUM('admin','user') DEFAULT 'user',
+    name VARCHAR(100) DEFAULT NULL,
+    status ENUM('Active','Inactive','Locked') DEFAULT 'Active',
+    created_by VARCHAR(100) DEFAULT NULL,
+    updated_by VARCHAR(100) DEFAULT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);

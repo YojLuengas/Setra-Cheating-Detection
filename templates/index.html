@@ -12,6 +12,7 @@
 <body>
 
   <div class="container">
+
     <!-- Left Sidebar -->
     <aside class="sidebar">
       <ul class="menu-top">
@@ -72,7 +73,9 @@
               </div>
               <div class="form-group">
                 <label>Subject</label>
-                <input type="text" id="subject" required>
+                <select id="subject" required>
+                  <option value="" disabled selected>Select Subject</option>
+                </select>
               </div>
             </div>
 
@@ -92,6 +95,20 @@
               <div class="form-group">
                 <label>Date & Time</label>
                 <input type="datetime-local" id="exam-datetime" required>
+              </div>
+            </div>
+
+            <!-- ⏱ ADDED -->
+            <div class="form-row">
+              <div class="form-group">
+                <label>Exam Duration</label>
+                <select id="exam-duration" required>
+                  <option value="" disabled selected>Select Duration</option>
+                  <option value="30">30 Minutes</option>
+                  <option value="60">1 Hour</option>
+                  <option value="90">1 Hour 30 Minutes</option>
+                  <option value="120">2 Hours</option>
+                </select>
               </div>
             </div>
 
@@ -123,13 +140,11 @@
           </div>
 
           <div class="camera-status-container">
-            <!-- Internet Status -->
             <div class="status-item">
               <span class="status-label">Internet Connectivity</span>
               <i id="internet-status" class="fa-solid fa-wifi offline"></i>
             </div>
 
-            <!-- Camera Preview -->
             <div class="camera-preview-container">
               <label>Camera Preview</label>
               <div class="camera-video-wrapper">
@@ -191,6 +206,14 @@
               </div>
             </div>
 
+            <!-- ⏱ ADDED -->
+            <div class="form-row">
+              <div class="form-group">
+                <label>Duration</label>
+                <div class="confirm-value" id="confirm-duration"></div>
+              </div>
+            </div>
+
             <div class="form-row">
               <div class="form-group">
                 <label>Camera</label>
@@ -206,6 +229,7 @@
         </div>
       </div>
 
+      
       <!-- Camera Container -->
       <div class="camera-container" style="display:none;">
         <div class="video-wrapper">
@@ -243,6 +267,7 @@
       </div>
     </div>
   </div>
+
   <!-- Stop Assessment Modal -->
   <div id="stop-assessment-modal" class="modal">
     <div class="modal-content">
@@ -262,7 +287,7 @@
     <div class="spinner"></div>
   </div>
 
-  <!-- ✅ Added script -->
+  <!-- Validation JS (kept original) -->
   <script>
     document.addEventListener("DOMContentLoaded", () => {
       const nextBtn = document.getElementById("exam-next-btn");
@@ -286,7 +311,7 @@
         });
 
         setupCard.classList.remove("shake", "error-glow");
-        void setupCard.offsetWidth; // restart animation
+        void setupCard.offsetWidth;
         setupCard.classList.add("shake");
 
         if (!isValid) {
@@ -298,7 +323,16 @@
         examSetup.style.display = "none";
         systemCheck.style.display = "block";
       });
+
+      /* ⏱ ADDED: Fill Duration in Confirm Screen */
+      const durationSelect = document.getElementById("exam-duration");
+      const confirmDuration = document.getElementById("confirm-duration");
+
+      durationSelect.addEventListener("change", () => {
+        confirmDuration.textContent = durationSelect.value + " minutes";
+      });
     });
   </script>
+
 </body>
 </html>

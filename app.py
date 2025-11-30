@@ -1,3 +1,5 @@
+import eventlet
+eventlet.monkey_patch()
 import os
 import io
 import base64
@@ -9,7 +11,9 @@ from PIL import Image
 from datetime import datetime
 from functools import wraps
 from threading import Lock
-
+from datetime import datetime
+import uuid
+import sys  # <-- Add this import
 from flask import (
     Flask,
     render_template,
@@ -25,9 +29,27 @@ from flask import (
 )
 from flask_socketio import SocketIO, emit
 import mysql.connector
+import torch
+from ultralytics.nn.tasks import DetectionModel
 
-from ultralytics import YOLO
-import mediapipe as mp
+print(f"Python version: {sys.version}")
+print("Starting Flask application...")
+
+# Try to import ML libraries, but handle if they're not available
+try:
+    from ultralytics import YOLO
+    YOLO_AVAILABLE = True
+except ImportError:
+    YOLO_AVAILABLE = False
+    print("⚠️ YOLO not available - running without ML detection")
+
+try:
+    import mediapipe as mp
+    MEDIAPIPE_AVAILABLE = True
+except ImportError:
+    MEDIAPIPE_AVAILABLE = False
+    print("⚠️ MediaPipe not available - running without face detection")
+
 import bcrypt
 import logging
 
@@ -36,11 +58,11 @@ import logging
 import os
 
 DB_CONFIG = {
-    "host": os.getenv("DB_HOST", "mysql-0mzw.railway.internal"),
-    "user": os.getenv("DB_USER", "root"),
-    "password": os.getenv("DB_PASSWORD", "nIFYDtNDvbljNWTwvZjhfYJhANoGlkCR"),
-    "database": os.getenv("DB_NAME", "railway"),
-    "port": int(os.getenv("DB_PORT", 3306)),
+    "host": os.environ.get("MYSQL_HOST", "switchback.proxy.rlwy.net"),
+    "user": os.environ.get("MYSQL_USER", "root"), 
+    "password": os.environ.get("MYSQL_PASSWORD", "PLbCUQpgMuuLSPqHNQhSWUIbbJKXrpzp"),
+    "database": os.environ.get("MYSQL_DATABASE", "railway"),
+    "port": int(os.environ.get("MYSQL_PORT", 57978)),
     "charset": "utf8mb4",
 }
 
@@ -53,13 +75,19 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Use a buffered cursor to permit multiple fetches reliably
+# Database connection with error handling
 try:
     db = mysql.connector.connect(**DB_CONFIG)
     cursor = db.cursor(buffered=True)
+    
+    # Set SQL mode to be less strict
+    cursor.execute("SET sql_mode = 'STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO'")
+    
+    logger.info(f"✅ Connected to database: {DB_CONFIG['host']}:{DB_CONFIG['port']}")
 except Exception as e:
-    logger.exception("Database connection error: %s", e)
-    raise
+    logger.error(f"❌ Database connection failed: {e}")
+    db = None
+    cursor = None
 
 # ---------- Models / ML ----------
 # Update path as required
@@ -81,7 +109,7 @@ frame_lock = Lock()
 
 # Throttling / timing controls to reduce CPU / GPU load and UI lag
 PROCESS_INTERVAL = 0.50       # seconds between heavy processing runs (≈10 FPS)
-OUT_IMG_MAX = 640            # send this max width for annotated frames
+OUT_IMG_MAX = 608            # send this max width for annotated frames
 _last_processed_time = 0.0
 
 # ---------- Helpers ----------
@@ -231,6 +259,10 @@ def add_user():
         username = request.form["username"]
         password = request.form["password"]
 
+        # NEW: get all selected subjects (as list)
+        subjects_list = request.form.getlist("subjects[]")
+        subjects_str = ", ".join(subjects_list) if subjects_list else ""
+
         try:
             # Check if username already exists
             cursor.execute("SELECT id FROM users WHERE username=%s", (username,))
@@ -238,22 +270,29 @@ def add_user():
                 flash("Username already exists!", "danger")
             else:
                 hashed_pw = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode()
+
                 cursor.execute(
-                    "INSERT INTO users (name, username, password_hash, status, created_by) VALUES (%s, %s, %s, 'Active', %s)",
-                    (name, username, hashed_pw, session.get("username")),
+                    """
+                    INSERT INTO users 
+                        (name, username, password_hash, status, created_by, subjects)
+                    VALUES 
+                        (%s, %s, %s, 'Active', %s, %s)
+                    """,
+                    (name, username, hashed_pw, session.get("username"), subjects_str),
                 )
+
                 db.commit()
                 flash(f"User '{username}' added successfully!", "success")
+
         except Exception as e:
             db.rollback()
             logger.exception("add_user DB error: %s", e)
             flash("Unable to add user.", "danger")
 
-        # Redirect after POST so flash messages show on a fresh GET
+        # Redirect after POST so flash messages show on GET
         return redirect(url_for("add_user"))
 
     return render_template("add_user.html", show_sidebar=True)
-
 
 @app.route("/admin/reset_password/<int:user_id>", methods=["POST"])
 @login_required
@@ -368,117 +407,172 @@ def admin_dashboard():
         users_preview=users_preview
     )
 
-# ---------- Assessment session ----------
 @app.route("/assessment-session", methods=["POST"])
 @login_required
 def create_assessment_session():
-    # Ensure any previous assessment session is cleared
+    # Clear previous session
     session.pop("assessment_session_id", None)
+
     data = request.get_json(silent=True) or {}
+
+    cursor = db.cursor(dictionary=True)
+
+    subject = (data.get("subject") or "").strip()
+    course = (data.get("course") or "").strip()
+
+    # Duration validation
+    allowed_durations = {30, 60, 90, 120}
     try:
+        raw_duration = data.get("duration_minutes", data.get("duration", None))
+        duration_minutes = int(raw_duration) if raw_duration else 60
+    except (ValueError, TypeError):
+        return jsonify({"success": False, "error": "Invalid duration value"}), 400
+
+    if duration_minutes not in allowed_durations:
+        return jsonify({"success": False, "error": "Unsupported duration value"}), 400
+
+    try:
+        # Validate subject belongs to the user
+        cursor.execute("SELECT subjects FROM users WHERE id = %s", (session["user_id"],))
+        row = cursor.fetchone()
+
+        if not row:
+            return jsonify({"success": False, "error": "User not found"}), 400
+
+        subjects_raw = row.get("subjects") or ""
+        valid_subjects = [s.strip() for s in subjects_raw.split(",") if s.strip()]
+
+        if subject not in valid_subjects:
+            return jsonify({"success": False, "error": "Invalid subject"}), 400
+
+        # Insert assessment session with STATUS added
         cursor.execute(
             """
             INSERT INTO assessment_sessions
-                (user_id, course, subject, exam_type, exam_datetime, camera, created_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+                (user_id, course, subject, exam_type, exam_datetime, camera, duration_minutes, status, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 session["user_id"],
-                data.get("course"),
-                data.get("subject"),
+                course,
+                subject,
                 data.get("exam_type"),
                 data.get("exam_datetime"),
                 data.get("camera"),
+                duration_minutes,
+                "active",   # NEW: Default active status
                 datetime.now(),
             ),
         )
+
         assessment_session_id = cursor.lastrowid
-        # Removed immediate creation of records entry here to delay until finish
+
+        # Create folder record
+        folder_name = (
+            f"{course.replace(' ', '_')}_"
+            f"{subject.replace(' ', '_')}_"
+            f"{data.get('exam_type','').replace(' ','_')}_"
+            f"{str(uuid.uuid4())[:8]}"
+        )
+
+        cursor.execute(
+            """
+            INSERT INTO records
+                (assessment_session_id, user_id, folder_name, created_at)
+            VALUES (%s, %s, %s, %s)
+            """,
+            (assessment_session_id, session["user_id"], folder_name, datetime.now())
+        )
 
         db.commit()
+
+        # Reset tracking
         global all_snapshots, notified_snapshots, last_cheating_notification_time
         all_snapshots = []
         notified_snapshots = []
         last_cheating_notification_time = 0
+
         session["assessment_session_id"] = assessment_session_id
-        return jsonify({"success": True, "message": "Assessment session created successfully!"})
+
+        return jsonify({
+            "success": True,
+            "message": "Assessment session created successfully!",
+            "assessment_session_id": assessment_session_id,
+            "duration_minutes": duration_minutes,
+            "status": "active"
+        })
+
     except Exception as e:
         db.rollback()
         logger.exception("create_assessment_session error: %s", e)
         return jsonify({"success": False, "error": str(e)}), 500
 
+    finally:
+        try:
+            cursor.close()
+        except Exception:
+            pass
+      
+        
 @app.route("/stop-assessment", methods=["POST"])
 @login_required
 def stop_assessment():
     """
-    Called by the frontend when user stops an assessment.
-    Emits a refresh_notifications event and clears the session assessment ID.
+    Stops an active assessment session:
+    - Update DB status to 'completed'
+    - Emit refresh event to update UI
+    - Clear session assessment ID
     """
-    global all_snapshots, notified_snapshots, last_cheating_notification_time
+    assessment_id = session.get("assessment_session_id")
+
+    if not assessment_id:
+        return jsonify({"success": False, "error": "No active session"}), 400
+
     try:
-        # Insert all accumulated snapshots into detections and create records entry
+        cursor = db.cursor()
 
-        assessment_session_id = session.get("assessment_session_id")
-        if not assessment_session_id:
-            return jsonify({"success": False, "error": "No active assessment session."}), 400
+        # Mark the session as completed
+        cursor.execute(
+            "UPDATE assessment_sessions SET status = 'completed' WHERE id = %s",
+            (assessment_id,)
+        )
+        db.commit()
 
-        # Fetch all assessment session details for records table
-        cursor.execute("SELECT user_id, course, subject, exam_type, exam_datetime, camera FROM assessment_sessions WHERE id = %s", (assessment_session_id,))
-        session_data = cursor.fetchone()
-        if not session_data:
-            return jsonify({"success": False, "error": "Invalid assessment session."}), 400
-
-        user_id, course, subject, exam_type, exam_datetime, camera = session_data
-
-        # Create folder_name similarly to create_assessment_session
-        folder_name = f"{(course or '').replace(' ', '_')}_{(subject or '').replace(' ', '_')}_{(exam_type or '').replace(' ', '_')}_{str(uuid.uuid4())[:8]}"
-
-        try:
-            # Insert into records table
-            cursor.execute(
-                "INSERT INTO records (assessment_session_id, user_id, folder_name, created_at) VALUES (%s, %s, %s, %s)",
-                (assessment_session_id, user_id, folder_name, datetime.now())
-            )
-
-            # Insert accumulated snapshots into detections
-            for snapshot in all_snapshots:
-                cursor.execute(
-                    "INSERT INTO detections (id, timestamp, epoch, image_path, assessment_session_id, user_id) VALUES (%s, %s, %s, %s, %s, %s)",
-                    (
-                        snapshot["id"],
-                        datetime.strptime(snapshot["timestamp"], "%Y-%m-%d %I:%M:%S %p"),
-                        snapshot["epoch"],
-                        snapshot["image_path"],
-                        assessment_session_id,
-                        user_id
-                    )
-                )
-
-            db.commit()
-
-            # Clear the accumulated snapshots
-            all_snapshots = []
-            notified_snapshots = []
-            last_cheating_notification_time = 0
-
-        except Exception as e:
-            db.rollback()
-            logger.exception("stop_assessment DB insert error: %s", e)
-            return jsonify({"success": False, "error": "Failed to save assessment data"}), 500
-
-        # Clear the assessment session ID from the session
+        # Remove from session
         session.pop("assessment_session_id", None)
 
-        # Notify connected clients to refresh notifications / records view
+        # Notify the UI to refresh notifications / history
         try:
-            socketio.emit("refresh_notifications", {"msg": "assessment_stopped"})
+            socketio.emit("refresh_notifications", {"msg": "assessment_ended"})
         except Exception as e:
-            logger.exception("socket emit failed: %s", e)
+            logger.exception("SocketIO emit failed: %s", e)
 
-        return jsonify({"success": True})
+        return jsonify({"success": True, "message": "Assessment session stopped"})
+
     except Exception as e:
         logger.exception("stop_assessment error: %s", e)
         return jsonify({"success": False, "error": str(e)}), 500
+
+    finally:
+        try:
+            cursor.close()
+        except Exception:
+            pass
+
+
+@app.route("/api/get_user_subjects")
+@login_required
+def get_user_subjects():
+    cursor.execute("SELECT subjects FROM users WHERE id=%s", (session["user_id"],))
+    row = cursor.fetchone()
+
+    if not row:
+        return jsonify({"success": False, "subjects": []})
+
+    subjects_raw = row[0] or ""
+    subjects = [s.strip() for s in subjects_raw.split(",") if s.strip()]
+
+    return jsonify({"success": True, "subjects": subjects})
 
 # ---------- SocketIO frame handler ----------
 @socketio.on("connect")
@@ -533,7 +627,7 @@ def handle_frame(message):
         # Run YOLO on the small image
         try:
             # keep imgsz similar to our small width for efficiency
-            results = yolo_model.predict(small, imgsz=min(640, OUT_IMG_MAX), conf=0.50, verbose=False)
+            results = yolo_model.predict(small, imgsz=min(608, OUT_IMG_MAX), conf=0.50, verbose=False)
         except Exception as e:
             logger.exception("YOLO prediction error: %s", e)
             results = []
@@ -598,7 +692,7 @@ def handle_frame(message):
                 if abs(yaw_deg) > 25:
                     cheating_in_frame = True
 
-        # Save snapshot & accumulate in memory; do NOT save to DB during assessment
+        # Save snapshot & DB insert (rate-limit snapshot writes)
         if cheating_in_frame and time.time() - last_cheating_notification_time >= 2:
             snap_id = str(uuid.uuid4())
             # save a smaller base64 string (annotated small)
@@ -624,6 +718,7 @@ def handle_frame(message):
             frame_lock.release()
         except Exception:
             pass
+        logger.debug("Frame processed")  # Use debug level for less critical logs
         
 # ---------- UI / Snapshot routes ----------
 @app.route("/")
@@ -972,5 +1067,7 @@ def create_tables():
 
 # Add this call when your app starts (find the existing startup code)
 if __name__ == "__main__":
-    create_tables()  # Create tables on first run
-    socketio.run(app, host="0.0.0.0", port=5000, debug=True)
+    host = "0.0.0.0"
+    port = 5000
+    logger.info("🚀 Server running at: http://127.0.0.1:%s", port)
+    socketio.run(app, host=host, port=port, debug=True)
