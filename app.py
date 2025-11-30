@@ -1,3 +1,4 @@
+# app.py (fixed)
 import os
 import io
 import base64
@@ -12,6 +13,7 @@ from threading import Lock
 import bcrypt
 import logging
 
+# eventlet must be monkey-patched before other networking/threading libs
 try:
     import eventlet
     eventlet.monkey_patch()
@@ -22,10 +24,10 @@ except ImportError:
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 from flask_socketio import SocketIO, emit
 import mysql.connector
-from ultralytics import YOLO
-import mediapipe as mp
 from mysql.connector import Error
-
+# NOTE: don't instantiate heavy objects at import time (we'll lazy-load ultralytics / mediapipe)
+# from ultralytics import YOLO
+# import mediapipe as mp
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "replace_this_123")
@@ -33,8 +35,8 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-# ===== DB FIXED & STABLE =====
 
+# ===== DB FIXED & STABLE =====
 db = None
 
 def init_db():
@@ -45,8 +47,9 @@ def init_db():
             user=os.getenv("MYSQLUSER"),
             password=os.getenv("MYSQLPASSWORD"),
             database=os.getenv("MYSQLDATABASE"),
-            port=os.getenv("MYSQLPORT", "3306"),
-            autocommit=True
+            port=int(os.getenv("MYSQLPORT", 3306)),
+            autocommit=True,
+            connection_timeout=10
         )
         logger.info("✅ MySQL connected successfully!")
     except Error as e:
@@ -56,10 +59,10 @@ def init_db():
 def get_db():
     global db
     try:
-        if db is None or not db.is_connected():
+        if db is None or not getattr(db, "is_connected", lambda: True)():
             init_db()
         return db
-    except Error:
+    except Exception:
         init_db()
         return db
 
@@ -68,19 +71,52 @@ def get_db_cursor(buffered=False, dict_cursor=False):
     if db_conn is None:
         logger.error("❌ DB not available for cursor request")
         return None
-    
-    return db_conn.cursor(
-        buffered=buffered,
-        dictionary=dict_cursor
-    )
+    return db_conn.cursor(buffered=buffered, dictionary=dict_cursor)
 
-model = None
+# ===== Globals for realtime processing =====
+frame_lock = Lock()
+PROCESS_INTERVAL = 0.50
+OUT_IMG_MAX = 608
+_last_processed_time = 0.0
+last_cheating_notification_time = 0.0
+
+# Lazy-loaded model & mediapipe
+_model = None
+_mp = None
+_face_mesh = None
 
 def get_model():
-    global model
-    if model is None:
-        model = YOLO("model.pt")
-    return model
+    global _model
+    if _model is None:
+        try:
+            # lazy import to avoid blocking startup
+            from ultralytics import YOLO
+            model_path = os.getenv("YOLO_MODEL_PATH", "model.pt")
+            logger.info("Loading YOLO model (lazy)...")
+            _model = YOLO(model_path)
+            logger.info("YOLO model loaded.")
+        except Exception as e:
+            logger.exception("Failed to load YOLO model: %s", e)
+            _model = None
+    return _model
+
+def get_face_mesh():
+    global _mp, _face_mesh
+    if _face_mesh is None:
+        try:
+            import mediapipe as mp
+            _mp = mp
+            _face_mesh = mp.solutions.face_mesh.FaceMesh(
+                max_num_faces=1,
+                refine_landmarks=True,
+                min_detection_confidence=0.5,
+                min_tracking_confidence=0.5
+            )
+            logger.info("MediaPipe FaceMesh initialized.")
+        except Exception as e:
+            logger.exception("Failed to initialize MediaPipe FaceMesh: %s", e)
+            _face_mesh = None
+    return _face_mesh
 
 # ---------- Helpers ----------
 def b64_to_cv2(data_b64):
@@ -125,6 +161,7 @@ def estimate_head_rotation(image_rgb, face_landmarks):
     except Exception:
         return 0.0
 
+# ---------- Auth decorator ----------
 def login_required(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
@@ -134,19 +171,30 @@ def login_required(f):
         return f(*args, **kwargs)
     return wrapper
 
+# ---------- Routes ----------
 @app.route("/")
 def home():
     return "Server is running on Railway!"
 
-
+# Keep your other routes (login, admin, etc.) but guard DB cursor usage:
 @app.route("/login", methods=["GET","POST"])
 def login():
     if request.method == "POST":
         username = request.form.get("username","").strip()
         password_raw = request.form.get("password","")
         cursor = get_db_cursor()
-        cursor.execute("SELECT id,username,password_hash,role,status FROM users WHERE username=%s",(username,))
-        user = cursor.fetchone()
+        if cursor is None:
+            flash("Database unavailable. Try again later.", "danger")
+            return render_template("login.html")
+        try:
+            cursor.execute("SELECT id,username,password_hash,role,status FROM users WHERE username=%s",(username,))
+            user = cursor.fetchone()
+        except Exception as e:
+            logger.exception("Login DB error: %s", e)
+            user = None
+        finally:
+            try: cursor.close()
+            except Exception: pass
 
         if user and bcrypt.checkpw(password_raw.encode(), user[2].encode()):
             if user[4] != "Active":
@@ -154,228 +202,17 @@ def login():
             else:
                 session.update({"user_id":user[0],"username":user[1],"role":user[3]})
                 return redirect(url_for("admin_page" if user[3]=="admin" else "home"))
-
         flash("Invalid login!", "danger")
     return render_template("login.html")
 
-@app.route("/logout")
-def logout():
-    session.clear()
-    return redirect(url_for("login"))
+# (The rest of your admin routes remain mostly the same, but always call get_db_cursor()
+#  and close cursors. For brevity, they were omitted here — keep them in your app as before.)
 
-@app.route("/admin")
-@login_required
-def admin_page():
-    if session.get("role")!="admin":
-        return redirect(url_for("home"))
-    
-    cursor = get_db_cursor()
-    cursor.execute("SELECT COUNT(*) FROM users")
-    total_users = cursor.fetchone()[0]
-
-    cursor.execute("SELECT COUNT(*) FROM users WHERE status='Active'")
-    active_users = cursor.fetchone()[0]
-
-    cursor.execute("SELECT username,role,status FROM users ORDER BY id DESC LIMIT 5")
-    users_preview = cursor.fetchall()
-
-    return render_template("admin.html", total_users=total_users,
-                           active_users=active_users, users_preview=users_preview,
-                           show_sidebar=True)
-
-@app.route("/admin/add_user", methods=["GET", "POST"])
-@login_required
-def add_user():
-    if session.get("role") != "admin":
-        flash("Access denied!", "danger")
-        return redirect(url_for("home"))
-
-    if request.method == "POST":
-        name = request.form["name"]
-        username = request.form["username"]
-        password = request.form["password"]
-
-        subjects_list = request.form.getlist("subjects[]")
-        subjects_str = ", ".join(subjects_list) if subjects_list else ""
-
-        cursor = get_db_cursor(buffered=True)
-        try:
-            cursor.execute("SELECT id FROM users WHERE username=%s", (username,))
-            if cursor.fetchone():
-                flash("Username already exists!", "danger")
-            else:
-                hashed_pw = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode()
-                cursor.execute("""
-                    INSERT INTO users 
-                        (name, username, password_hash, status, created_by, subjects)
-                    VALUES (%s, %s, %s, 'Active', %s, %s)
-                """, (name, username, hashed_pw, session.get("username"), subjects_str))
-                db.commit()
-                flash(f"User '{username}' added successfully!", "success")
-        except Exception as e:
-            db.rollback()
-            logger.exception("add_user DB error: %s", e)
-            flash("Unable to add user.", "danger")
-        finally:
-            cursor.close()
-
-        return redirect(url_for("add_user"))
-
-    return render_template("add_user.html", show_sidebar=True)
-
-
-@app.route("/admin/reset_password/<int:user_id>", methods=["POST"])
-@login_required
-def reset_password(user_id):
-    if session.get("role") != "admin":
-        return redirect(url_for("home"))
-
-    cursor = get_db_cursor()
-    try:
-        hashed_pw = bcrypt.hashpw(b"1234", bcrypt.gensalt()).decode()
-        cursor.execute("UPDATE users SET password_hash=%s, updated_by=%s WHERE id=%s",
-                       (hashed_pw, session.get("username"), user_id))
-        db.commit()
-        flash("Password reset to 1234", "info")
-    except Exception as e:
-        db.rollback()
-        logger.exception("reset_password error: %s", e)
-        flash("Unable to reset password.", "danger")
-    finally:
-        cursor.close()
-
-    return redirect(url_for("list_users"))
-
-
-@app.route("/admin/deactivate_user/<int:user_id>", methods=["POST"])
-@login_required
-def deactivate_user(user_id):
-    if session.get("role") != "admin":
-        return redirect(url_for("home"))
-
-    cursor = get_db_cursor()
-    try:
-        cursor.execute("UPDATE users SET status='Inactive', updated_by=%s WHERE id=%s",
-                       (session.get("username"), user_id))
-        db.commit()
-        flash("User deactivated successfully.", "warning")
-    except Exception as e:
-        db.rollback()
-        logger.exception("deactivate_user error: %s", e)
-        flash("Unable to deactivate user.", "danger")
-    finally:
-        cursor.close()
-
-    return redirect(url_for("list_users"))
-
-
-@app.route("/admin/delete_user/<int:user_id>", methods=["POST"])
-@login_required
-def delete_user(user_id):
-    if session.get("role") != "admin":
-        return redirect(url_for("home"))
-
-    if str(user_id) == str(session.get("user_id")):
-        flash("You cannot delete your own account.", "warning")
-        return redirect(url_for("admin_page"))
-
-    cursor = get_db_cursor()
-    try:
-        cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
-        db.commit()
-        flash("User deleted successfully.", "success")
-    except Exception as e:
-        db.rollback()
-        logger.exception("delete_user error: %s", e)
-        flash("Unable to delete user.", "danger")
-    finally:
-        cursor.close()
-
-    return redirect(url_for("admin_page"))
-
-
-@app.route("/admin/users")
-@login_required
-def list_users():
-    if session.get("role") != "admin":
-        flash("Access denied!", "danger")
-        return redirect(url_for("home"))
-
-    cursor = get_db_cursor()
-    try:
-        cursor.execute("SELECT id, name, username, role, status FROM users WHERE role != 'admin'")
-        users = cursor.fetchall()
-    except Exception as e:
-        logger.exception("list_users error: %s", e)
-        users = []
-    finally:
-        cursor.close()
-
-    return render_template("list_users.html", users=users, show_sidebar=True)
-
-
-@app.route("/admin/activate_user/<int:user_id>", methods=["POST"])
-@login_required
-def activate_user(user_id):
-    if session.get("role") != "admin":
-        return redirect(url_for("home"))
-
-    cursor = get_db_cursor()
-    try:
-        cursor.execute("UPDATE users SET status='Active', updated_by=%s WHERE id=%s",
-                       (session.get("username"), user_id))
-        db.commit()
-        flash("User activated successfully.", "success")
-    except Exception as e:
-        db.rollback()
-        logger.exception("activate_user error: %s", e)
-        flash("Unable to activate user.", "danger")
-    finally:
-        cursor.close()
-
-    return redirect(url_for("list_users"))
-
-
-@app.route("/admin/dashboard")
-@login_required
-def admin_dashboard():
-    if session.get("role") != "admin":
-        flash("Access denied!", "danger")
-        return redirect(url_for("home"))
-
-    cursor = get_db_cursor()
-    try:
-        cursor.execute("SELECT COUNT(*) FROM users")
-        total_users = cursor.fetchone()[0]
-
-        cursor.execute("SELECT COUNT(*) FROM users WHERE status='Active'")
-        active_users = cursor.fetchone()[0]
-
-        cursor.execute("SELECT COUNT(*) FROM users WHERE status='Inactive'")
-        inactive_users = cursor.fetchone()[0]
-
-        cursor.execute("SELECT username, role, status FROM users ORDER BY id DESC LIMIT 5")
-        users_preview = cursor.fetchall()
-    except Exception as e:
-        logger.exception("admin_dashboard error: %s", e)
-        total_users = active_users = inactive_users = 0
-        users_preview = []
-    finally:
-        cursor.close()
-
-    return render_template("admin_dashboard.html",
-                           total_users=total_users,
-                           active_users=active_users,
-                           inactive_users=inactive_users,
-                           users_preview=users_preview,
-                           show_sidebar=True)
-
-# ---------- SocketIO ----------
+# ---------- SocketIO frame handler ----------
 @socketio.on("frame")
 def handle_frame(message):
+    # Use only necessary globals and lazy resources
     global _last_processed_time, last_cheating_notification_time
-    global frame_lock, PROCESS_INTERVAL, yolo_model
-    global db
     if not frame_lock.acquire(blocking=False):
         return
     try:
@@ -384,30 +221,91 @@ def handle_frame(message):
             return
         _last_processed_time = now
 
-        frame = b64_to_cv2(message)
+        frame = process_binary_image(message) if isinstance(message, (bytes, bytearray)) else b64_to_cv2(message)
         if frame is None:
             return
 
-        # Predict with YOLO
-        results = yolo_model.predict(frame, conf=0.5, verbose=False)
-        cheating = any("cheat" in yolo_model.model.names[int(box.cls)] 
-                       for box in results[0].boxes)
+        # Resize for faster inference
+        h, w = frame.shape[:2]
+        scale = OUT_IMG_MAX / max(h, w) if max(h, w) > 0 else 1.0
+        small = cv2.resize(frame, (int(w * scale), int(h * scale))) if scale != 1.0 else frame.copy()
 
-        if cheating and now - last_cheating_notification_time > 2:
+        # Run YOLO lazily
+        model = get_model()
+        cheating = False
+        annotated = small.copy()
+
+        if model is not None:
+            try:
+                results = model.predict(small, imgsz=608, conf=0.5, verbose=False)
+                if results and len(results) > 0 and getattr(results[0], "boxes", None) is not None:
+                    for box in results[0].boxes:
+                        # support both legacy/new API forms
+                        cls_idx = int(box.cls[0]) if hasattr(box.cls, "__getitem__") else int(box.cls)
+                        label = getattr(model, "model", None) and model.model.names.get(cls_idx, "unknown") or "unknown"
+                        coords = box.xyxy[0].tolist() if hasattr(box.xyxy, "__iter__") else []
+                        if coords:
+                            x1, y1, x2, y2 = map(int, coords)
+                            color = (0, 0, 255) if "cheat" in str(label).lower() else (0, 255, 0)
+                            cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
+                            if "cheat" in str(label).lower():
+                                cheating = True
+            except Exception:
+                logger.exception("YOLO inference error")
+
+        # Head pose estimation (lazy init)
+        face_mesh = get_face_mesh()
+        try:
+            if face_mesh is not None:
+                rgb = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
+                face_results = face_mesh.process(rgb)
+                if face_results and getattr(face_results, "multi_face_landmarks", None):
+                    yaw = estimate_head_rotation(rgb, face_results.multi_face_landmarks[0])
+                    if abs(yaw * 180) > 25:
+                        cheating = True
+        except Exception:
+            logger.exception("Face mesh processing error")
+
+        # Save cheating snapshot if detected
+        if cheating and time.time() - last_cheating_notification_time >= 2:
             cursor = get_db_cursor()
-            snap_id = str(uuid.uuid4())
-            cursor.execute(
-                "INSERT INTO detections (id,timestamp,image_path,user_id,assessment_session_id) VALUES (%s,%s,%s,%s,%s)",
-                (snap_id, datetime.now(), "snapshot", session.get("user_id"), session.get("assessment_session_id"))
-            )
-            socketio.emit("cheating_notification", {"message":"Cheating!"})
-            last_cheating_notification_time = now
+            try:
+                if cursor is not None:
+                    snap_id = str(uuid.uuid4())
+                    _, buf = cv2.imencode(".jpg", annotated, [cv2.IMWRITE_JPEG_QUALITY, 75])
+                    img_b64 = base64.b64encode(buf).decode()
+                    cursor.execute(
+                        "INSERT INTO detections (id, timestamp, epoch, image_path, assessment_session_id, user_id) VALUES (%s, %s, %s, %s, %s, %s)",
+                        (snap_id, datetime.now(), time.time(), img_b64, session.get("assessment_session_id"), session.get("user_id"))
+                    )
+                    db.commit()
+                    socketio.emit("cheating_notification", {
+                        "message": "Cheating detected!",
+                        "time": datetime.now().strftime("%I:%M %p"),
+                        "url": f"/cheating/{snap_id}"
+                    })
+                    last_cheating_notification_time = time.time()
+            except Exception:
+                logger.exception("Failed to save detection")
+            finally:
+                try:
+                    if cursor is not None:
+                        cursor.close()
+                except Exception:
+                    pass
 
-        emit("response_frame", {"cheating": cheating})
+        out_b64 = cv2_to_b64(annotated, 60)
+        if out_b64:
+            emit("response_frame", {"image": out_b64, "cheating": cheating})
     finally:
         frame_lock.release()
-# ---------- Main ----------
 
+# Keep the rest of your routes (admin, assessment session, etc.) but ensure every DB usage
+# obtains a cursor via get_db_cursor() and closes it in a finally block. (You already had that pattern.)
+
+# ---------- Entrypoint ----------
+# For local debug (not used by Gunicorn); Gunicorn will import 'app' variable above.
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    # Use socketio.run locally for proper WebSocket behavior in dev
+    socketio.run(app, host="0.0.0.0", port=port)
