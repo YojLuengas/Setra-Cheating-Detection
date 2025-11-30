@@ -579,6 +579,9 @@ def on_connect():
 
 @socketio.on("frame")
 def handle_frame(message):
+    socketio.start_background_task(process_frame, message)
+
+def process_frame(message):
     """
     Process incoming frames but throttle to PROCESS_INTERVAL and do
     face mesh less frequently. Annotate on the downscaled image and
