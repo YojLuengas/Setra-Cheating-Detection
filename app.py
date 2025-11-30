@@ -1,5 +1,4 @@
-from dotenv import load_dotenv
-load_dotenv()
+
 
 import os
 import io
@@ -39,24 +38,22 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# ---------- Global DB Connection (Fixed!) ----------
-db = mysql.connector.connect(
-    host=os.getenv("MYSQLHOST"),
-    port=int(os.getenv("MYSQLPORT", 3306)),
-    user=os.getenv("MYSQLUSER"),
-    password=os.getenv("MYSQLPASSWORD"),
-    database=os.getenv("MYSQLDATABASE"),
-    autocommit=True
-)
-# Optional: reconnect if needed
-db.ping(reconnect=True, attempts=3, delay=5)
 
-def get_db_cursor(dictionary=False):
-    """Always get a fresh cursor"""
-    if not db.is_connected():
-        db.reconnect(attempts=3, delay=5)
-    return db.cursor(dictionary=dictionary)
-
+# === SAFE DB CONNECTION THAT WORKS ON RAILWAY ===
+try:
+    db = mysql.connector.connect(
+        host=os.getenv("MYSQLHOST", "mysql.railway.internal"),
+        port=int(os.getenv("MYSQLPORT", 3306)),
+        user=os.getenv("MYSQLUSER", "root"),
+        password=os.getenv("MYSQLPASSWORD", "PLbCUQpgMuuLSPqHNQhSWUIbbJKXrpzp"),
+        database=os.getenv("MYSQLDATABASE", "railway"),
+        autocommit=True,
+        connect_timeout=10
+    )
+    logger.info("Connected to Railway MySQL successfully!")
+except Exception as e:
+    logger.error(f"Failed to connect to database: {e}")
+    raise
 # ---------- Models ----------
 yolo_model = YOLO("models/best.pt")
 face_mesh = mp.solutions.face_mesh.FaceMesh(
