@@ -74,6 +74,13 @@ def get_db_cursor(buffered=False, dict_cursor=False):
         dictionary=dict_cursor
     )
 
+model = None
+
+def get_model():
+    global model
+    if model is None:
+        model = YOLO("model.pt")
+    return model
 
 # ---------- Helpers ----------
 def b64_to_cv2(data_b64):
