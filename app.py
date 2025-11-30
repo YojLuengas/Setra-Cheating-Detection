@@ -24,6 +24,8 @@ from flask_socketio import SocketIO, emit
 import mysql.connector
 from ultralytics import YOLO
 import mediapipe as mp
+from mysql.connector import Error
+
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "replace_this_123")
@@ -31,40 +33,46 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+# ===== DB FIXED & STABLE =====
 
-# ===== DB FIX =====
+db = None
+
+def init_db():
+    global db
+    try:
+        db = mysql.connector.connect(
+            host=os.getenv("MYSQLHOST"),
+            user=os.getenv("MYSQLUSER"),
+            password=os.getenv("MYSQLPASSWORD"),
+            database=os.getenv("MYSQLDATABASE"),
+            port=os.getenv("MYSQLPORT", "3306"),
+            autocommit=True
+        )
+        logger.info("✅ MySQL connected successfully!")
+    except Error as e:
+        logger.error(f"❌ DB Initialization Failed: {e}")
+        db = None
+
+def get_db():
+    global db
+    try:
+        if db is None or not db.is_connected():
+            init_db()
+        return db
+    except Error:
+        init_db()
+        return db
+
 def get_db_cursor(buffered=False, dict_cursor=False):
-    cursor_class = mysql.connector.cursor.MySQLCursorDict if dict_cursor else None
-    return db.cursor(buffered=buffered, dictionary=dict_cursor)
-
-try:
-    db = mysql.connector.connect(
-        host=os.getenv("MYSQLHOST", "shinkansen.proxy.rlwy.net"),
-        port=int(os.getenv("MYSQLPORT", 55162)),
-        user=os.getenv("MYSQLUSER", "root"),
-        password=os.getenv("MYSQLPASSWORD", "PLbCUQpgMuuLSPqHNQhSWUIbbJKXrpzp"),
-        database=os.getenv("MYSQLDATABASE", "railway"),
-        autocommit=True
+    db_conn = get_db()
+    if db_conn is None:
+        logger.error("❌ DB not available for cursor request")
+        return None
+    
+    return db_conn.cursor(
+        buffered=buffered,
+        dictionary=dict_cursor
     )
-except Exception as e:
-    logger.error(f"DB Connection Error: {e}")
-    raise
-
-# Models
-yolo_model = YOLO("models/best.pt")
-face_mesh = mp.solutions.face_mesh.FaceMesh(
-    max_num_faces=1,
-    refine_landmarks=True,
-    min_detection_confidence=0.5,
-    min_tracking_confidence=0.5
-)
-
-# Globals
-frame_lock = Lock()
-PROCESS_INTERVAL = 0.50
-OUT_IMG_MAX = 608
-_last_processed_time = 0
-last_cheating_notification_time = 0
 
 
 # ---------- Helpers ----------
@@ -354,7 +362,8 @@ def admin_dashboard():
 @socketio.on("frame")
 def handle_frame(message):
     global _last_processed_time, last_cheating_notification_time
-
+    global frame_lock, PROCESS_INTERVAL, yolo_model
+    global db
     if not frame_lock.acquire(blocking=False):
         return
     try:
