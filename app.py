@@ -1,3 +1,5 @@
+import eventlet
+eventlet.monkey_patch()
 import os
 import io
 import base64
@@ -9,7 +11,9 @@ from PIL import Image
 from datetime import datetime
 from functools import wraps
 from threading import Lock
-import sys
+from datetime import datetime
+import uuid
+import sys  # <-- Add this import
 from flask import (
     Flask,
     render_template,
@@ -64,7 +68,7 @@ DB_CONFIG = {
 app = Flask(__name__)
 app.secret_key = "replace_this_with_a_strong_random_secret"  # change this
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0  # Disable caching for static files to enable cache busting
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="gevent")
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -84,9 +88,11 @@ except Exception as e:
     cursor = None
 
 # ---------- Models / ML ----------
-# Lazy load models to reduce startup memory usage
-yolo_model = None
-face_mesh = None
+# Update path as required
+yolo_model = YOLO("models/best.pt")
+
+# Initialize MediaPipe Face Mesh
+face_mesh = mp.solutions.face_mesh.FaceMesh(max_num_faces=1, refine_landmarks=True, min_detection_confidence=0.5, min_tracking_confidence=0.5)
 
 
 
@@ -579,7 +585,7 @@ def handle_frame(message):
     send a smaller JPEG to clients to reduce latency.
     """
     global all_snapshots, notified_snapshots, last_cheating_notification_time
-    global _last_processed_time, _last_face_time, yolo_model, face_mesh
+    global _last_processed_time, _last_face_time
 
     # Quick-drop if someone else is processing
     if not frame_lock.acquire(blocking=False):
@@ -616,25 +622,13 @@ def handle_frame(message):
         small_h = max(1, int(original_h * scale))
         small = cv2.resize(frame, (small_w, small_h), interpolation=cv2.INTER_LINEAR)
 
-        # Lazy load YOLO model if not loaded
-        if yolo_model is None and YOLO_AVAILABLE:
-            try:
-                logger.info("Loading YOLO model...")
-                yolo_model = YOLO("models/best.pt")
-                logger.info("YOLO model loaded successfully.")
-            except Exception as e:
-                logger.exception("Failed to load YOLO model: %s", e)
-                yolo_model = None
-
-        # Run YOLO on the small image if model is available
-        results = []
-        if yolo_model is not None:
-            try:
-                # keep imgsz similar to our small width for efficiency
-                results = yolo_model.predict(small, imgsz=min(608, OUT_IMG_MAX), conf=0.50, verbose=False)
-            except Exception as e:
-                logger.exception("YOLO prediction error: %s", e)
-                results = []
+        # Run YOLO on the small image
+        try:
+            # keep imgsz similar to our small width for efficiency
+            results = yolo_model.predict(small, imgsz=min(608, OUT_IMG_MAX), conf=0.50, verbose=False)
+        except Exception as e:
+            logger.exception("YOLO prediction error: %s", e)
+            results = []
 
         detections = []
         cheating_in_frame = False
@@ -685,27 +679,16 @@ def handle_frame(message):
             if str(label).lower() == "cheating":
                 cheating_in_frame = True
 
-        # Lazy load MediaPipe face mesh if not loaded
-        if face_mesh is None and MEDIAPIPE_AVAILABLE:
-            try:
-                logger.info("Loading MediaPipe FaceMesh...")
-                face_mesh = mp.solutions.face_mesh.FaceMesh(max_num_faces=1, refine_landmarks=True, min_detection_confidence=0.5, min_tracking_confidence=0.5)
-                logger.info("MediaPipe FaceMesh loaded successfully.")
-            except Exception as e:
-                logger.exception("Failed to load MediaPipe FaceMesh: %s", e)
-                face_mesh = None
-
-        # MediaPipe face mesh processing for head rotation if available
-        if face_mesh is not None:
-            small_rgb = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
-            results = face_mesh.process(small_rgb)
-            yaw_deg = 0.0
-            if results.multi_face_landmarks:
-                for face_landmarks in results.multi_face_landmarks:
-                    yaw = estimate_head_rotation(small_rgb, face_landmarks)
-                    yaw_deg = yaw * 180 / 3.14159  # Convert to degrees
-                    if abs(yaw_deg) > 25:
-                        cheating_in_frame = True
+        # MediaPipe face mesh processing for head rotation
+        small_rgb = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
+        results = face_mesh.process(small_rgb)
+        yaw_deg = 0.0
+        if results.multi_face_landmarks:
+            for face_landmarks in results.multi_face_landmarks:
+                yaw = estimate_head_rotation(small_rgb, face_landmarks)
+                yaw_deg = yaw * 180 / 3.14159  # Convert to degrees
+                if abs(yaw_deg) > 25:
+                    cheating_in_frame = True
 
         # Save snapshot & DB insert (rate-limit snapshot writes)
         if cheating_in_frame and time.time() - last_cheating_notification_time >= 2:
@@ -1033,7 +1016,6 @@ def delete_notification(snap_id):
 # ---------- Run ----------
 if __name__ == "__main__":
     host = "0.0.0.0"
-    port = int(os.environ.get("PORT", 8000))
+    port = 5000
     logger.info("🚀 Server running at: http://127.0.0.1:%s", port)
-    # For local dev only; use gunicorn in production!
     socketio.run(app, host=host, port=port, debug=True)
