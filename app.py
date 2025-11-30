@@ -40,12 +40,13 @@ eventlet.monkey_patch()
 
 def get_db():
     return mysql.connector.connect(
-        host=os.environ.get("mysql.railway.internal"),
-        port=os.environ.get("3306"),
-        user=os.environ.get("root"),
-        password=os.environ.get("PLbCUQpgMuuLSPqHNQhSWUIbbJKXrpzp"),
-        database=os.environ.get("railway")
+        host=os.environ.get("MYSQLHOST"),
+        port=os.environ.get("MYSQLPORT"),
+        user=os.environ.get("MYSQLUSER"),
+        password=os.environ.get("MYSQLPASSWORD"),
+        database=os.environ.get("MYSQLDATABASE")
     )
+
 # ---------- App / DB / Logging ----------
 app = Flask(__name__)
 app.secret_key = "replace_this_with_a_strong_random_secret"  # change this
@@ -55,13 +56,6 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Use a buffered cursor to permit multiple fetches reliably
-try:
-    db = mysql.connector.connect(**DB_CONFIG)
-    cursor = db.cursor(buffered=True)
-except Exception as e:
-    logger.exception("Database connection error: %s", e)
-    raise
 
 # ---------- Models / ML ----------
 # Update path as required
