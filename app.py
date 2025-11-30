@@ -31,6 +31,10 @@ from ultralytics import YOLO
 import mediapipe as mp
 import bcrypt
 import logging
+import eventlet
+
+eventlet.monkey_patch()
+
 
 # ---------- Config ----------
 
@@ -986,8 +990,10 @@ def delete_notification(snap_id):
         return jsonify({"success": False, "error": str(e)}), 500
 
 # ---------- Run ----------
+
+
 if __name__ == "__main__":
     host = "0.0.0.0"
-    port = 5000
-    logger.info("🚀 Server running at: http://127.0.0.1:%s", port)
-    socketio.run(app, host=host, port=port, debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    logger.info(f"🚀 Server running at: http://{host}:{port}")
+    socketio.run(app, host=host, port=port, debug=False)
