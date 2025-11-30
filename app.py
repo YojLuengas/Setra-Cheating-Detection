@@ -31,7 +31,7 @@ import mediapipe as mp
 
 # ---------- App Setup ----------
 app = Flask(__name__)
-app.secret_key = os.getenv("SECRET_KEY", "replace_this_with_random_string_123")
+app.secret_key = os.getenv("b2d17120ac2cafe8dcd66bae6ecefb0ed2e119d06104ee6f10e7075b83c2e5ad", "replace_this_with_random_string_123")
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
 
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
